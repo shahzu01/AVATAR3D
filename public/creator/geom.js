@@ -171,6 +171,15 @@ export function toonGradient() {
   gradient.minFilter = gradient.magFilter = THREE.LinearFilter; gradient.needsUpdate = true;
   return gradient;
 }
+let fabric = null;
+/** Fabric ramp (v2): a slightly deeper, more defined shadow band than skin and fur, so cloth reads as a separate material. */
+export function fabricGradient() {
+  if (fabric) return fabric;
+  const v = [118, 134, 188, 230, 246, 255];
+  fabric = new THREE.DataTexture(new Uint8Array(v.flatMap((x) => [x, x, x, 255])), v.length, 1, THREE.RGBAFormat);
+  fabric.minFilter = fabric.magFilter = THREE.LinearFilter; fabric.needsUpdate = true;
+  return fabric;
+}
 export function toonMaterial(opts = {}) {
   return new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient(), ...opts });
 }

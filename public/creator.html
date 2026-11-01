@@ -61,6 +61,32 @@
   .hint { color: var(--muted); font-size: 12px; margin: 10px 0 0; line-height: 1.5; }
   @media (max-width: 1180px) { .equip { display: none; } .dock-test { max-width: calc(100% - 380px); } }
   @media (max-width: 900px) { .work { --panelW: 320px; } .dock-save { width: 260px; } .dock-test { display: none; } }
+  /* new-character start flow */
+  .flow { position: fixed; inset: var(--topbar, 52px) 0 0 0; z-index: 60; display: grid; place-items: center; padding: 22px; background: rgba(8, 9, 14, 0.72); backdrop-filter: blur(10px); }
+  .flow.hidden { display: none; }
+  .flowcard { width: min(1060px, 100%); max-height: 100%; overflow: auto; background: linear-gradient(180deg, #151724, #10121b); border: 1px solid var(--line2); border-radius: 20px; padding: 22px 24px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+  .flowtop { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .flow .steps { display: flex; gap: 6px; flex-wrap: wrap; }
+  .flow .steps span { font-size: 12px; padding: 5px 11px; border-radius: 99px; background: var(--bg2); border: 1px solid var(--line); color: var(--muted); }
+  .flow .steps span.on { color: var(--text); border-color: var(--acc); background: var(--acc-soft); }
+  .flow .steps span.done { color: var(--text); }
+  .flow h2 { margin: 18px 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  .flowsub { margin: 0 0 16px; color: var(--muted); }
+  .flowgrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .flowgrid.n2 { grid-template-columns: repeat(2, minmax(0, 260px)); justify-content: center; }
+  .flowgrid.n5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .fcard { display: flex; flex-direction: column; align-items: stretch; padding: 0; border-radius: 16px; overflow: hidden; background: linear-gradient(160deg, #20233a, #171926); border: 1px solid var(--line); color: var(--text); text-align: center; cursor: pointer; transition: border-color .15s, transform .15s; }
+  .fcard:hover { border-color: var(--line2); transform: translateY(-2px); }
+  .fcard.on { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc) inset; }
+  .fcard .img { aspect-ratio: 1; display: grid; place-items: center; background: radial-gradient(circle at 50% 70%, rgba(155, 107, 255, 0.18), transparent 65%); }
+  .flowgrid.n2 .fcard .img { aspect-ratio: 4 / 5; }
+  .fcard .img img { width: 100%; height: 100%; object-fit: contain; }
+  .fcard .img.loading::after { content: ''; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line2); border-top-color: var(--acc); animation: spin 0.9s linear infinite; }
+  .fcard .lbl { padding: 9px 8px 2px; font-weight: 600; }
+  .fcard .hint { padding: 0 8px 10px; font-size: 11.5px; color: var(--muted); }
+  .flownav { display: flex; justify-content: space-between; margin-top: 18px; }
+  .flownav .invisible { visibility: hidden; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 <script type="importmap">
 { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/", "@pixiv/three-vrm": "/vendor/three-vrm/three-vrm.module.js" } }
@@ -78,6 +104,15 @@
     </aside>
     <main class="stage" id="stage">
       <div id="viewer"></div>
+      <!-- new-character start flow -->
+      <div id="flow" class="flow hidden" role="dialog" aria-label="New character setup">
+        <div class="flowcard">
+          <div class="flowtop"><div class="steps" id="flowSteps"></div><button class="ghost" id="flowSkip">Skip setup</button></div>
+          <h2 id="flowTitle"></h2><p class="flowsub" id="flowSub"></p>
+          <div id="flowGrid" class="flowgrid"></div>
+          <div class="flownav"><button class="ghost" id="flowBack">Back</button><button class="primary" id="flowNext">Next</button></div>
+        </div>
+      </div>
       <div class="floating glass seg views">
         <button data-view="front-full" title="Full body">Full</button>
         <button data-view="front" class="on" title="Upper body">Upper</button>

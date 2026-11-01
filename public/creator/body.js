@@ -10,12 +10,31 @@ export class Body {
   constructor(recipe, species) {
     const b = recipe.body, k = (x) => (x ?? 0.5) - 0.5;
     this.recipe = recipe; this.sp = species;
-    const H = this.H = clamp(b.height ?? 1.55, 0.9, 2.0);
-    const sc = this.sc = H / 1.55;
+    // proportions 'v2' (proof of concept, opt-in per character): more compact and fuller - shorter torso,
+    // slightly shorter legs, wider shoulders, fuller limbs, clearer hands and feet. 'classic' is unchanged.
+    const v2 = this.v2 = recipe.proportions === 'v2';
+    const P0 = v2
+      ? { layout: 0.875, head: 1.05, legShare: 0.037, shoulders: 1.22, hips: 0.95, depth: 1.1, arm: 1.2, thigh: 1.12, calf: 1.15, ankle: 1.1, neck: 1.1, hand: 1.35, foot: 1.12, footW: 1.15 }
+      : { layout: 1, head: 1, legShare: 0, shoulders: 1, hips: 1, depth: 1, arm: 1, thigh: 1, calf: 1, ankle: 1, neck: 1, hand: 1, foot: 1, footW: 1 };
+    // Male / Female starting anatomy (works for every species; none = the original shape) and body type presets.
+    // Each layer only nudges real geometry parameters; the sliders stay on top and can take any character anywhere.
+    const pres = this.presentation = recipe.presentation === 'male' || recipe.presentation === 'female' ? recipe.presentation : null;
+    const G = pres === 'male' ? { layout: 1.02, shoulders: 1.17, hips: 0.9, waist: 1.06, chestW: 1.1, depth: 1.08, arm: 1.12, thigh: 1.03, calf: 1.08, neck: 1.18, hand: 1.12, foot: 1.1, footW: 1.1 }
+      : pres === 'female' ? { layout: 0.97, shoulders: 0.9, hips: 0.98, waist: 0.8, chestW: 0.94, depth: 1.0, arm: 0.86, thigh: 1.0, calf: 0.95, ankle: 0.92, neck: 0.84, hand: 0.88, foot: 0.88, footW: 0.88 } : {};
+    const BT = this.bodyTypeP = {
+      compact: { layout: 0.94, head: 1.04, legShare: -0.02, arm: 1.05, thigh: 1.05, calf: 1.04, depth: 1.05, waist: 1.05, kb: 0.2 },
+      athletic: { layout: 1.02, legShare: 0.01, shoulders: 1.1, waist: 0.92, hips: 0.98, arm: 1.1, thigh: 1.08, calf: 1.08, depth: 1.04, kb: -0.2 },
+      broad: { shoulders: 1.15, waist: 1.18, hips: 1.12, chestW: 1.12, depth: 1.15, arm: 1.18, thigh: 1.18, calf: 1.15, ankle: 1.08, neck: 1.15, hand: 1.1, foot: 1.08, footW: 1.1, kb: 0.6 },
+    }[recipe.bodyType] || {};
+    const P = this.P = { waist: 1, chestW: 1, ...P0 };
+    for (const src of [G, BT]) for (const [key, val] of Object.entries(src)) { if (key === 'kb') continue; P[key] = key === 'legShare' ? (P[key] || 0) + val : (P[key] ?? 1) * val; }
+    const Hraw = clamp(b.height ?? 1.55, 0.9, 2.0);
+    const sc = this.sc = Hraw / 1.55;                 // thickness scale follows the height slider
+    const H = this.H = Hraw * P.layout;               // v2 lays the body out shorter, so it reads compact and full
     const build = this.buildF = 0.85 + 0.3 * (b.build ?? 0.5);
     // head (species shape multiplies a base radius)
     const hs = clamp(b.head ?? 1, 0.7, 1.6);
-    const r = 0.152 * hs * Math.pow(sc, 0.55);
+    const r = 0.152 * hs * Math.pow(sc, 0.55) * P.head;
     this.head = { rx: r * species.head[0], ry: r * species.head[1], rz: r * species.head[2] };
     const headCY = H - this.head.ry * 1.0;
     this.headC = V(0, headCY, 0.0);
@@ -23,33 +42,37 @@ export class Body {
     this.yHead = headCY - this.head.ry * 0.78;
     this.yNeck = this.yHead - neckLen;
     this.ySh = this.yNeck - 0.012 * sc;
-    const legShare = clamp(0.47 + 0.12 * k(b.legLength) - 0.08 * (hs - 1), 0.32, 0.6);
+    const legShare = clamp(0.47 + P.legShare + 0.12 * k(b.legLength) - 0.08 * (hs - 1), 0.32, 0.62);
     this.yHip = this.ySh * legShare;
     this.ySpine = lerp(this.yHip, this.ySh, 0.25);
     this.yChest = lerp(this.yHip, this.ySh, 0.58);
     this.yUpLeg = this.yHip - 0.035 * sc;
     this.yAnkle = 0.06 * sc;
     this.yKnee = lerp(this.yUpLeg, this.yAnkle, 0.5) + 0.01 * sc;
-    this.shX = (0.118 + 0.05 * k(b.shoulders)) * sc * build;
-    this.hipX = (0.08 + 0.03 * k(b.hips)) * sc * build;
+    this.shX = (0.118 + 0.05 * k(b.shoulders)) * sc * build * P.shoulders;
+    this.hipX = (0.08 + 0.03 * k(b.hips)) * sc * build * P.hips;
     const armLen = this.ySh * 0.44 + 0.05 * sc;
-    this.upperArmLen = armLen * 0.43; this.lowerArmLen = armLen * 0.39; this.handLen = armLen * 0.18 * (species.paws ? 1.05 : 1);
+    this.upperArmLen = armLen * 0.43; this.lowerArmLen = armLen * 0.39; this.handLen = armLen * 0.18 * (species.paws ? 1.05 : 1) * P.hand;
     // cross-section radii
     const f = build;
     this.r = {
       hip: [(this.hipX * 1.55 + 0.006), 0.1 * sc * f],
-      waist: [(0.112 + 0.04 * k(b.waist)) * sc * f, 0.094 * sc * f],
-      chest: [(0.13 + 0.04 * k(b.chest)) * sc * f, (0.097 + 0.03 * k(b.chest)) * sc * f],
-      shoulder: [this.shX * 0.98, 0.078 * sc * f],
-      neck: (0.042 + 0.012 * species.neck) * sc * (0.85 + 0.3 * f - 0.15),
-      arm: [0.05, 0.043, 0.036].map((x) => x * sc * (0.75 + 0.5 * (b.arms ?? 0.5)) * f),
-      leg: [0.08, 0.06, 0.047].map((x) => x * sc * (0.75 + 0.5 * (b.legs ?? 0.5)) * f),
+      waist: [(0.112 + 0.04 * k(b.waist)) * sc * f * P.waist, 0.094 * sc * f * P.depth * Math.sqrt(P.waist)],
+      chest: [(0.13 + 0.04 * k(b.chest)) * sc * f * P.chestW, (0.097 + 0.03 * k(b.chest)) * sc * f * P.depth],
+      shoulder: [this.shX * 0.98, 0.078 * sc * f * P.depth],
+      neck: (0.042 + 0.012 * species.neck) * sc * (0.85 + 0.3 * f - 0.15) * P.neck,
+      arm: [0.05, 0.043, 0.036].map((x) => x * sc * (0.75 + 0.5 * (b.arms ?? 0.5)) * f * P.arm),
+      leg: [0.08 * P.thigh, 0.06 * P.calf, 0.047 * P.ankle].map((x) => x * sc * (0.75 + 0.5 * (b.legs ?? 0.5)) * f),
     };
-    this.footLen = 0.17 * sc; this.footW = 0.05 * sc * f;
+    this.r.hip[1] *= P.depth;
+    this.footLen = 0.17 * sc * P.foot; this.footW = 0.05 * sc * f * P.footW;
     // sculpted body shapes from the Blender body kit (falls back to plain tubes without it)
     this.kit = kitBody(species.style === 'animal' ? 'animal' : 'human');
-    this.kb = clamp(((b.build ?? 0.5) - 0.5) * 2, -0.5, 1);
+    this.kb = clamp(((b.build ?? 0.5) - 0.5) * 2 + (BT.kb || 0), -0.5, 1.4);
     this.kc = clamp(((b.chest ?? 0.5) - 0.5) * 2, -0.5, 1);
+    // sculpted channel weights: female = waist, hips and a modest bust sized by the chest slider; male = broad chest, lats, fuller arms
+    this.kw = { build: this.kb, chest: pres === 'female' ? this.kc * 0.4 : this.kc, fem: pres === 'female' ? 0.7 : 0, masc: pres === 'male' ? 0.85 : 0,
+      bust: pres === 'female' ? clamp(0.5 + 1.5 * (b.chest ?? 0.5), 0, 1.8) : 0 };
   }
 
   // ---------------------------------------------------------------- body kit lookups
@@ -63,15 +86,22 @@ export class Body {
   /** Per-angle surface offset for a ring (used by tube's r.off). axes(w) maps a world direction to the part's [X, Z]. */
   ringOff(part, h, T, hint, cloth, axes, gain = 1) {
     const map = this.kit?.[part]; if (!map || gain <= 0) return undefined;
-    const { N, B } = frameFor(T, hint), f = cloth ? map.cloth : map.skin, kb = this.kb, kc = this.kc;
+    const { N, B } = frameFor(T, hint), f = cloth ? map.cloth : map.skin;
+    const kw = part === 'arm' && this.kw.masc ? { ...this.kw, masc: this.kw.masc * 0.45 }      // male arms fuller, not bulky
+      : part === 'leg' && this.kw.fem ? { ...this.kw, fem: this.kw.fem * 0.55 } : this.kw;           // female thighs fuller, not wide
     return (a) => {
       const c = Math.cos(a), s = Math.sin(a);
       const [X, Z] = axes(B.x * c + N.x * s, B.y * c + N.y * s, B.z * c + N.z * s);
-      return f(h, Math.atan2(X, Z), kb, kc) * gain;
+      return f(h, Math.atan2(X, Z), kw) * gain;
     };
   }
+  /** Ring offset function for a garment ring around a leg at height y (boots etc.), following the sculpted calf. */
+  legOff(side, y) {
+    const s = side === 'left' ? 1 : -1, top = this.yHip - 0.012 * this.sc, bot = this.yAnkle - (this.kit ? 0.022 * this.sc : 0.005), t = clamp((top - y) / (top - bot), 0, 1);
+    return this.ringOff('leg', t, V(0, 1, 0), V(0, 0, 1), true, (x, _y, z) => [s * x, z], smooth(0.05, 0.2, t));   // (rings built bottom-up, like boot shafts)
+  }
   /** Sculpted torso offset at height y in a horizontal direction (dx, dz); cloth fills hollows. */
-  torsoOff(y, dx, dz, cloth = true) { const m = this.kit?.torso; return m ? m[cloth ? 'cloth' : 'skin'](this.torsoU(y), Math.atan2(dx, dz), this.kb, this.kc) : 0; }
+  torsoOff(y, dx, dz, cloth = true) { const m = this.kit?.torso; return m ? m[cloth ? 'cloth' : 'skin'](this.torsoU(y), Math.atan2(dx, dz), this.kw) : 0; }
   /** Largest torso offset all the way round at height y (for skirts and other loose garments). */
   torsoMaxOff(y) { if (!this.kit) return 0; let m = 0; for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; m = Math.max(m, this.torsoOff(y, Math.sin(a), Math.cos(a))); } return m; }
   /** Front (sign=1) or back (sign=-1) surface z of the torso at height y and side position x, including the sculpt. */
@@ -243,7 +273,7 @@ export class Body {
     }
     // rotate cross-section: tube's N is the hint (up), B spans the palm width (z)
     tube(bld, pr, { seg: 16, hint: V(0, 1, 0), colorFn: (p) => cf(p, 'hand') });
-    const fingerR = (paw ? 0.0118 : 0.0084) * sc * (paw ? 1.15 : 1);
+    const fingerR = (paw ? 0.0118 : 0.0084) * sc * (paw ? 1.15 : 1) * this.P.hand;
     for (const fn of FINGERS) {
       const p0 = this.bones[`${side}${fn}Proximal`].userData.world, p1 = this.bones[`${side}${fn}Intermediate`].userData.world, p2 = this.bones[`${side}${fn}Distal`].userData.world, tip = this[`${side}${fn}Tip`];
       const rr = fingerR * (fn === 'Little' ? 0.85 : 1);

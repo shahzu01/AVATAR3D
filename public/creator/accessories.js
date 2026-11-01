@@ -147,10 +147,22 @@ export function buildAccessories(ctx) {
         break;
       }
       case 'scarf': {
-        const rr = body.r.neck + 0.022 * sc;
-        ring(b, V(0, body.ySh + 0.012 * sc, 0), V(0, 1, 0), rr, 0.02 * sc, { color: C, weights: body.W({ neck: 0.4, chest: 0.6 }), sy: 0.95 });
-        const p0 = V(body.r.neck * 0.6, body.ySh, rr + 0.012 * sc);
-        tube(b, [p0, p0.clone().add(V(0.012 * sc, -0.08 * sc, 0.01 * sc)), p0.clone().add(V(0.02 * sc, -0.16 * sc, 0.0))].map((p, i) => ({ c: p, r: [0.026 * sc, 0.008 * sc], w: cw, hint: V(0, 0, 1), color: i === 2 ? dark : C })), { seg: 8 });
+        if (!body.v2) {   // classic characters keep their original scarf exactly
+          const rr = body.r.neck + 0.022 * sc;
+          ring(b, V(0, body.ySh + 0.012 * sc, 0), V(0, 1, 0), rr, 0.02 * sc, { color: C, weights: body.W({ neck: 0.4, chest: 0.6 }), sy: 0.95 });
+          const p0 = V(body.r.neck * 0.6, body.ySh, rr + 0.012 * sc);
+          tube(b, [p0, p0.clone().add(V(0.012 * sc, -0.08 * sc, 0.01 * sc)), p0.clone().add(V(0.02 * sc, -0.16 * sc, 0.0))].map((p, i) => ({ c: p, r: [0.026 * sc, 0.008 * sc], w: cw, hint: V(0, 0, 1), color: i === 2 ? dark : C })), { seg: 8 });
+          break;
+        }
+        // v2: the loop sits on top of the (thicker) collar, and the hanging end comes out of a knot at the front,
+        // resting on the chest, so loop and tail read as one piece
+        const yS = body.ySh + 0.012 * sc, [tx, tz] = body.torsoAt(yS), clear = 0.034 * sc;
+        const rz = Math.max(body.r.neck + 0.022 * sc, tz * (1 + body.torsoOff(yS, 0, 1)) + clear), rx = Math.max((body.r.neck + 0.022 * sc) * 0.95, tx * (1 + body.torsoOff(yS, 1, 0)) + clear);
+        ring(b, V(0, yS, 0), V(0, 1, 0), rz, 0.02 * sc, { color: C, weights: body.W({ neck: 0.4, chest: 0.6 }), sy: rx / rz });
+        blob(b, V(body.r.neck * 0.45, yS - 0.008 * sc, rz + 0.006 * sc), [0.02 * sc, 0.017 * sc, 0.012 * sc], { nu: 12, nv: 8, color: C, weights: body.W({ neck: 0.3, chest: 0.7 }) });   // knot
+        const p0 = V(body.r.neck * 0.55, yS - 0.012 * sc, rz + 0.004 * sc);
+        const onChest = (q) => { q.z = Math.max(q.z, body.torsoZ(q.y, 1, q.x) + 0.032 * sc); return q; };
+        tube(b, [p0, onChest(p0.clone().add(V(0.012 * sc, -0.08 * sc, 0.01 * sc))), onChest(p0.clone().add(V(0.02 * sc, -0.16 * sc, 0.0)))].map((p, i) => ({ c: p, r: [0.026 * sc, 0.008 * sc], w: cw, hint: V(0, 0, 1), color: i === 2 ? dark : C })), { seg: 8 });
         break;
       }
       case 'choker': {
