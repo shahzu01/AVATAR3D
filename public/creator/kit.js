@@ -82,17 +82,20 @@ function cylSampler(arr, nu, nv, scale) {
 }
 const bodyCache = new Map();
 /** Body shape maps for a style ('human' | 'animal'), or null without the kit.
- *  Returns part(name) -> { skin(h, psi, kb, kc), cloth(h, psi, kb, kc) } where kb / kc blend in the build and chest shapes. */
+ *  Returns part(name) -> { skin(h, psi, w), cloth(h, psi, w) }; w = channel weights, e.g. { build, chest, fem, masc, bust }. */
 export function kitBody(style) {
   if (!BODY) return null;
   if (bodyCache.has(style)) return bodyCache.get(style);
   const { meta, buf } = BODY, parts = {};
   for (const name of ['torso', 'arm', 'leg', 'palm', 'foot']) {
     const e = meta.parts[`${style}.${name}`]; if (!e) return null;
-    const n = e.nu * e.nv, S = (key) => cylSampler(new Int8Array(buf, e.offsets[key], n), e.nu, e.nv, meta.scale);
-    const sk = ['base', 'build', 'chest'].map((c) => S(`skin.${c}`)), cl = ['base', 'build', 'chest'].map((c) => S(`cloth.${c}`));
-    const skin = (h, psi, kb = 0, kc = 0) => sk[0](h, psi) + kb * sk[1](h, psi) + kc * sk[2](h, psi);
-    parts[name] = { skin, cloth: (h, psi, kb = 0, kc = 0) => Math.max(cl[0](h, psi) + kb * cl[1](h, psi) + kc * cl[2](h, psi), skin(h, psi, kb, kc) + 0.004) };
+    const n = e.nu * e.nv, S = (key) => (e.offsets[key] === undefined ? null : cylSampler(new Int8Array(buf, e.offsets[key], n), e.nu, e.nv, meta.scale));
+    const chans = e.channels || ['build', 'chest'];
+    const sk0 = S('skin.base'), cl0 = S('cloth.base');
+    const sk = chans.map((c) => [c, S(`skin.${c}`)]).filter((x) => x[1]), cl = chans.map((c) => [c, S(`cloth.${c}`)]).filter((x) => x[1]);
+    const mix = (f0, list) => (h, psi, w = {}) => { let v = f0(h, psi); for (const [c, f] of list) { const k = w[c]; if (k) v += k * f(h, psi); } return v; };
+    const skin = mix(sk0, sk), clothRaw = mix(cl0, cl);
+    parts[name] = { skin, cloth: (h, psi, w) => Math.max(clothRaw(h, psi, w), skin(h, psi, w) + 0.004) };
   }
   bodyCache.set(style, parts);
   return parts;

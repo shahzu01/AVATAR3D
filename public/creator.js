@@ -74,7 +74,7 @@ function restoreTest() { viewer.setMotion(testMotion); viewer.setExpression(test
 
 // ------------------------------------------------------------------ categories
 const CATS = [
-  { id: 'start', label: 'Start', icon: 'start', sub: 'Pick a ready-made character or species', tabs: [['characters', 'Characters'], ['species', 'Species']] },
+  { id: 'start', label: 'Start', icon: 'start', sub: 'Your character, ready-made characters and species', tabs: [['character', 'Character'], ['characters', 'Ready-made'], ['species', 'Species']] },
   { id: 'body', label: 'Body', icon: 'body', sub: 'Proportions and shape', tabs: [['size', 'Size'], ['shape', 'Shape'], ['style', 'Style']] },
   { id: 'face', label: 'Face', icon: 'face', sub: 'Eyes, brows, mouth and more', tabs: [['eyes', 'Eyes'], ['brows', 'Brows'], ['mouth', 'Mouth'], ['nose', 'Nose'], ['markings', 'Marks']] },
   { id: 'colors', label: 'Fur & skin', icon: 'fur', sub: 'Colours and patterns', tabs: [['main', 'Colours'], ['pattern', 'Pattern']] },
@@ -108,7 +108,7 @@ function slider(path, label) {
 }
 /** Thumbnail grid for one option list. kind: 'face:<part>' (drawn) or a 3D framing. */
 function grid(path, options, kind, { big = false, angle = 0.45, recipeFor } = {}) {
-  const cur = get(path);
+  const cur = get(path) ?? (path === 'proportions' ? 'classic' : undefined);
   return `<div class="thumbs ${big ? 'big' : ''}" data-chips="${path}">${options.map((o) => {
     const variant = recipeFor ? recipeFor(o.id) : withValue(path, o.id);
     let img = '', key = '';
@@ -120,11 +120,13 @@ function grid(path, options, kind, { big = false, angle = 0.45, recipeFor } = {}
 function withValue(path, v) { const r = clone(recipe); const ks = path.split('.'), last = ks.pop(); ks.reduce((o, k) => (o[k] ??= {}), r)[last] = v; return r; }
 function thumbBasis(r, kind) {   // only what affects a thumbnail goes into its cache key
   return { kind, sp: r.species, c: r.colors, pat: r.pattern, hair: r.hair, top: kind === 'torso' ? r.top : null, bot: kind === 'legs' ? r.bottom : null, shoes: kind === 'feet' ? r.shoes : null,
-    acc: r.accessories, ears: r.ears, tail: kind === 'back' ? r.tail : null, head: r.body.head, face: kind === 'bust' ? r.face : null };
+    acc: r.accessories, ears: r.ears, tail: kind === 'back' ? r.tail : null, head: r.body.head, face: kind === 'bust' ? r.face : null, prop: r.proportions === 'v2' ? 'v2' : undefined,
+    pres: r.presentation || undefined, bt: r.bodyType || undefined, bod: kind === 'full' ? r.body : undefined };
 }
 const thumbJobs = [];
 function queueThumb(key, r, framing, angle) { thumbJobs.push([key, r, framing, angle]); }
 function flushThumbs() {
+  if (!$('flow')?.classList.contains('hidden')) { thumbJobs.length = 0; return; }   // setup screen open: its previews come first
   clearThumbQueue();
   for (const [key, r, framing, angle] of thumbJobs.reverse()) {
     requestThumb(key, r, framing, angle, (url) => {
@@ -146,7 +148,12 @@ function renderTab() {
   const r = recipe;
   let h = '';
   if (tab === 'start') {
-    if (st === 'characters') {
+    if (st === 'character') {
+      h += section('Starting anatomy') + grid('presentation', PRESENTATIONS, 'full', { big: true, angle: 0.5, recipeFor: (v) => noAcc(withValue('presentation', v)) })
+        + `<p class="hint">Male and Female set the starting body for every species. Every slider stays free afterwards.</p>`;
+      h += section('Body type') + grid('bodyType', BODY_TYPES, 'full', { angle: 0.5, recipeFor: (v) => noAcc(withValue('bodyType', v)) });
+      h += `<div class="rnd"><button data-flow>${ICON.start || ''} Run the setup again</button></div>`;
+    } else if (st === 'characters') {
       h += section('Ready-made characters');
       h += `<div class="presets">${PRESETS.map((p, i) => {
         const key = `preset:${i}:${hash(p)}`, hit = cachedThumb(key); queueThumb(key, p, 'bust', 0.35);
@@ -161,7 +168,8 @@ function renderTab() {
       }).join('')}</div><p class="hint">Changing species keeps your outfit and hair and resets fur or skin colours to that species' defaults.</p>`;
     }
   } else if (tab === 'body') {
-    if (st === 'size') h += section('Size') + slider('body.height', 'Height') + slider('body.head', 'Head size') + slider('body.legLength', 'Leg length');
+    if (st === 'size') h += section('Size') + slider('body.height', 'Height') + slider('body.head', 'Head size') + slider('body.legLength', 'Leg length')
+      + section('Body style') + grid('proportions', [{ id: 'classic', label: 'Classic' }, { id: 'v2', label: 'Compact (preview)' }], 'full', { angle: 0.5 });
     if (st === 'shape') h += section('Shape') + slider('body.build', 'Build') + slider('body.shoulders', 'Shoulders') + slider('body.chest', 'Chest') + slider('body.waist', 'Waist') + slider('body.hips', 'Hips') + slider('body.arms', 'Arm thickness') + slider('body.legs', 'Leg thickness');
     if (st === 'style') h += section('Look') + slider('outline', 'Toon outline') + `<p class="hint">A thicker outline gives a bolder cartoon look on stream.</p>`;
   } else if (tab === 'face') {
@@ -246,8 +254,9 @@ function bindTab() {
   }));
   body.querySelectorAll('[data-reset]').forEach((b) => (b.onclick = () => set(b.dataset.reset, getDefault(b.dataset.reset) ?? 0.5)));
   body.querySelectorAll('[data-check]').forEach((el) => (el.onchange = () => set(el.dataset.check, el.checked)));
-  body.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => { change((r) => { Object.assign(r, clone(PRESETS[+b.dataset.preset])); }); $('name').value = recipe.name; toast(`Loaded ${recipe.name}`); }));
+  body.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => { change((r) => { for (const k of Object.keys(r)) delete r[k]; Object.assign(r, clone(PRESETS[+b.dataset.preset])); }); $('name').value = recipe.name; toast(`Loaded ${recipe.name}`); }));   // a ready-made character comes exactly as it is
   body.querySelectorAll('[data-random]').forEach((b) => (b.onclick = () => { change((r) => Object.assign(r, randomRecipe(Math.random() * 1e9, b.dataset.random === 'species' ? { species: r.species } : {}))); $('name').value = recipe.name; }));
+  body.querySelector('[data-flow]')?.addEventListener('click', () => openFlow());
   const sp = body.querySelector('[data-species]');
   if (sp) sp.onclick = (e) => { const v = e.target.closest('[data-v]')?.dataset.v; if (!v || v === recipe.species) return; change((r) => { withSpecies(r, v, true); r.ears.type = 'auto'; r.tail.type = 'auto'; r.face.nose = 'auto'; if (SPECIES[v].style === 'human' && r.face.markings === 'mask') r.face.markings = 'none'; }); };
   body.querySelectorAll('[data-acc]').forEach((el) => (el.onchange = () => change((r) => {
@@ -315,6 +324,62 @@ async function save(asCopy = false) {
 $('save').onclick = () => save(false);
 $('saveCopy').onclick = () => save(true);
 
+// ------------------------------------------------------------------ new-character start flow: Male/Female -> Species -> Body type
+const PRESENTATIONS = [{ id: 'male', label: 'Male' }, { id: 'female', label: 'Female' }];
+const BODY_TYPES = [{ id: 'compact', label: 'Compact' }, { id: 'balanced', label: 'Balanced' }, { id: 'athletic', label: 'Athletic' }, { id: 'broad', label: 'Broad' }, { id: 'custom', label: 'Custom' }];
+const BODY_TYPE_HINT = { compact: 'Shorter and rounder', balanced: 'The standard shape', athletic: 'Broad shoulders, slim waist', broad: 'Wide and sturdy throughout', custom: 'Neutral; shape it with sliders' };
+/** A clean starting character for the chosen sex, species and body type (built on that species' ready-made look). */
+function recipeFromFlow({ presentation, species, bodyType }) {
+  const base = PRESETS.find((p) => p.species === species);
+  const r = base ? clone(base) : withSpecies(defaultRecipe(), species, true);
+  r.name = 'New character'; r.accessories = []; r.proportions = 'v2';
+  r.presentation = presentation || null; r.bodyType = bodyType || 'balanced';
+  r.face = { ...r.face, lashes: presentation === 'female' };
+  if (SPECIES[species]?.style === 'human') r.hair = presentation === 'female' ? { style: 'long', color: '#4a2f22', color2: '#6b4226' } : { style: 'short', color: '#2b2220', color2: '#3b2a22' };
+  return r;
+}
+// simple fitted clothes for the Male / Female previews, so the body shape is easy to see
+const anatomyPreview = (r) => { r.top = { style: 'tank', color: '#5b6bd6', color2: '#e8e9f2' }; r.bottom = { style: 'shorts', color: '#2b2c36' }; r.shoes = { style: 'sneakers', color: '#e8e9f2', color2: '#5b6bd6' }; return r; };
+const flow = { step: 0, presentation: null, species: 'fox', bodyType: 'balanced' };
+const FLOW_STEPS = [
+  { title: 'Who are you creating?', sub: 'Choose the starting anatomy. You can change it, and every slider, at any time.', key: 'presentation',
+    items: () => PRESENTATIONS.map((o) => ({ ...o, recipe: anatomyPreview(recipeFromFlow({ ...flow, presentation: o.id, species: 'human' })) })) },
+  { title: 'Pick a species', sub: 'Each species has its own head, ears, tail and paws.', key: 'species',
+    items: () => Object.entries(SPECIES).map(([k, sp]) => ({ id: k, label: `${EMOJI[k]} ${sp.label}`, recipe: recipeFromFlow({ ...flow, species: k }) })) },
+  { title: 'Choose a body type', sub: 'A starting shape, not a limit: fine-tune everything in the Creator.', key: 'bodyType',
+    items: () => BODY_TYPES.map((o) => ({ ...o, hint: BODY_TYPE_HINT[o.id], recipe: recipeFromFlow({ ...flow, bodyType: o.id }) })) },
+];
+function openFlow() { clearThumbQueue(); flow.step = 0; flow.presentation = recipe.presentation || null; flow.species = recipe.species; flow.bodyType = recipe.bodyType || 'balanced'; $('flow').classList.remove('hidden'); renderFlow(); }
+function closeFlow() { $('flow').classList.add('hidden'); clearThumbQueue(); renderTab(); }   // panel thumbnails resume
+function renderFlow() {
+  const st = FLOW_STEPS[flow.step], items = st.items();
+  $('flowSteps').innerHTML = FLOW_STEPS.map((x, i) => `<span class="${i === flow.step ? 'on' : i < flow.step ? 'done' : ''}">${i + 1} · ${['Male / Female', 'Species', 'Body type'][i]}</span>`).join('');
+  $('flowTitle').textContent = st.title; $('flowSub').textContent = st.sub;
+  $('flowGrid').className = `flowgrid n${items.length > 6 ? 'many' : items.length}`;
+  $('flowGrid').innerHTML = items.map((it) => {
+    const key = `flow:${st.key}:${it.id}:${hash(thumbBasis(it.recipe, 'full'))}`, hit = cachedThumb(key);
+    requestThumb(key, it.recipe, 'full', 0.5, (url) => { document.querySelectorAll(`[data-fkey="${CSS.escape(key)}"]`).forEach((el) => { el.classList.remove('loading'); el.innerHTML = `<img src="${url}" alt="">`; }); });
+    return `<button class="fcard ${flow[st.key] === it.id ? 'on' : ''}" data-fv="${esc(it.id)}"><span class="img ${hit ? '' : 'loading'}" data-fkey="${key}">${hit ? `<img src="${hit}" alt="">` : ''}</span><span class="lbl">${esc(it.label)}</span>${it.hint ? `<span class="hint">${esc(it.hint)}</span>` : ''}</button>`;
+  }).join('');
+  $('flowBack').classList.toggle('invisible', flow.step === 0);
+  $('flowNext').textContent = flow.step === FLOW_STEPS.length - 1 ? 'Start customizing' : 'Next';
+  $('flowNext').disabled = !flow[st.key];
+}
+function finishFlow() {
+  const fresh = recipeFromFlow(flow);
+  change((r) => { for (const k of Object.keys(r)) delete r[k]; Object.assign(r, fresh); });
+  $('name').value = recipe.name; tab = 'body'; subtab.body = 'size'; renderTab(); renderEquipped(); closeFlow();
+  toast(`${flow.presentation === 'female' ? 'Female' : 'Male'} ${SPECIES[flow.species].label.toLowerCase()} ready to customize`);
+}
+$('flowGrid').onclick = (e) => {
+  const b = e.target.closest('[data-fv]'); if (!b) return;
+  const st = FLOW_STEPS[flow.step]; flow[st.key] = b.dataset.fv;
+  if (flow.step < FLOW_STEPS.length - 1) { flow.step++; renderFlow(); } else renderFlow();
+};
+$('flowBack').onclick = () => { if (flow.step > 0) { flow.step--; renderFlow(); } };
+$('flowNext').onclick = () => { if (flow.step < FLOW_STEPS.length - 1) { flow.step++; renderFlow(); } else finishFlow(); };
+$('flowSkip').onclick = () => closeFlow();
+
 // ------------------------------------------------------------------ start
 (async () => {
   if (editId) {
@@ -330,5 +395,6 @@ $('saveCopy').onclick = () => save(true);
   }
   $('name').value = recipe.name;
   updateUndo(); renderTab(); renderEquipped(); renderSaved(); rebuild(); updateShift();
+  if (!editId && params.get('setup') !== '0') openFlow();     // new characters start with Male/Female -> Species -> Body type
 })();
-window.__creator = { get recipe() { return recipe; }, viewer, set: (p, v) => set(p, v), get building() { return building || !!pending; } };     // for automated tests
+window.__creator = { get recipe() { return recipe; }, viewer, set: (p, v) => set(p, v), get building() { return building || !!pending; }, flow, openFlow, recipeFromFlow };     // for automated tests

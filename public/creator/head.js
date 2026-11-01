@@ -7,9 +7,21 @@ import { kitHead, kitNose } from './kit.js';
 export function makeHeadShape(body, sp, recipe) {
   const kit = kitHead(recipe.species);
   if (kit) {                              // sculpted head from the Blender head kit
-    const k = body.head.rx / sp.head[0], mz = recipe.face?.muzzle ?? 0.5;
-    const shape = (dir) => dir.clone().multiplyScalar(kit.radius(dir, mz) * k);
-    const animal = sp.style === 'animal';
+    const animal = sp.style === 'animal', pres = body.presentation;
+    // Male / Female: animals get a slightly longer (male) or shorter, softer (female) snout; humans a squarer or rounder jaw
+    const k = body.head.rx / sp.head[0], mz = clamp((recipe.face?.muzzle ?? 0.5) + (animal && pres ? (pres === 'male' ? 0.06 : -0.08) : 0), 0, 1);
+    const jaw = !animal && pres ? (pres === 'male' ? 1 : -1) : 0;
+    const shape = (dir) => {
+      const p = dir.clone().multiplyScalar(kit.radius(dir, mz) * k);
+      if (jaw) {
+        const low = smooth(-0.1, -0.45, dir.y) * smooth(-0.98, -0.75, dir.y) * smooth(-0.35, 0.1, dir.z);   // lower face, front and sides
+        const side = smooth(0.25, 0.75, Math.abs(dir.x));
+        p.x *= 1 + jaw * 0.07 * low * side;                                        // jaw corners wider (male) or narrower (female)
+        p.y *= 1 + jaw * 0.03 * low * (1 - side) * smooth(0.3, 0.8, dir.z);       // chin a touch longer (male) or shorter (female)
+        if (jaw < 0) p.x *= 1 + 0.025 * smooth(-0.05, -0.35, dir.y) * smooth(-0.75, -0.45, dir.y) * smooth(0.1, 0.6, dir.z);   // softer, fuller cheeks
+      }
+      return p;
+    };
     shape.muzzleWeight = (dir) => (animal ? kit.muzzle(dir) : 0);
     shape.cheekWeight = (dir) => (animal ? kit.cheek(dir) : 0);
     shape.kit = true;
@@ -197,7 +209,7 @@ export function buildTail(bld, body, type, colors, size = 0.5, addSpring) {
       deform: type === 'pom' ? (p, dd) => p.multiplyScalar(1 + 0.08 * Math.sin(dd.x * 13) * Math.sin(dd.y * 11)) : null });
     return;
   }
-  const L = { thin: 0.62, bushy: 0.55, ringed: 0.52, striped: 0.6, dragon: 0.62 }[type] * sc * k;
+  const L = { thin: 0.62, bushy: 0.55, ringed: 0.52, striped: 0.6, dragon: 0.62 }[type] * sc * k * (body.P?.layout ?? 1);   // stays in proportion with the body
   const pts = type === 'thin' || type === 'striped'
     ? [root, root.clone().add(V(0, -0.06 * L, -0.3 * L)), root.clone().add(V(0.04 * L, 0.15 * L, -0.62 * L)), root.clone().add(V(0.02 * L, 0.5 * L, -0.78 * L)), root.clone().add(V(-0.06 * L, 0.72 * L, -0.66 * L))]
     : type === 'dragon' ? [root, root.clone().add(V(0, -0.12 * L, -0.35 * L)), root.clone().add(V(0.05 * L, -0.25 * L, -0.7 * L)), root.clone().add(V(0.12 * L, -0.3 * L, -1.0 * L))]
