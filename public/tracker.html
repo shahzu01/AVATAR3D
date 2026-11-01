@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kael Studio</title>
+<style>
+  :root { --bg:#0f1014; --panel:#181a21; --line:#2a2d38; --text:#e9e8ef; --muted:#9a9cab; --acc:#a35cff; --ok:#3ccf91; --warn:#f0b44c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:17px; margin:0; letter-spacing:.3px; } header h1 b { color:var(--acc); }
+  .chips { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+  .chip { padding:3px 9px; border-radius:99px; background:#22252f; color:var(--muted); font-size:12px; }
+  .chip.on { background:rgba(60,207,145,.15); color:var(--ok); }
+  main { display:grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap:16px; padding:16px 18px; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 10px; }
+  .stage { position:relative; aspect-ratio: 16/10; background:#000; border-radius:10px; overflow:hidden; }
+  .stage video, .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform: scaleX(-1); }
+  .preview { aspect-ratio: 4/3; border-radius:10px; overflow:hidden; background: repeating-conic-gradient(#20222a 0 25%, #1a1c23 0 50%) 0 0/24px 24px; }
+  .preview iframe { width:100%; height:100%; border:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  label { color:var(--muted); font-size:13px; display:flex; align-items:center; gap:6px; }
+  button, select, input[type=text], input[type=color] { font:inherit; color:var(--text); background:#22252f; border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  button { cursor:pointer; } button:hover { border-color:var(--acc); } button.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  input[type=color] { padding:2px; width:40px; height:30px; } input[type=range] { accent-color: var(--acc); }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px; }
+  @media (max-width: 980px) { .grid2 { grid-template-columns:1fr; } }
+  .btns button { margin:3px 2px; }
+  code { background:#22252f; padding:1px 6px; border-radius:6px; font-size:12px; }
+  .muted { color:var(--muted); font-size:12px; }
+  #log { height:90px; overflow:auto; font:12px ui-monospace, Menlo, monospace; color:var(--muted); background:#121318; border-radius:8px; padding:6px 8px; }
+  kbd { background:#2a2d38; border-radius:4px; padding:0 5px; font-size:12px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js" } }
+</script>
+</head>
+<body>
+<header>
+  <h1><b>Kael</b> Studio</h1>
+  <div class="chips">
+    <span class="chip" id="cFace">face</span><span class="chip" id="cHands">hands</span><span class="chip" id="cBody">body</span>
+    <span class="chip" id="cVoice">voice</span><span class="chip" id="cVmc">iPhone (VMC)</span><span class="chip" id="cObs">OBS avatars: 0</span>
+    <span class="chip" id="cTwitch">Twitch: off</span><span class="chip" id="cFps">0 fps</span>
+  </div>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>Camera &amp; tracking</h2>
+      <div class="stage"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+      <div class="row">
+        <button class="primary" id="start">Start camera</button>
+        <select id="camSel"><option value="">Default camera</option></select>
+        <button id="calib" title="Look straight at the camera with a relaxed face, then press">Calibrate neutral</button>
+        <label><input type="checkbox" id="tFace" checked> Face</label>
+        <label><input type="checkbox" id="tHands" checked> Hands</label>
+        <label><input type="checkbox" id="tBody" checked> Body</label>
+        <label><input type="checkbox" id="tVoice"> Voice lip sync</label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="mirror"> Mirror movement</label>
+        <label><input type="checkbox" id="swapLR"> Swap face left/right</label>
+        <label>Smoothing <input type="range" id="smooth" min="0" max="1" step="0.05" value="0.5"></label>
+        <label>Body every <select id="poseEvery"><option value="1">frame</option><option value="2" selected>2nd frame</option><option value="3">3rd frame</option></select></label>
+      </div>
+      <p class="muted">Tips: sit with your face and chest in view, light in front of you, camera at eye level. Show your hands to drive the fingers.</p>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>Activity</h2>
+      <div id="log"></div>
+    </div>
+  </section>
+  <section>
+    <div class="card">
+      <h2>Avatar preview</h2>
+      <div class="preview"><iframe id="preview" src="/avatar.html?preview=1"></iframe></div>
+      <div class="row">
+        <span class="muted">OBS Browser Source URL:</span> <code id="obsUrl"></code> <button id="copyUrl">Copy</button>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="grid2" style="padding:0 18px 18px">
+  <div class="card">
+    <h2>Look</h2>
+    <div class="row">
+      <label>Avatar <select id="avatarSel"></select></label>
+      <label>Upload .vrm <input type="file" id="upload" accept=".vrm"></label>
+    </div>
+    <div class="row">
+      <label>Camera <select id="cam"><option value="head">Head</option><option value="bust">Bust</option><option value="half">Half body</option><option value="full">Full body</option></select></label>
+      <label>Zoom <input type="range" id="zoom" min="0.6" max="1.8" step="0.02"></label>
+      <label>Up/Down <input type="range" id="offY" min="-0.4" max="0.4" step="0.01"></label>
+      <label>Left/Right <input type="range" id="offX" min="-0.6" max="0.6" step="0.01"></label>
+    </div>
+    <div class="row">
+      <label>Background <select id="bg"><option value="transparent">Transparent (OBS)</option><option value="green">Green screen</option><option value="blue">Blue screen</option><option value="color">Solid color</option></select></label>
+      <input type="color" id="bgColor">
+    </div>
+    <div class="row">
+      <label>Key light <input type="color" id="lightColor"></label>
+      <label>Brightness <input type="range" id="lightIntensity" min="0.3" max="2" step="0.05"></label>
+      <label>Rim light <input type="color" id="rimColor"></label>
+      <label>Rim <input type="range" id="rimIntensity" min="0" max="2" step="0.05"></label>
+      <label><input type="checkbox" id="idleMotion"> Idle breathing</label>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Interactions</h2>
+    <div class="btns" id="exprBtns"></div>
+    <div class="btns" id="throwBtns"></div>
+    <div class="btns" id="gestureBtns"></div>
+    <div class="row">
+      <label>Twitch channel <input type="text" id="twitch" placeholder="yourchannel" size="14"></label><button id="twitchSave">Connect</button>
+      <label><input type="checkbox" id="chatCommands"> Chat commands</label>
+    </div>
+    <p class="muted">Chat: <code>!heart</code> <code>!star</code> <code>!tomato</code> <code>!bonk</code> <code>!gift</code> <code>!pizza</code> <code>!joy</code> <code>!laugh</code> <code>!angry</code> <code>!sad</code> <code>!wow</code> <code>!smug</code> <code>!blush</code> <code>!wink</code> <code>!wave</code> <code>!nod</code> <code>!dance</code><br>
+    Stream Deck (background web request): <code id="apiEx"></code><br>
+    Hotkeys while this page is focused: <kbd>1</kbd>–<kbd>9</kbd> expressions, <kbd>Q</kbd>–<kbd>Y</kbd> throws, <kbd>Z</kbd> <kbd>X</kbd> <kbd>C</kbd> gestures.</p>
+  </div>
+</div>
+<script type="module" src="/tracker.js"></script>
+</body>
+</html>
