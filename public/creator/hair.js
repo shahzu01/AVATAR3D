@@ -5,6 +5,7 @@ import { V, lerp, smooth, col, Builder, surface, tube, catmull, blob } from './g
 export function buildHair(ctx) {
   const { recipe, body, shape, addSpring, sp } = ctx;
   const style = recipe.hair?.style || 'none';
+  const hat = (recipe.accessories || []).some((a) => ['cap', 'beanie'].includes(a.id));   // hair under a hat is flattened
   if (style === 'none') return {};
   const b = new Builder();
   const C1 = col(recipe.hair.color || '#3b2a22'), C2 = col(recipe.hair.color2 || recipe.hair.color || '#6b4226');
@@ -46,6 +47,7 @@ export function buildHair(ctx) {
     clump(pts, rx * width, rx * 0.02, { thick: 0.32 });
   };
   const spike = (az, el, len, width, bend = 0.25) => {
+    if (hat && el > 0.05) return;            // would poke through the hat
     const d = dirOf(az, el), base = surf(d, 0.02), up = V(0, 1, 0);
     const out = d.clone().lerp(up, bend).normalize();
     clump([base, base.clone().addScaledVector(out, len * 0.55), base.clone().addScaledVector(out, len).addScaledVector(d, len * 0.1)], width, 0.001, { thick: 0.7, outward: () => V(0, 0, 1).applyAxisAngle(V(0, 1, 0), az) });
@@ -118,10 +120,10 @@ export function buildHair(ctx) {
       break;
     }
     case 'buns': cap({ front: 0.45, side: -0.15, back: -0.5, thick: 0.07 }); sidesBangs(5, 0.22, 0.75);
-      for (const s of [1, -1]) { const p = surf(dirOf(s * 0.75, 0.95), 0.12); blob(b, p, [rx * 0.33, rx * 0.33, rx * 0.33], { nu: 18, nv: 12, color: C1, weights: hw, deform: (q, d) => q.multiplyScalar(1 + 0.05 * Math.sin(d.x * 14 + d.y * 9)) }); }
+      if (!hat) for (const s of [1, -1]) { const p = surf(dirOf(s * 0.75, 0.95), 0.12); blob(b, p, [rx * 0.33, rx * 0.33, rx * 0.33], { nu: 18, nv: 12, color: C1, weights: hw, deform: (q, d) => q.multiplyScalar(1 + 0.05 * Math.sin(d.x * 14 + d.y * 9)) }); }
       break;
     case 'curly': cap({ front: 0.4, side: -0.35, back: -0.6, thick: 0.18 });
-      for (let i = 0; i < 26; i++) { const az = (i / 26) * Math.PI * 2, el = 0.15 + ((i * 7) % 5) / 6; const p = surf(dirOf(az, el), 0.18); blob(b, p, [rx * 0.2, rx * 0.2, rx * 0.2], { nu: 10, nv: 8, color: i % 3 ? C1 : C2, weights: hw }); }
+      for (let i = 0; i < 26; i++) { const az = (i / 26) * Math.PI * 2, el = 0.15 + ((i * 7) % 5) / 6; if (hat && el > 0.3) continue; const p = surf(dirOf(az, el), 0.18); blob(b, p, [rx * 0.2, rx * 0.2, rx * 0.2], { nu: 10, nv: 8, color: i % 3 ? C1 : C2, weights: hw }); }
       break;
     case 'mohawk': cap({ front: 0.5, side: 0.35, back: -0.3, thick: 0.02 });
       for (let i = 0; i < 9; i++) { const el = lerp(0.95, -0.25, i / 8) ; const az = el > 0.6 ? 0 : Math.PI; const e2 = el > 0.6 ? el : Math.PI - el - 1.2; spike(i < 3 ? 0 : Math.PI, i < 3 ? lerp(0.8, 1.35, i / 2) : lerp(1.35, 0.1, (i - 3) / 5), ry * (0.55 - Math.abs(i - 3) * 0.04), rx * 0.13, 0.5); void az; void e2; }
@@ -130,9 +132,9 @@ export function buildHair(ctx) {
       for (let i = 0; i < 6; i++) bang(lerp(-0.3, 1.0, i / 5), { width: 0.24, len: lerp(0.95, 0.6, i / 5), curl: 0.8 });
       bang(-0.6, { width: 0.2, len: 0.5 }); break;
     case 'undercut': cap({ front: 0.55, side: 0.42, back: 0.1, thick: 0.05 });
-      for (let i = 0; i < 7; i++) { const az = lerp(-0.9, 0.9, i / 6); const p0 = surf(dirOf(az * 1.2 + Math.PI, 0.8), 0.04), p1 = surf(dirOf(az, 1.3), 0.25), p2 = surf(dirOf(az * 0.8, 0.75), 0.2); clump([p0, p1, p2], rx * 0.22, rx * 0.03, { thick: 0.5 }); }
+      if (!hat) for (let i = 0; i < 7; i++) { const az = lerp(-0.9, 0.9, i / 6); const p0 = surf(dirOf(az * 1.2 + Math.PI, 0.8), 0.04), p1 = surf(dirOf(az, 1.3), 0.25), p2 = surf(dirOf(az * 0.8, 0.75), 0.2); clump([p0, p1, p2], rx * 0.22, rx * 0.03, { thick: 0.5 }); }
       break;
-    case 'tuft': for (let i = 0; i < 4; i++) { const az = lerp(-0.45, 0.45, i / 3); const p0 = surf(dirOf(az, 1.05), 0.0), p1 = surf(dirOf(az * 1.2, 0.95), 0.18), p2 = surf(dirOf(az * 1.4, 0.7), 0.22); clump([p0, p1, p2], rx * 0.13, 0.001, { thick: 0.6 }); }
+    case 'tuft': if (!hat) for (let i = 0; i < 4; i++) { const az = lerp(-0.45, 0.45, i / 3); const p0 = surf(dirOf(az, 1.05), 0.0), p1 = surf(dirOf(az * 1.2, 0.95), 0.18), p2 = surf(dirOf(az * 1.4, 0.7), 0.22); clump([p0, p1, p2], rx * 0.13, 0.001, { thick: 0.6 }); }
       break;
   }
   void animal;

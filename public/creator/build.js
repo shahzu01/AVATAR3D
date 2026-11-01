@@ -76,7 +76,10 @@ export function buildCharacter(input, { faceSize = 1024 } = {}) {
     if ((recipe.outline ?? 0.5) > 0.02 && !p.glow) { const o = new THREE.SkinnedMesh(g, outline); o.name = `${p.name}-outline`; o.frustumCulled = false; root.add(o); o.bind(skeleton, new THREE.Matrix4()); }
   }
   // drawn face
-  const decal = buildFaceDecal(body, headB.geometry());
+  // the face decal is projected onto a lighter copy of the head (much faster to raycast, same surface within a fraction of a mm)
+  let proxy = headB;
+  if (shape.kit) { proxy = new Builder(); buildHead(proxy, body, shape, { headColor: () => colors.main }, { nu: 80, nv: 56 }); }
+  const decal = buildFaceDecal(body, proxy.geometry());
   const face = new FaceDrawer(recipe, body, decal.region, sp, faceSize);
   const faceMat = new THREE.MeshToonMaterial({ map: face.texture, transparent: true, depthWrite: false, gradientMap: mat.gradientMap, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const faceMesh = new THREE.SkinnedMesh(decal.builder.geometry(), faceMat); faceMesh.name = 'face'; faceMesh.frustumCulled = false; faceMesh.renderOrder = 2;

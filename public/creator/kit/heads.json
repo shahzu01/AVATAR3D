@@ -1,0 +1,1 @@
+{"version": 1, "nu": 128, "nv": 65, "rmax": 2.5, "species": {"human": 0, "elf": 66560, "cat": 133120, "fox": 199680, "wolf": 266240, "raccoon": 332800, "bear": 399360, "panda": 465920, "bunny": 532480, "tiger": 599040, "mouse": 665600}, "variants": [0, 0.5, 1], "nose": {"offset": 732160, "nu": 64, "nv": 33}, "bytes": 736384}

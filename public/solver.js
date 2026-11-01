@@ -39,6 +39,7 @@ const mirrorQuat = (q) => new Quaternion(q.x, -q.y, -q.z, q.w);     // reflect a
 
 // ------------------------------------------------------------------ face
 const LR = (n) => n.replace(/Left$/, '__R').replace(/Right$/, 'Left').replace(/__R$/, 'Right');
+const DEADZONE = [[/^jawOpen$/, 0.05], [/^mouthSmile/, 0.07], [/^mouth(Funnel|Pucker)$/, 0.1], [/^mouth(Frown|Stretch|Press|Roll|Shrug|Dimple|LowerDown|UpperUp)/, 0.08], [/^brow/, 0.08], [/^cheek/, 0.08], [/^nose/, 0.1]];
 export class FaceSolver {
   constructor() { this.neutral = null; this.neutralBs = {}; this.filters = {}; this.headF = new QuatSmoother(3.0, 0.5); this.smoothing = 0.5; }
   setSmoothing(s) {           // 0 = raw, 1 = very smooth
@@ -76,8 +77,17 @@ export class FaceSolver {
       if (k.startsWith('eyeBlink')) v = smoothstep(0.30, 0.68, v);          // MediaPipe rarely reports a full blink
       else if (k === 'jawOpen') v = clamp01(v * 1.25);
       else if (k.startsWith('mouthSmile')) v = clamp01(v * 1.2);
+      // dead zones: webcam noise makes the mouth and brows twitch at rest
+      const dz = DEADZONE.find(([re]) => re.test(k));
+      if (dz) v = clamp01((v - dz[1]) / (1 - dz[1]));
       const f = this.filters[k] || (this.filters[k] = new OneEuro(k.startsWith('eyeBlink') ? 8 - 4 * this.smoothing : 6 - 5 * this.smoothing, 1.2));
       out[k] = Math.round(clamp01(f.filter(v, t)) * 1000) / 1000;
+    }
+    // link the eyes: webcams often see one eye half-closed; blink together unless it is clearly a wink
+    if (opts.linkEyes !== false) for (const [a, b] of [['eyeBlinkLeft', 'eyeBlinkRight'], ['eyeSquintLeft', 'eyeSquintRight'], ['eyeWideLeft', 'eyeWideRight']]) {
+      const l = out[a] ?? 0, r = out[b] ?? 0;
+      const wink = a.startsWith('eyeBlink') && Math.max(l, r) > 0.75 && Math.min(l, r) < 0.2;    // one eye clearly shut, the other clearly open
+      if (!wink) { const m = Math.round((Math.max(l, r) * 0.65 + Math.min(l, r) * 0.35) * 1000) / 1000; out[a] = out[b] = m; }
     }
     if (opts.mirror) for (const k of Object.keys(out)) if (/Left$|Right$/.test(k) && k.endsWith('Left')) { const r = LR(k); [out[k], out[r]] = [out[r], out[k]]; }
     // gaze from eyeLook* (degrees). three-vrm: +yaw turns toward the avatar's left (+X), +pitch looks down.

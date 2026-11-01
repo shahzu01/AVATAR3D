@@ -41,8 +41,12 @@ export class AvatarViewer {
   resize() {
     const w = this.el.clientWidth || 1, h = this.el.clientHeight || 1;
     this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = '100%'; this.renderer.domElement.style.height = '100%';
-    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    this.camera.aspect = w / h;
+    if (this.shiftPx) this.camera.setViewOffset(w, h, this.shiftPx, 0, w, h); else this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
   }
+  /** Shift the picture left (positive px) so the character stays centred in the space not covered by side panels. */
+  setShift(px) { this.shiftPx = px || 0; this.resize(); }
   setLighting(name) {
     const L = LIGHTS[name] || LIGHTS.studio; this.lighting = name;
     this.key.color.set(L.key[0]); this.key.intensity = L.key[1];
@@ -182,12 +186,17 @@ export class AvatarViewer {
     if (!this.model) return;
     const box = this.box || new THREE.Box3().setFromObject(this.model);
     const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+    if (view === 'face' && this.headPos) {        // close-up on the face
+      const top = box.max.y, h = Math.max(0.18, top - this.headPos.y);
+      const target = new THREE.Vector3(0, this.headPos.y + h * 0.42, 0), d = Math.max(0.55, h * 3.0);
+      this.camera.position.set(0, target.y + 0.02, d); this.controls.target.copy(target); this.controls.update(); return;
+    }
     const full = view.endsWith('-full') || !this.vrm;
     const v = view.replace('-full', '');
     let target, dist;
     const fov = THREE.MathUtils.degToRad(this.camera.fov), fit = (h, w) => Math.max(h / 2 / Math.tan(fov / 2), w / 2 / Math.tan(fov / 2) / Math.max(0.5, this.camera.aspect)) * 1.12;
     if (!full && this.headPos) {        // bust: from mid-chest to the top of the head (heads, ears and hats vary a lot)
-      const top = box.max.y + 0.03, bottom = Math.max(box.min.y, this.headPos.y - Math.max(0.45, size.y * 0.27));
+      const top = box.max.y + 0.03, bottom = Math.max(box.min.y, this.headPos.y - Math.max(0.62, size.y * 0.42));
       target = new THREE.Vector3(0, (top + bottom) / 2, 0); dist = fit(top - bottom, Math.min(size.x, (top - bottom) * 1.2));
     } else { target = center; dist = fit(size.y, size.x); }
     const ang = { front: 0, threequarter: Math.PI / 4, side: Math.PI / 2, back: Math.PI }[v] ?? 0;
@@ -248,7 +257,7 @@ export class AvatarViewer {
   thumbnail(size = 384) {
     const prev = { pos: this.camera.position.clone(), target: this.controls.target.clone(), aspect: this.camera.aspect, grid: this.grid.visible, bg: this.background };
     const w = this.el.clientWidth, h = this.el.clientHeight;
-    this.renderer.setSize(size, size, false); this.camera.aspect = 1; this.camera.updateProjectionMatrix();
+    this.renderer.setSize(size, size, false); this.camera.aspect = 1; this.camera.clearViewOffset(); this.camera.updateProjectionMatrix();
     this.grid.visible = false; this.setBackground('transparent');
     const keepMotion = this.motion, keepStart = this.motionStart;
     if (this.vrm) { this.motion = 'idle'; this.pose(0); this.vrm.expressionManager && this.expr && this.setExpression(this.expr); this.vrm.update(0); this.model.updateMatrixWorld(true); }
@@ -258,7 +267,7 @@ export class AvatarViewer {
     this.camera.lookAt(this.controls.target);
     this.renderer.render(this.scene, this.camera);
     const url = this.renderer.domElement.toDataURL('image/png');
-    this.renderer.setSize(w, h, false); this.camera.aspect = prev.aspect; this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h, false); this.camera.aspect = prev.aspect; this.resize();
     this.camera.position.copy(prev.pos); this.controls.target.copy(prev.target); this.grid.visible = prev.grid; this.setBackground(prev.bg);
     return url;
   }

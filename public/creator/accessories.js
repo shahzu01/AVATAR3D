@@ -1,5 +1,6 @@
 // Accessories. Mostly rigid to the head; scarf/choker to the neck; backpack and wings to the chest.
 import { V, lerp, smooth, col, Builder, surface, tube, blob } from './geom.js';
+import { earHoles } from './head.js';
 
 /** Ring (torus) around an axis. */
 function ring(b, center, axis, R, r, { color, weights, nu = 32, nv = 10, sx = 1, sy = 1, arc = Math.PI * 2, a0 = 0 }) {
@@ -71,33 +72,56 @@ export function buildAccessories(ctx) {
       }
       case 'cap': case 'beanie': {
         const beanie = acc.id === 'beanie';
-        surface(b, 36, 14, (u, v) => {
-          const th = u * Math.PI * 2, ph = v * (beanie ? 0.47 : 0.42) * Math.PI;
-          const dir = V(Math.sin(ph) * Math.sin(th), Math.cos(ph), Math.sin(ph) * Math.cos(th));
-          return { pos: surf(dir, hairOut + (beanie ? 0.05 : 0.03) + (beanie ? 0.08 * (1 - v) : 0)), color: beanie && v > 0.82 ? dark : C, weights: hw };
-        }, { flip: true });
-        if (beanie) blob(b, surf(V(0, 1, -0.05), hairOut + 0.2), [rx * 0.2, rx * 0.2, rx * 0.2], { nu: 12, nv: 10, color: lite, weights: hw, deform: (q, d) => q.multiplyScalar(1 + 0.1 * Math.sin(d.x * 12) * Math.sin(d.y * 10)) });
-        else {
-          const bp = surf(V(0, 0.28, 1), hairOut + 0.04);
-          blob(b, bp.add(V(0, -0.005 * sc, rz * 0.32)), [rx * 0.62, 0.006 * sc, rz * 0.5], { nu: 22, nv: 6, color: dark, weights: hw, deform: (q, d) => { if (d.z < 0) q.z *= 0.3; q.y -= q.z * 0.18; return q; } });
-          blob(b, surf(V(0, 1, 0), hairOut + 0.05), [0.01 * sc, 0.006 * sc, 0.01 * sc], { nu: 8, nv: 6, color: dark, weights: hw });
+        const holes = ctx.sp.style === 'animal' || !['human', 'elf', 'none'].includes(ctx.earType) ? earHoles(ctx.earType, recipe.ears?.size) : [];
+        const lift = hairOut + (beanie ? 0.06 : 0.035);
+        // hat edge height (dir.y) all the way round: lower at the back, higher over the eyes
+        const browTop = Math.min(0.62, Math.max(0.22, (eyeY - c.y) / ry + (eyeH / ry) * 1.25));     // just above the eyebrows
+        const edgeY = (az) => { const z = Math.cos(az); return beanie ? lerp(-0.05, browTop + 0.03, smooth(-0.2, 1, z)) : lerp(-0.05, browTop, smooth(-0.3, 1, z)); };
+        const crown = (az, v) => {
+          const phEdge = Math.acos(Math.max(-0.95, Math.min(0.95, edgeY(az))));
+          const ph = v * phEdge, dir = V(Math.sin(ph) * Math.sin(az), Math.cos(ph), Math.sin(ph) * Math.cos(az));
+          let out = lift + (beanie ? 0.05 * (1 - v) ** 2 : 0.02 * (1 - v));
+          for (const h of holes) { const ang = Math.acos(Math.max(-1, Math.min(1, dir.dot(h.dir)))); out = lerp(-0.08, out, smooth(h.r * 0.75, h.r, ang)); }   // ear cut-outs
+          return surf(dir, out);
+        };
+        surface(b, 48, 18, (u, v) => ({ pos: crown(u * Math.PI * 2, v), color: beanie && v > 0.8 ? dark : C, weights: hw }), { flip: true });
+        if (beanie) {
+          // folded cuff and pom-pom
+          const cuff = []; for (let k = 0; k <= 48; k++) { const az = (k / 48) * Math.PI * 2; cuff.push(crown(az, 1).add(V(0, 0.004 * sc, 0))); }
+          tube(b, cuff.map((c) => ({ c, r: [0.016 * sc, 0.011 * sc], w: hw, hint: c.clone().sub(body.headC).setY(0).normalize() })), { seg: 10, color: dark });
+          blob(b, surf(V(0, 1, -0.05), lift + 0.16), [rx * 0.2, rx * 0.2, rx * 0.2], { nu: 14, nv: 10, color: lite, weights: hw, deform: (q, d) => q.multiplyScalar(1 + 0.1 * Math.sin(d.x * 12) * Math.sin(d.y * 10)) });
+        } else {
+          // brim: curved peak that follows the front edge and tilts slightly down
+          const L = rz * 0.88, brim = (u, v, t) => {
+            const az = u * 1.05, base = crown(az, 1);
+            const fwd = V(Math.sin(az) * 0.35, 0, 1).normalize();
+            const len = L * Math.sqrt(Math.max(0, 1 - (u / 1.0) ** 2)) * v;
+            return base.addScaledVector(fwd, len).add(V(0, -len * 0.16 + t, 0));
+          };
+          const th = 0.0045 * sc;
+          surface(b, 20, 6, (uu, v) => ({ pos: brim(uu * 2 - 1, v, th), color: C, weights: hw }), { closeU: false, flip: true });
+          surface(b, 20, 6, (uu, v) => ({ pos: brim(uu * 2 - 1, v, -th), color: dark, weights: hw }), { closeU: false });
+          // rim of the brim
+          const rim = []; for (let k = 0; k <= 20; k++) rim.push(brim((k / 20) * 2 - 1, 1, 0));
+          tube(b, rim.map((c) => ({ c, r: [th * 1.1, th * 1.1], w: hw })), { seg: 6, color: C });
+          blob(b, crown(0, 0).add(V(0, 0.004 * sc, 0)), [0.011 * sc, 0.007 * sc, 0.011 * sc], { nu: 8, nv: 6, color: dark, weights: hw });
         }
         break;
       }
       case 'crown': {
-        const top = surf(V(0, 1, -0.1), hairOut), Rr = rx * 0.42;
+        const top = surf(V(0, 1, 0.05), hairOut), Rr = rx * 0.5;
         ring(b, top.clone().add(V(0, 0.005 * sc, 0)), V(0, 1, 0), Rr, 0.008 * sc, { color: C, weights: hw, sy: 0.9 });
         for (let i = 0; i < 7; i++) {
           const a = (i / 7) * Math.PI * 2, base = top.clone().add(V(Math.sin(a) * Rr, 0.008 * sc, Math.cos(a) * Rr * 0.9));
-          tube(b, [base, base.clone().add(V(0, 0.035 * sc, 0))].map((p, k) => ({ c: p, r: [0.012 * sc * (1 - k * 0.9) + 0.001, 0.006 * sc * (1 - k * 0.9) + 0.001], w: hw, hint: V(Math.sin(a), 0, Math.cos(a)) })), { seg: 6, color: C });
+          tube(b, [base, base.clone().add(V(0, 0.05 * sc, 0))].map((p, k) => ({ c: p, r: [0.017 * sc * (1 - k * 0.9) + 0.001, 0.007 * sc * (1 - k * 0.9) + 0.001], w: hw, hint: V(Math.sin(a), 0, Math.cos(a)) })), { seg: 6, color: C });
           blob(b, base.clone().add(V(Math.sin(a) * 0.004, 0.012 * sc, Math.cos(a) * 0.004)), [0.005 * sc, 0.005 * sc, 0.005 * sc], { nu: 8, nv: 6, color: col(i % 2 ? '#e0333f' : '#3f8cff'), weights: hw });
         }
         break;
       }
       case 'horns': for (const s of [1, -1]) {
-        const base = surf(dirOf(s * 0.55, 0.85), hairOut * 0.6);
-        const pts = [base, base.clone().add(V(s * 0.03 * sc, 0.05 * sc, -0.01 * sc)), base.clone().add(V(s * 0.07 * sc, 0.075 * sc, -0.04 * sc)), base.clone().add(V(s * 0.085 * sc, 0.06 * sc, -0.08 * sc))];
-        const rings = []; for (let k = 0; k <= 10; k++) { const t = k / 10; rings.push({ c: catmullLocal(pts, t), r: [0.02 * sc * (1 - t) + 0.001, 0.02 * sc * (1 - t) + 0.001], w: hw, color: C.clone().lerp(lite, t) }); }
+        const base = surf(dirOf(s * 0.5, 0.88), hairOut + 0.01);
+        const hk = 1.35, pts = [base.clone().add(V(0, -0.01 * sc, 0)), base.clone().add(V(s * 0.04 * hk * sc, 0.065 * hk * sc, -0.01 * sc)), base.clone().add(V(s * 0.09 * hk * sc, 0.1 * hk * sc, -0.05 * hk * sc)), base.clone().add(V(s * 0.11 * hk * sc, 0.08 * hk * sc, -0.1 * hk * sc))];
+        const rings = []; for (let k = 0; k <= 12; k++) { const t = k / 12; rings.push({ c: catmullLocal(pts, t), r: [0.026 * sc * (1 - t) + 0.001, 0.026 * sc * (1 - t) + 0.001], w: hw, color: C.clone().lerp(lite, t) }); }
         tube(b, rings, { seg: 10 });
       } break;
       case 'halo': ring(glow, c.clone().add(V(0, ry * 1.25 + hairOut * ry, -0.02 * sc)), V(0, 1, 0.15), rx * 0.55, 0.007 * sc, { color: col(acc.color || '#ffe27a'), weights: hw }); break;
@@ -108,9 +132,10 @@ export function buildAccessories(ctx) {
         break;
       }
       case 'flower': {
-        const p = surf(dirOf(-0.95, 0.45), hairOut + 0.03);
-        for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; blob(b, p.clone().add(V(-0.004, Math.sin(a) * 0.016 * sc, Math.cos(a) * 0.016 * sc)), [0.006 * sc, 0.013 * sc, 0.013 * sc], { nu: 10, nv: 6, color: C, weights: hw }); }
-        blob(b, p.clone().add(V(-0.006 * sc, 0, 0)), [0.006 * sc, 0.008 * sc, 0.008 * sc], { nu: 8, nv: 6, color: col('#ffd43f'), weights: hw });
+        const fd = dirOf(-0.8, 0.5), p = surf(fd, hairOut + 0.04), k2 = 1.7;
+        const fx = fd.clone().setY(0).normalize(), fy = V(0, 1, 0), fz = fx.clone().cross(fy).normalize();
+        for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; blob(b, p.clone().addScaledVector(fy, Math.sin(a) * 0.016 * k2 * sc).addScaledVector(fz, Math.cos(a) * 0.016 * k2 * sc), [0.013 * k2 * sc, 0.013 * k2 * sc, 0.013 * k2 * sc], { nu: 10, nv: 8, color: C, weights: hw, deform: (q) => q.addScaledVector(fx, -q.dot(fx) * 0.65) }); }
+        blob(b, p.clone().addScaledVector(fx, 0.004 * sc), [0.009 * k2 * sc, 0.009 * k2 * sc, 0.009 * k2 * sc], { nu: 8, nv: 6, color: col('#ffd43f'), weights: hw });
         break;
       }
       case 'bandana': {

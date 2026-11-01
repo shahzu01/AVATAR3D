@@ -11,7 +11,7 @@ export const col = (hex) => new THREE.Color(hex);
 
 /** Mesh under construction. Every vertex carries position, color and up to 4 bone weights. */
 export class Builder {
-  constructor() { this.p = []; this.c = []; this.uv = []; this.si = []; this.sw = []; this.idx = []; }
+  constructor() { this.p = []; this.c = []; this.uv = []; this.si = []; this.sw = []; this.idx = []; this.nidx = []; this.twin = new Map(); }
   get count() { return this.p.length / 3; }
   vert(pos, color, weights, uv = null) {
     this.p.push(pos.x, pos.y, pos.z);
@@ -20,6 +20,15 @@ export class Builder {
     const w = Object.entries(weights).sort((a, b) => b[1] - a[1]).slice(0, 4);
     const tot = w.reduce((s, [, v]) => s + v, 0) || 1;
     for (let i = 0; i < 4; i++) { this.si.push(w[i] ? w[i][0] : 0); this.sw.push(w[i] ? w[i][1] / tot : 0); }
+    return this.count - 1;
+  }
+  /** Copy of vertex v with another colour; it borrows v's smooth normal, so colour edges stay crisp without shading seams. */
+  dup(v, color) {
+    this.p.push(this.p[v * 3], this.p[v * 3 + 1], this.p[v * 3 + 2]);
+    this.c.push(color.r, color.g, color.b);
+    this.uv.push(this.uv[v * 2], this.uv[v * 2 + 1]);
+    for (let i = 0; i < 4; i++) { this.si.push(this.si[v * 4 + i]); this.sw.push(this.sw[v * 4 + i]); }
+    this.twin.set(this.count - 1, v);
     return this.count - 1;
   }
   tri(a, b, c) { this.idx.push(a, b, c); }
@@ -31,8 +40,11 @@ export class Builder {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.si, 4));
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
-    g.setIndex(this.idx);
+    // normals come from the smooth surface (including hidden "normal-only" faces); colour copies borrow them
+    g.setIndex(this.nidx.length ? this.idx.concat(this.nidx) : this.idx);
     g.computeVertexNormals();
+    if (this.twin.size) { const n = g.attributes.normal; for (const [v, src] of this.twin) n.setXYZ(v, n.getX(src), n.getY(src), n.getZ(src)); }
+    if (this.nidx.length) g.setIndex(this.idx);
     return g;
   }
 }
@@ -78,7 +90,7 @@ export function frameFor(t, hint = V(0, 0, 1)) {
  *   w: weights, color?: THREE.Color or fn(angle, ring) }
  * hint: preferred "N" direction for the cross-section (front direction for limbs/torso).
  */
-export function tube(b, rings, { seg = 20, hint = V(0, 0, 1), capStart = true, capEnd = true, color, colorFn } = {}) {
+export function tube(b, rings, { seg = 20, hint = V(0, 0, 1), capStart = true, capEnd = true, color, colorFn, sharp = false } = {}) {
   const frames = rings.map((r, i) => {
     const prev = rings[Math.max(0, i - 1)].c, next = rings[Math.min(rings.length - 1, i + 1)].c;
     return frameFor(next.clone().sub(prev), r.hint || hint);
@@ -97,11 +109,17 @@ export function tube(b, rings, { seg = 20, hint = V(0, 0, 1), capStart = true, c
   });
   for (let j = 0; j < rings.length - 1; j++) for (let i = 0; i < seg; i++) {
     const a = start + j * seg + i, bb = start + j * seg + ((i + 1) % seg), c = start + (j + 1) * seg + ((i + 1) % seg), d = start + (j + 1) * seg + i;
-    b.quad(a, d, c, bb);
+    if (!sharp || !colorFn) { b.quad(a, d, c, bb); continue; }
+    // sharp colours: each face gets one solid colour (from its centre), so collars, cuffs, hems and stripes have clean edges
+    b.nidx.push(a, d, c, a, c, bb);
+    const P = (v) => V(b.p[v * 3], b.p[v * 3 + 1], b.p[v * 3 + 2]);
+    const mid = P(a).add(P(bb)).add(P(c)).add(P(d)).multiplyScalar(0.25);
+    const fc = colorFn(mid, ((i + 0.5) / seg) * Math.PI * 2, rings[j], j);
+    b.quad(b.dup(a, fc), b.dup(d, fc), b.dup(c, fc), b.dup(bb, fc));
   }
   const cap = (j, flip) => {
-    const r = rings[j]; const ci = b.vert(r.c.clone().addScaledVector(frames[j].T, flip ? r.r[0] * 0.25 : -r.r[0] * 0.25), colorFn ? colorFn(r.c, 0, r, j) : r.color || color, r.w);
-    for (let i = 0; i < seg; i++) { const a = start + j * seg + i, bb = start + j * seg + ((i + 1) % seg); if (flip) b.tri(ci, a, bb); else b.tri(ci, bb, a); }
+    const r = rings[j]; const ci = b.vert(r.c.clone().addScaledVector(frames[j].T, flip ? Math.min(r.r[0], r.r[1]) * 0.6 : -Math.min(r.r[0], r.r[1]) * 0.6), colorFn ? colorFn(r.c, 0, r, j) : r.color || color, r.w);
+    for (let i = 0; i < seg; i++) { const a = start + j * seg + i, bb = start + j * seg + ((i + 1) % seg); if (flip) b.tri(ci, bb, a); else b.tri(ci, a, bb); }   // outward-facing caps
   };
   if (capStart) cap(0, false);
   if (capEnd) cap(rings.length - 1, true);

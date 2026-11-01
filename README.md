@@ -46,9 +46,28 @@ Use the **Website** action. Turn on "GET request in background" and set the URL 
 - `http://localhost:3939/api/throw/heart?n=5`
 - `http://localhost:3939/api/gesture/wave`
 
-## Optional: better face tracking with an iPhone
+## iPhone face tracking (recommended)
 
-Any app that sends the **VMC protocol** (for example waidayo, or iFacialMocap through a VMC bridge) can drive the face with Apple's ARKit tracking. Send it to your Mac's IP address on port **39539**. The **iPhone (VMC)** chip turns green when data arrives. Webcam body and hand tracking keep working at the same time.
+An iPhone with Face ID tracks your face much better than a webcam. Use the **iPhone face tracking** panel in the Studio. The webcam keeps tracking body and hands.
+
+| Phone app | Setup |
+|---|---|
+| **waidayo** (free) or any VMC app | In the app's VMC settings, send to this Mac's address (shown in the panel) on port **39539**. |
+| **iFacialMocap** | Type the IP address the app shows into the panel. Kael Studio connects to the phone by itself. |
+| **VTube Studio** (iPhone app) | Turn on the setting that lets PC apps receive tracking, then type the phone's IP address into the panel. |
+
+Phone and Mac must be on the same Wi-Fi. If macOS asks about incoming connections for **node**, click **Allow**. Look straight ahead and press **Calibrate iPhone**. If turning or nodding goes the wrong way, use **Mirror**, **Flip left/right** or **Flip up/down**. While the iPhone is connected, the webcam skips the face to save power (you can turn that off).
+
+## Tracking tips and options
+
+- Press **Calibrate neutral** each session (head straight, relaxed face).
+- **Smoothing:** move right if the avatar jitters, left if it lags.
+- **Blink both eyes together:** stops one-eye flicker from webcams; real winks still work.
+- **Smart hand search:** looks for hands only while your wrists are in view.
+- **Auto performance:** if your Mac struggles, hands and body are tracked less often automatically; the timing line under the camera shows what each part costs.
+- **Run on GPU / CPU:** GPU is fastest on Apple Silicon. Try CPU only if tracking misbehaves.
+- Keep the Studio in its own visible window; Chrome pauses hidden tabs (the Studio warns you if that happened).
+- Light in front of you, camera at eye level, charger plugged in, Low Power Mode off.
 
 ## Avatar Library
 

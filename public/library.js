@@ -1,6 +1,10 @@
 // Avatar Library page: browse avatars, import VRM/GLB with validation and 3D preview, inspect capabilities,
 // manage files and per-avatar stream presentation.
 import { AvatarViewer, LIGHT_PRESETS } from '/viewer.js';
+import { ICON, topbar, wireRanges, toast } from '/ui.js';
+topbar('library');
+document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = ICON[el.dataset.icon] || ''; });
+const stageViewer = (id) => { const v = new AvatarViewer($(id)); v.setGrid(false); v.setBackground('transparent'); $(id).classList.remove('checker'); return v; };
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -49,26 +53,63 @@ async function route() {
 }
 addEventListener('hashchange', route);
 
-// ------------------------------------------------------------------ library grid
+// ------------------------------------------------------------------ home: avatar strip + stage + info
+let selectedId = null;
 async function refresh() {
   lib = await api('/api/library');
   $('limitNote').textContent = `VRM 1.0 / 0.x or GLB, up to ${lib.limits.maxFileMB} MB. The file stays on this Mac.`;
   $('libEmpty').style.display = lib.avatars.length ? 'none' : 'block';
+  $('libCount').textContent = lib.avatars.length ? `· ${lib.avatars.length}` : '';
+  if (!lib.avatars.some((a) => a.id === selectedId)) selectedId = lib.activeId || lib.avatars[0]?.id || null;
   $('libGrid').innerHTML = lib.avatars.map((a) => `
-    <div class="card clickable" data-id="${a.id}">
+    <div class="card ${a.id === selectedId ? 'sel' : ''}" data-id="${a.id}" title="${esc(a.name)} (double-click for details)">
+      ${a.id === lib.activeId ? '<span class="live">Active</span>' : ''}
       <div class="thumb">${a.thumbUrl ? `<img src="${a.thumbUrl}" alt="">` : '🧍'}</div>
-      <div class="body">
-        <div class="name" title="${esc(a.name)}">${esc(a.name)}</div>
-        <div class="badges">
-          ${a.id === lib.activeId ? '<span class="badge active">Active</span>' : ''}
-          <span class="badge">${SOURCE[a.sourceType] || a.sourceType}${a.format.vrmVersion ? ' ' + a.format.vrmVersion : ''}</span>
-          <span class="badge ${a.suitability.level}">${LEVEL[a.suitability.level]}</span>
-        </div>
-        <div class="muted">${esc(a.originalFilename)} · ${mb(a.fileSize)}</div>
-      </div>
+      <div class="body"><div class="name">${esc(a.name)}</div><div class="sub">${SOURCE[a.sourceType] || a.sourceType}</div></div>
     </div>`).join('');
-  for (const c of $('libGrid').querySelectorAll('[data-id]')) c.onclick = () => { location.hash = `a=${c.dataset.id}`; };
+  for (const c of $('libGrid').querySelectorAll('[data-id]')) { c.onclick = () => select(c.dataset.id); c.ondblclick = () => { location.hash = `a=${c.dataset.id}`; }; }
   makeMissingThumbnails();
+  select(selectedId, true);
+}
+let homeLoaded = null;
+async function select(id, quiet = false) {
+  selectedId = id;
+  $('libGrid').querySelectorAll('[data-id]').forEach((c) => c.classList.toggle('sel', c.dataset.id === id));
+  const a = lib.avatars.find((x) => x.id === id);
+  renderHomeInfo(a);
+  if (!a) { $('homeOverlay').textContent = 'Create your first avatar, or import a VRM you already own.'; viewers.home?.unload(); homeLoaded = null; return; }
+  if (homeLoaded === `${a.id}|${a.updatedAt}`) return;
+  homeLoaded = `${a.id}|${a.updatedAt}`;
+  if (!viewers.home) { viewers.home = stageViewer('homeViewer'); viewers.home.setShift(-82); }
+  $('homeOverlay').textContent = 'Loading…';
+  try {
+    await viewers.home.load(a.fileUrl, { kind: a.sourceType === 'created' ? 'created' : undefined });
+    if (selectedId !== a.id) return;
+    $('homeOverlay').textContent = ''; viewers.home.frame('front'); viewers.home.setMotion('idle');
+  } catch (e) { if (selectedId === a.id) $('homeOverlay').textContent = `Could not show this avatar: ${e.message}`; }
+  void quiet;
+}
+function renderHomeInfo(a) {
+  if (!a) { $('homeInfo').innerHTML = `<h2>Welcome</h2><p class="hint">Your avatars live here. Make one with the creator or bring a VRM you already own. The one marked <b>Active</b> is what OBS shows.</p>`; return; }
+  const c = a.capabilities, active = a.id === lib.activeId;
+  const fmt = a.sourceType === 'created' ? 'Made in the creator' : `${a.format.type}${a.format.vrmVersion ? ' ' + a.format.vrmVersion : ''}`;
+  $('homeInfo').innerHTML = `
+    <div><div class="badges" style="margin-bottom:8px">${active ? '<span class="badge active">Active · on stream</span>' : ''}<span class="badge ${a.suitability.level}">${LEVEL[a.suitability.level]}</span></div><h2>${esc(a.name)}</h2><div class="muted">${esc(a.originalFilename)} · ${mb(a.fileSize)}</div></div>
+    <div class="facts">
+      <div class="fact"><small>Type</small><span>${esc(fmt)}</span></div>
+      <div class="fact"><small>Face tracking</small><span>${a.sourceType === 'created' || c.expressions.perfectSync ? 'Perfect Sync' : c.expressions.blink ? 'Basic' : 'None'}</span></div>
+      <div class="fact"><small>Fingers</small><span>${c.humanoid.fingers ? `${c.humanoid.fingers} bones` : 'No'}</span></div>
+      <div class="fact"><small>Sway</small><span>${c.springBones ? `${c.springBones} group(s)` : 'None'}</span></div>
+    </div>
+    <div class="btns">
+      <button class="primary" id="homeActivate" ${active || !a.suitability.tracking ? 'disabled' : ''}>${active ? 'Already on stream' : a.suitability.tracking ? 'Put on stream' : 'Cannot be used live'}</button>
+      ${a.sourceType === 'created' ? `<a class="btnlink" href="/creator.html?id=${a.id}" style="justify-content:center">${ICON.edit} Edit in creator</a>` : ''}
+      <button id="homeDetails">${ICON.info} Details, stream setup and file</button>
+    </div>
+    <p class="tip">Tip: double-click an avatar to open its details. Drag the stage to turn it, scroll to zoom.</p>`;
+  $('homeDetails').onclick = () => { location.hash = `a=${a.id}`; };
+  const act = $('homeActivate');
+  if (act && !act.disabled) act.onclick = async () => { try { await api(`/api/library/${a.id}/activate`, { method: 'POST' }); toast(`${a.name} is now on stream`); await refresh(); } catch (e) { toast(e.message); } };
 }
 // Avatars without a picture (for example ones dropped into the avatars folder) get one, one at a time in the background.
 let thumbBusy = false;
@@ -95,22 +136,17 @@ $('importCard').onclick = () => { location.hash = 'import'; };
 
 // ------------------------------------------------------------------ shared: viewer controls and capability report
 function viewerControls(row, viewer, info) {
-  const views = [['front', 'Front'], ['threequarter', '¾'], ['side', 'Side'], ['back', 'Back'], ['front-full', 'Full body']];
+  const views = [['front', 'Upper'], ['front-full', 'Full'], ['face', 'Face'], ['threequarter', '¾'], ['side', 'Side'], ['back', 'Back']];
   row.innerHTML = `
-    <span class="muted">View</span>${views.map(([k, l]) => `<button data-view="${k}">${l}</button>`).join('')}
-    <button data-zoom="0.8" title="Zoom in">＋</button><button data-zoom="1.25" title="Zoom out">－</button>
-    <label>Light <select data-k="light">${LIGHT_PRESETS.map((p) => `<option>${p}</option>`).join('')}</select></label>
-    <label>Background <select data-k="bg"><option value="dark">Dark</option><option value="light">Light</option><option value="green">Green</option><option value="transparent">Transparent</option></select></label>
-    <label class="inline"><input type="checkbox" data-k="grid" checked> Floor</label>
-    <div style="width:100%"></div>
-    <span class="muted">Motion</span><span class="chips" data-k="motions"></span>
-    <div style="width:100%"></div>
-    <span class="muted">Expressions</span><span class="chips" data-k="exprs"></span>`;
-  row.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => viewer.frame(b.dataset.view)));
+    <div class="line"><span class="k">View</span><span class="seg">${views.map(([k, l]) => `<button data-view="${k}">${l}</button>`).join('')}<span class="div"></span><button data-zoom="0.8" title="Zoom in">＋</button><button data-zoom="1.25" title="Zoom out">－</button></span>
+      <span style="flex:1"></span><label>Light <select data-k="light">${LIGHT_PRESETS.map((p) => `<option>${p}</option>`).join('')}</select></label>
+      <label>Background <select data-k="bg"><option value="stage">Stage</option><option value="dark">Dark</option><option value="light">Light</option><option value="green">Green</option><option value="transparent">Checker</option></select></label></div>
+    <div class="line"><span class="k">Motion</span><span class="pills small" data-k="motions"></span></div>
+    <div class="line"><span class="k">Expressions</span><span class="pills small" data-k="exprs"></span></div>`;
+  row.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => { viewer.frame(b.dataset.view); row.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x === b)); }));
   row.querySelectorAll('[data-zoom]').forEach((b) => (b.onclick = () => viewer.zoom(Number(b.dataset.zoom))));
   row.querySelector('[data-k=light]').onchange = (e) => viewer.setLighting(e.target.value);
-  row.querySelector('[data-k=bg]').onchange = (e) => viewer.setBackground(e.target.value);
-  row.querySelector('[data-k=grid]').onchange = (e) => viewer.setGrid(e.target.checked);
+  row.querySelector('[data-k=bg]').onchange = (e) => { const v = e.target.value; viewer.setBackground(v === 'stage' ? 'transparent' : v); if (v === 'stage') viewer.el.classList.remove('checker'); };
   const motions = viewer.vrm ? [['idle', 'Idle'], ['wave', 'Wave'], ['nod', 'Nod'], ['look', 'Look around'], ['blink', 'Blink'], ['tpose', 'Rest pose']] : (info.animations || []).map((a) => [a, a]);
   const mBox = row.querySelector('[data-k=motions]');
   mBox.innerHTML = motions.length ? motions.map(([k, l]) => `<button data-m="${esc(k)}">${esc(l)}</button>`).join('') : '<span class="muted">None (no humanoid rig or embedded animations)</span>';
@@ -198,7 +234,7 @@ function upload(file, onProgress) {
   });
 }
 async function startImport(file) {
-  if (!viewers.imp) viewers.imp = new AvatarViewer($('impViewer'));
+  if (!viewers.imp) viewers.imp = stageViewer('impViewer');
   $('drop').classList.add('hidden'); $('impInfo').classList.remove('hidden'); $('impSave').classList.add('hidden'); $('impAgain').classList.add('hidden');
   const ext = (file.name.match(/\.([^.]+)$/)?.[1] || '?').toUpperCase();
   $('fileinfo').innerHTML = `<span>File</span><span>${esc(file.name)}</span><span>Size</span><span>${mb(file.size)}</span><span>Format</span><span id="fiFormat">${esc(ext)} (checking…)</span>`;
@@ -268,7 +304,7 @@ async function openDetail(id) {
   try { lib = await api('/api/library'); rec = (await api(`/api/library/${id}`)).avatar; } catch (e) { dStatus(e.message, 'error'); $('dOverlay').textContent = e.message; return; }
   cur = rec;
   renderDetailHeader();
-  if (!viewers.d) viewers.d = new AvatarViewer($('dViewer'));
+  if (!viewers.d) viewers.d = stageViewer('dViewer');
   $('dOverlay').textContent = 'Loading…'; $('dOverlay').classList.remove('hidden'); $('dViewRow').innerHTML = '';
   $('tab-caps').innerHTML = capsHtml(rec, null);
   renderFileTab(); renderPresentTab();
@@ -296,6 +332,7 @@ function renderDetailHeader() {
   $('dReplace').classList.toggle('hidden', created);
   $('dDownload').textContent = created ? 'Download character file' : 'Download original';
 }
+$('dBack').onclick = () => { location.hash = ''; };
 $('dTabs').onclick = (e) => {
   const t = e.target.dataset?.tab; if (!t) return;
   $('dTabs').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
@@ -346,21 +383,22 @@ function renderPresentTab() {
   const presetNow = Object.entries(LOOK_PRESETS).find(([, v]) => v.lightColor === look.lightColor && v.rimColor === look.rimColor)?.[0] || '';
   $('tab-present').innerHTML = `
     ${a.suitability.tracking ? '' : '<ul class="issues"><li class="error">This model cannot be used live, so these settings have no effect until it is replaced with a VRM that has a humanoid rig.</li></ul>'}
-    <h2 style="margin-top:4px">Position in the stream</h2>
+    <h2 class="sec" style="margin-top:4px">Position in the stream</h2>
     <div class="row">${slider('transform.x', 'Left / right', -1, 1, 0.01, tr.x)}${slider('transform.y', 'Up / down', -1, 1, 0.01, tr.y)}</div>
     <div class="row">${slider('transform.rotY', 'Turn', -180, 180, 1, tr.rotY, '°')}${slider('transform.scale', 'Size', 0.25, 3, 0.01, tr.scale, '×')}</div>
-    <h2>Camera, background and light</h2>
+    <h2 class="sec">Camera, background and light</h2>
     <div class="row">
       <label>Framing <select data-look="camera">${['head', 'bust', 'half', 'full'].map((c) => `<option value="${c}" ${look.camera === c ? 'selected' : ''}>${{ head: 'Head', bust: 'Bust', half: 'Half body', full: 'Full body' }[c]}</option>`).join('')}</select></label>
       <label>Background <select data-look="background">${[['transparent', 'Transparent (OBS)'], ['green', 'Green screen'], ['blue', 'Blue screen'], ['color', 'Solid color']].map(([v, l]) => `<option value="${v}" ${look.background === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>Light preset <select data-look="preset"><option value="">Custom</option>${Object.keys(LOOK_PRESETS).map((p) => `<option ${presetNow === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
     </div>
-    <h2>Face and tracking</h2>
+    <h2 class="sec">Face and tracking</h2>
     <div class="row"><label class="inline"><input type="checkbox" data-p="tracking.blink" ${tk.blink ? 'checked' : ''} ${a.capabilities.expressions.blink ? '' : 'disabled'}> Blinking${a.capabilities.expressions.blink ? '' : ' (not supported by this model)'}</label></div>
     <div class="row">${slider('tracking.gaze', 'Eye movement', 0, 2, 0.05, tk.gaze, '×')}${slider('tracking.mouth', 'Mouth movement', 0, 3, 0.05, tk.mouth, '×')}${slider('tracking.expressions', 'Face expression strength', 0, 2, 0.05, tk.expressions, '×')}</div>
     <p class="muted">${a.capabilities.lookAt.supported ? '' : 'This model has no eye controls, so eye movement has no effect. '}Material editing is not offered: imported avatars keep their original look. Hair, body and clothing editing needs a model built from Kael Studio parts.</p>
-    <h2>Live stream preview</h2>
+    <h2 class="sec">Live stream preview</h2>
     ${active ? '<iframe class="stream" src="/avatar.html?preview=1"></iframe>' : '<p class="muted">Set this avatar as active to see it in the live stream preview.</p>'}`;
+  wireRanges($('tab-present'));
   let timer;
   let queued = {};
   const save = (patch) => {           // changes made in quick succession are merged into one request
