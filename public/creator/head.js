@@ -58,10 +58,14 @@ export function makeColoring(recipe, sp, body) {
   const bodyColor = (p, part) => {
     if (!animal) return main;
     const front = p.z > 0;
-    const bellyZone = front && Math.abs(p.x) < body.r.chest[0] * (tux ? 0.62 : 0.5) && p.y > body.yHip - 0.05 && p.y < body.ySh - 0.02 * body.sc;
+    // soft-edged belly patch (a smooth blend instead of an on/off test, so its edge is clean rather than jagged)
+    const bw = body.r.chest[0] * (tux ? 0.62 : 0.5), bsc = body.sc;
+    const bellyK = front ? smooth(bw + 0.012 * bsc, bw - 0.012 * bsc, Math.abs(p.x)) * smooth(body.yHip - 0.07 * bsc, body.yHip - 0.03 * bsc, p.y) * smooth(body.ySh - 0.0 * bsc, body.ySh - 0.04 * bsc, p.y) * smooth(-0.01, 0.03, p.z) : 0;
+    const bellyZone = bellyK > 0.5;
     // pale throat for species with a pale muzzle, so chin, throat and chest read as one seamless area down to the collar
     const throat = part === 'neck' && front && species !== 'panda' && Math.abs(p.x) < body.r.neck * 0.85;
-    if ((part === 'torso' || part === 'neck') && (bellyZone || throat || (tux && part === 'neck' && front))) return light;
+    if ((part === 'torso' || part === 'neck') && (throat || (tux && part === 'neck' && front))) return light;
+    if (part === 'torso' && bellyK > 0.001) return base.clone().lerp(light, bellyK);
     // species marks
     if (species === 'panda' && (part === 'arm' || part === 'hand' || part === 'finger' || part === 'leg' || part === 'foot' || (part === 'torso' && p.y > body.yChest + 0.01 && !bellyZone))) return dark;
     if (species === 'fox' && ((part === 'leg' && p.y < body.yKnee) || part === 'foot' || part === 'hand' || part === 'finger')) return dark;

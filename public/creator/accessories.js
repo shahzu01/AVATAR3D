@@ -164,14 +164,14 @@ export function buildAccessories(ctx) {
         ring(b, e.clone().add(V(0, -0.012 * sc, 0)), V(1, 0, 0), 0.011 * sc, 0.0022 * sc, { color: C, weights: hw, nu: 16, nv: 6 });
       } break;
       case 'backpack': {
-        const z = -body.r.chest[1] - 0.06 * sc;
+        const z = body.torsoZ(lerp(body.yHip, body.ySh, 0.55), -1) - 0.072 * sc;   // sits on the sculpted back, over any top
         blob(b, V(0, lerp(body.yHip, body.ySh, 0.55), z), [body.r.chest[0] * 0.75, (body.ySh - body.yHip) * 0.42, 0.06 * sc], { nu: 20, nv: 14, color: C, weights: cw, deform: (q, d) => { const k = 2.8; q.x = Math.sign(q.x) * Math.abs(q.x) ** 1 ; void k; void d; return q; } });
         blob(b, V(0, lerp(body.yHip, body.ySh, 0.42), z - 0.05 * sc), [body.r.chest[0] * 0.5, (body.ySh - body.yHip) * 0.18, 0.025 * sc], { nu: 14, nv: 8, color: dark, weights: cw });
-        for (const s of [1, -1]) { const x = s * body.r.chest[0] * 0.45; tube(b, [V(x, body.ySh - 0.02 * sc, -body.r.chest[1] - 0.012 * sc), V(x * 1.15, body.ySh + 0.012 * sc, 0), V(x * 1.1, body.yChest, body.r.chest[1] + 0.016 * sc), V(x * 1.0, body.yHip + 0.06 * sc, body.r.waist[1] + 0.014 * sc)].map((p) => ({ c: p, r: [0.012 * sc, 0.004 * sc], w: body.torsoWeights(p.y, p.x), hint: p.z >= 0 ? V(0, 0.3, 1) : V(0, 0.3, -1) })), { seg: 6, color: dark }); }
+        for (const s of [1, -1]) { const x = s * body.r.chest[0] * 0.45; tube(b, [V(x, body.ySh - 0.02 * sc, body.torsoZ(body.ySh - 0.02 * sc, -1, x) - 0.024 * sc), V(x * 1.15, body.ySh + 0.024 * sc, 0), V(x * 1.1, body.yChest, body.torsoZ(body.yChest, 1, x * 1.1) + 0.024 * sc), V(x * 1.0, body.yHip + 0.06 * sc, body.torsoZ(body.yHip + 0.06 * sc, 1, x) + 0.022 * sc)].map((p) => ({ c: p, r: [0.012 * sc, 0.004 * sc], w: body.torsoWeights(p.y, p.x), hint: p.z >= 0 ? V(0, 0.3, 1) : V(0, 0.3, -1) })), { seg: 6, color: dark }); }
         break;
       }
       case 'wings': for (const s of [1, -1]) {
-        const root = V(s * 0.04 * sc, body.yChest + 0.04 * sc, -body.r.chest[1] - 0.01 * sc);
+        const root = V(s * 0.04 * sc, body.yChest + 0.04 * sc, body.torsoZ(body.yChest + 0.04 * sc, -1, s * 0.04 * sc) - 0.016 * sc);
         for (let k = 0; k < 3; k++) {
           const tip = root.clone().add(V(s * (0.16 - k * 0.03) * sc, (0.08 - k * 0.07) * sc, -0.05 * sc));
           tube(b, [root, root.clone().lerp(tip, 0.5).add(V(0, 0.03 * sc, 0)), tip].map((p, i) => ({ c: p, r: [0.03 * sc * (1 - i * 0.45), 0.005 * sc], w: cw, hint: V(0, 0, -1), color: k === 0 ? C : lite })), { seg: 8 });
