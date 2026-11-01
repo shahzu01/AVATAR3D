@@ -67,16 +67,17 @@ export class Body {
       const el = ua.clone().add(V(s * this.upperArmLen, 0, 0)); add(`${side}LowerArm`, `${side}UpperArm`, el);
       const wr = el.clone().add(V(s * this.lowerArmLen, 0, 0)); add(`${side}Hand`, `${side}LowerArm`, wr);
       this[`${side}Wrist`] = wr;
-      const palm = this.handLen * 0.52, fl = this.handLen * 0.48, spread = this.handLen * 0.2;
+      const paw = this.sp.paws, palm = this.handLen * (paw ? 0.56 : 0.52), fl = this.handLen * (paw ? 0.36 : 0.48), spread = this.handLen * (paw ? 0.3 : 0.27);
+      this.handSpread = spread;
       FINGERS.forEach((fn, i) => {
-        const z = spread * (0.75 - i * 0.5) * 1.0, len = fl * [0.95, 1.0, 0.95, 0.78][i];
+        const z = spread * (0.75 - i * 0.5), len = fl * [0.95, 1.0, 0.95, 0.78][i];
         let p = wr.clone().add(V(s * palm, -0.004 * this.sc, z));
         add(`${side}${fn}Proximal`, `${side}Hand`, p);
         p = p.clone().add(V(s * len * 0.42, 0, 0)); add(`${side}${fn}Intermediate`, `${side}${fn}Proximal`, p);
         p = p.clone().add(V(s * len * 0.32, 0, 0)); add(`${side}${fn}Distal`, `${side}${fn}Intermediate`, p);
         this[`${side}${fn}Tip`] = p.clone().add(V(s * len * 0.26, 0, 0));
       });
-      const t0 = wr.clone().add(V(s * this.handLen * 0.12, -0.008 * this.sc, spread * 0.95));
+      const t0 = wr.clone().add(V(s * this.handLen * 0.14, -0.008 * this.sc, spread * 0.8));
       add(`${side}ThumbMetacarpal`, `${side}Hand`, t0);
       const td = V(s * 0.62, 0, 0.78).normalize();
       const t1 = t0.clone().addScaledVector(td, this.handLen * 0.22); add(`${side}ThumbProximal`, `${side}ThumbMetacarpal`, t1);
@@ -125,7 +126,10 @@ export class Body {
     const rings = [];
     for (let i = 0; i <= steps; i++) {
       const y = lerp(yBottom, yTop, i / steps);
-      const [rx, rz, cz] = this.torsoAt(y);
+      let [rx, rz, cz] = this.torsoAt(y);
+      // around the hips the torso must contain both thighs (so shirts and jackets never show the legs poking out)
+      const k = smooth(this.yHip + 0.07 * this.sc, this.yHip - 0.01 * this.sc, y);
+      if (k > 0) { rx = Math.max(rx, lerp(rx, (this.hipX + this.r.leg[0]) * 1.1, k)); rz = Math.max(rz, lerp(rz, this.r.leg[0] * 1.3, k)); }
       const fl = flare * (1 - i / steps) ** 2;
       rings.push({ c: V(0, y, cz), r: [rx + offset + fl, rz + offset + fl * 0.8], n, w: weights ? weights(y) : this.torsoWeights(y), color, y });
     }
@@ -139,7 +143,7 @@ export class Body {
     for (let i = 0; i <= steps; i++) {
       const t = lerp(t0, t1, i / steps), x = start + s * t * total;
       const d = Math.abs(x - ua.x) / (this.upperArmLen + this.lowerArmLen);
-      const rad = d < 0.53 ? lerp(r0 * 1.12, r1, smooth(0, 0.53, d)) : lerp(r1, r2, smooth(0.53, 1, d));
+      const rad = d < 0.53 ? lerp(r0 * 1.02, r1, smooth(0, 0.53, d)) : lerp(r1, r2, smooth(0.53, 1, d));
       const e = smooth(0.42, 0.62, d), h = smooth(0.92, 1.02, d);
       const shoulderW = 1 - smooth(-0.04, 0.1, (x - ua.x) * s);
       const fl = flare * smooth(t1 - 0.25, t1, t) ;
@@ -171,34 +175,34 @@ export class Body {
     const sp = this.sp, sc = this.sc;
     const cf = colors.bodyColor;                  // fn(pos, part) -> THREE.Color
     // torso
-    tube(bld, this.torsoRings(this.yHip - 0.085 * sc, this.yNeck + 0.004, { steps: 18 }), { seg: 28, colorFn: (p) => cf(p, 'torso'), capEnd: false });
+    tube(bld, this.torsoRings(this.yHip - 0.085 * sc, this.yNeck + 0.004, { steps: 26, n: 2.15 }), { seg: 40, colorFn: (p) => cf(p, 'torso'), capEnd: false });
     // neck
     const neckRings = [];
     for (let i = 0; i <= 4; i++) {
       const y = lerp(this.ySh - 0.01 * sc, this.yHead + this.head.ry * 0.35, i / 4);
       neckRings.push({ c: V(0, y, -0.004 * sc), r: [this.r.neck * 1.02, this.r.neck], w: this.W({ chest: 1 - smooth(this.ySh, this.yNeck + 0.01 * sc, y), neck: smooth(this.ySh, this.yNeck + 0.01 * sc, y) * (1 - smooth(this.yNeck, this.yHead + 0.01, y)), head: smooth(this.yNeck, this.yHead + 0.01, y) }) });
     }
-    tube(bld, neckRings, { seg: 16, colorFn: (p) => cf(p, 'neck'), capStart: false, capEnd: false });
+    tube(bld, neckRings, { seg: 24, colorFn: (p) => cf(p, 'neck'), capStart: false, capEnd: false });
     for (const side of ['left', 'right']) {
-      tube(bld, this.armRings(side, 0, 1, { steps: 16 }), { seg: 16, hint: V(0, 1, 0), colorFn: (p) => cf(p, 'arm') });
-      tube(bld, this.legRings(side, 0, 1, { steps: 16 }), { seg: 18, colorFn: (p) => cf(p, 'leg') });
+      tube(bld, this.armRings(side, 0, 1, { steps: 20 }), { seg: 22, hint: V(0, 1, 0), colorFn: (p) => cf(p, 'arm') });
+      tube(bld, this.legRings(side, 0, 1, { steps: 20 }), { seg: 24, colorFn: (p) => cf(p, 'leg') });
       this.buildHand(bld, side, cf);
       if (!colors.hideFeet) this.buildFoot(bld, side, cf, sp.paws);
     }
   }
   buildHand(bld, side, cf) {
     const s = side === 'left' ? 1 : -1, wr = this[`${side}Wrist`], sc = this.sc, L = this.handLen, paw = this.sp.paws;
-    const fat = paw ? 1.35 : 1;
+    const fat = paw ? 1.35 : 1, spread = this.handSpread || L * 0.36;
     // palm: flattened rounded box as a short tube along X
     const pr = [];
     for (let i = 0; i <= 6; i++) {
       const t = i / 6, x = wr.x + s * (t * L * 0.56 - 0.01 * sc);
-      const w = lerp(this.r.arm[2] * 1.05, L * 0.28 * fat, smooth(0, 0.5, t)) * (1 - 0.15 * smooth(0.8, 1, t));
-      pr.push({ c: V(x, wr.y - 0.004 * sc, 0.002), r: [w, (0.022 * sc) * fat * (1 - 0.2 * t)], n: 2.6, w: this.W({ [`${side}Hand`]: 1 - smooth(0, 0.25, -t + 0.15) * 0 }), hint: V(0, 1, 0) });
+      const w = lerp(this.r.arm[2] * 1.05, spread * 0.78 + 0.006 * sc * fat, smooth(0, 0.45, t)) * (1 - 0.1 * smooth(0.85, 1, t));
+      pr.push({ c: V(x, wr.y - 0.004 * sc, 0.002), r: [w, (0.02 * sc) * fat * (1 - 0.15 * t)], n: 2.8, w: this.W({ [`${side}Hand`]: 1 }), hint: V(0, 1, 0) });
     }
     // rotate cross-section: tube's N is the hint (up), B spans the palm width (z)
     tube(bld, pr, { seg: 16, hint: V(0, 1, 0), colorFn: (p) => cf(p, 'hand') });
-    const fingerR = 0.0085 * sc * fat;
+    const fingerR = (paw ? 0.0118 : 0.0084) * sc * (paw ? 1.15 : 1);
     for (const fn of FINGERS) {
       const p0 = this.bones[`${side}${fn}Proximal`].userData.world, p1 = this.bones[`${side}${fn}Intermediate`].userData.world, p2 = this.bones[`${side}${fn}Distal`].userData.world, tip = this[`${side}${fn}Tip`];
       const rr = fingerR * (fn === 'Little' ? 0.85 : 1);

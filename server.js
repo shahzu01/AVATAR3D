@@ -11,6 +11,7 @@ import dgram from 'node:dgram';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Library, UserError, pickLook, LOOK_KEYS } from './lib/library.js';
+import { PhoneFace } from './lib/phone.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3939);
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS = {
   twitchChannel: '',
   chatCommands: true,
   commandCooldownMs: 1500,
+  phone: { app: 'vmc', ip: '', mirror: false, smoothing: 0.25, flipYaw: false, flipPitch: false, webcamFaceOff: true },
 };
 let settings = { ...DEFAULT_SETTINGS };
 try { settings = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; } catch {}
@@ -190,7 +192,7 @@ function broadcast(msg, roles = ['avatar', 'control']) {
 function status() {
   const count = r => [...clients].filter(c => c.role === r).length;
   return { trackers: count('tracker'), avatars: count('avatar'), controls: count('control'),
-    vmcActive: Date.now() - lastVmc < 1000, twitch: twitchState, settings: publicSettings() };
+    vmcActive: phone.active, phone: phone.status(), twitch: twitchState, settings: publicSettings() };
 }
 
 const server = http.createServer((req, res) => {
@@ -206,6 +208,8 @@ const server = http.createServer((req, res) => {
   if ((m = p.match(/^\/api\/throw\/([\w-]+)$/))) { const msg = { type: 'throw', item: m[1], count: Number(url.searchParams.get('n') || 1), source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
   if ((m = p.match(/^\/api\/gesture\/([\w-]+)$/))) { const msg = { type: 'gesture', name: m[1], source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
   if (p === '/api/status') return ok(status());
+  if (p === '/api/phone') return ok(phone.status());
+  if (p === '/api/phone/calibrate' && req.method === 'POST') return ok({ calibrated: phone.calibrate(), status: phone.status() });
   if (p.startsWith('/api/library')) { libraryApi(req, res, url); return; }
   if (p === '/api/avatars') return ok({ avatars: library.list().filter(canGoLive).map((r) => ({ id: r.id, name: r.name })), activeId: settings.activeAvatarId });
   if (p === '/api/settings' && req.method === 'GET') return ok(publicSettings());
@@ -216,6 +220,7 @@ const server = http.createServer((req, res) => {
         const patch = JSON.parse(body);
         delete patch.active;
         const nextActive = patch.activeAvatarId; delete patch.activeAvatarId;
+        if (patch.phone) patch.phone = { ...DEFAULT_SETTINGS.phone, ...settings.phone, ...patch.phone };
         settings = { ...settings, ...patch }; saveSettings();
         if (nextActive && nextActive !== settings.activeAvatarId) activate(nextActive);
         else if (LOOK_KEYS.some((k) => k in patch) && library.get(settings.activeAvatarId)) library.setPresentation(settings.activeAvatarId, { look: pickLook(settings) });
@@ -278,6 +283,7 @@ function oscMessage(buf, out) {
   }
   out.push([addr, args]);
 }
+const phone = new PhoneFace({ emit: (frame) => broadcast(frame, ['avatar']), getSettings: () => settings });
 const udp = dgram.createSocket('udp4');
 udp.on('message', (buf) => {
   const msgs = []; try { oscMessage(buf, msgs); } catch { return; }
@@ -286,7 +292,7 @@ udp.on('message', (buf) => {
     else if (addr === '/VMC/Ext/Bone/Pos' && a[0] === 'Head' && a.length >= 8) vmcHead = [a[4], -a[5], -a[6], a[7]];  // Unity(LH) -> three(RH)
     else if (addr === '/VMC/Ext/Blend/Apply') {
       lastVmc = Date.now();
-      broadcast({ type: 'frame', source: 'vmc', t: lastVmc, face: { bs: { ...vmcBlend }, head: vmcHead }, conf: { face: 1 } }, ['avatar']);
+      phone.onVMC({ ...vmcBlend }, vmcHead);
     }
   }
 });

@@ -1,6 +1,8 @@
 // Tops, bottoms and shoes. Built from the body's own shape functions (offset outward) so they fit every body.
 import * as THREE from 'three';
-import { V, lerp, smooth, col, Builder, tube, blob, superXY, frameFor } from './geom.js';
+import { V, lerp, smooth, col, Builder, tube as tubeSmooth, blob, superXY, frameFor } from './geom.js';
+// garments always use crisp colour edges (no colour smearing between collar, cuffs, hems, stripes and the body)
+const tube = (b, rings, opts = {}) => tubeSmooth(b, rings, { sharp: true, ...opts });
 
 /** Partial tube (an arc of the cross-section only), for panels such as apron fronts and bibs. */
 export function arcTube(b, rings, a0, a1, { seg = 14, hint = V(0, 0, 1), color, colorFn, thickness = 0.0025 } = {}) {
@@ -31,31 +33,44 @@ export function buildClothes(ctx) {
   const C1 = col(top.color || '#30508a'), C2 = col(top.color2 || top.color || '#27426f');
   const B1 = col(bot.color || '#1f2026'), B2 = col(bot.color2 || shade(bot.color || '#1f2026', -0.25));
   const front = (a) => Math.sin(a) > 0;          // tube angle: sin>0 is the front (N = +Z) for torso rings
+  // layering: which garment sits on the outside. Tops tuck into overalls; otherwise tops hang over bottoms.
+  const tuck = bot.style === 'overalls' && ['tshirt', 'tank', 'sweater', 'jersey'].includes(top.style);
+  const topO = tuck ? o * 0.8 : o * 1.35, botO = tuck ? o * 1.7 : o * 0.75;
   // ---------------------------------------------------------------- bottoms (built first: tops sit over them)
   if (bot.style && bot.style !== 'none') {
     const b = new Builder(); out.bottom = b;
     const waist = body.yHip + 0.06 * sc;
     if (['pants', 'joggers', 'shorts', 'overalls'].includes(bot.style)) {
-      tube(b, body.torsoRings(body.yHip - 0.09 * sc, waist, { offset: o * 0.8, steps: 6 }), { seg: 28, capStart: true, capEnd: false, colorFn: (p, a, r, j) => (j >= 5 && bot.style === 'joggers' ? B2 : B1) });
+      tube(b, body.torsoRings(body.yHip - 0.09 * sc, waist, { offset: botO, steps: 6 }), { seg: 40, capStart: true, capEnd: false, colorFn: (p, a, r, j) => (j >= 5 && bot.style === 'joggers' ? B2 : B1) });
       const tEnd = bot.style === 'shorts' ? 0.42 : 0.985;
       for (const side of ['left', 'right']) {
-        const rings = body.legRings(side, 0, tEnd, { offset: o * 0.8, steps: 14, flare: bot.style === 'shorts' ? 0.012 * sc : bot.style === 'pants' ? 0.006 * sc : 0 });
+        const rings = body.legRings(side, 0, tEnd, { offset: botO, steps: 16, flare: bot.style === 'shorts' ? 0.012 * sc : bot.style === 'pants' ? 0.006 * sc : 0 });
         if (bot.style === 'joggers') { const last = rings[rings.length - 1]; last.r = [last.r[0] - 0.006 * sc, last.r[1] - 0.006 * sc]; }
-        tube(b, rings, { seg: 20, capStart: false, capEnd: false, colorFn: (p, a, r, j) => (bot.style === 'joggers' && j >= rings.length - 2 ? B2 : B1) });
+        tube(b, rings, { seg: 24, capStart: false, capEnd: false, colorFn: (p, a, r, j) => (bot.style === 'joggers' && j >= rings.length - 2 ? B2 : B1) });
       }
-      if (bot.style === 'overalls') {     // bib + straps
-        const bib = body.torsoRings(waist - 0.01 * sc, body.yChest + 0.02 * sc, { offset: o * 1.6, steps: 6 });
-        arcTube(b, bib, Math.PI * 0.3, Math.PI * 0.7, { color: B1 });
-        for (const s of [1, -1]) {
-          const x = s * body.r.chest[0] * 0.45, pts = [V(x, body.yChest + 0.02 * sc, body.r.chest[1] + o * 1.5), V(x * 1.15, body.ySh + 0.012 * sc, 0.01 * sc), V(x * 1.05, body.yChest, -body.r.chest[1] - o * 1.4), V(x * 0.9, waist, -body.r.waist[1] - o)];
-          tube(b, pts.map((c, i) => ({ c, r: [0.014 * sc, 0.004 * sc], w: body.torsoWeights(c.y, c.x), hint: i < 2 ? V(0, 0.4, 1) : V(0, 0.4, -1) })), { seg: 6, color: B1 });
-          blob(b, V(x, body.yChest + 0.01 * sc, body.r.chest[1] + o * 2.2), [0.008 * sc, 0.008 * sc, 0.004 * sc], { nu: 8, nv: 6, color: col('#e8c45a'), weights: body.W({ chest: 1 }) });
+      if (bot.style === 'overalls') {     // bib + straps, always outside the top
+        const bibTop = body.yChest + 0.03 * sc, bibO = Math.max(botO, topO) + o * 0.7;
+        const bib = body.torsoRings(waist - 0.01 * sc, bibTop, { offset: bibO, steps: 8 });
+        arcTube(b, bib, Math.PI * 0.3, Math.PI * 0.7, { color: B1, seg: 16 });
+        const back = body.torsoRings(waist - 0.01 * sc, waist + 0.05 * sc, { offset: bibO, steps: 2 });
+        arcTube(b, back, Math.PI * 1.32, Math.PI * 1.68, { color: B1, seg: 12 });
+        for (const s2 of [1, -1]) {
+          // strap path sampled on the outside of the torso: front of the bib, over the shoulder, down the back
+          const x = s2 * body.r.chest[0] * 0.42, pts = [];
+          const outZ = (y, sign) => sign * (body.torsoAt(y)[1] + bibO + 0.004 * sc);
+          for (const y of [bibTop - 0.01 * sc, lerp(bibTop, body.ySh, 0.5), body.ySh - 0.012 * sc]) pts.push(V(x, y, outZ(y, 1)));
+          pts.push(V(x * 1.05, body.ySh + 0.026 * sc + topO, 0.004 * sc));
+          for (const y of [body.ySh - 0.012 * sc, lerp(body.ySh, waist, 0.5), waist + 0.04 * sc]) pts.push(V(x * (y < body.yChest ? 0.9 : 1), y, outZ(y, -1)));
+          const rings = [];
+          for (let k = 0; k <= 22; k++) { const c = catmullLocal(pts, k / 22); rings.push({ c, r: [0.015 * sc, 0.0045 * sc], w: body.torsoWeights(c.y, c.x), hint: V(0, c.y > body.ySh - 0.02 * sc ? 1 : 0.2, c.z >= 0 ? 1 : -1).normalize() }); }
+          tube(b, rings, { seg: 8, color: B1 });
+          blob(b, V(x, bibTop - 0.012 * sc, outZ(bibTop - 0.012 * sc, 1) + 0.004 * sc), [0.009 * sc, 0.009 * sc, 0.004 * sc], { nu: 10, nv: 6, color: col('#e8c45a'), weights: body.W({ chest: 1 }) });
         }
       }
     } else {   // skirts
       const long = bot.style === 'longskirt';
       const yEnd = long ? body.yAnkle + 0.05 * sc : body.yKnee + 0.07 * sc;
-      tube(b, skirtRings(body, waist, yEnd, long ? 0.12 * sc : 0.07 * sc, o), { seg: 32, capStart: false, capEnd: false, colorFn: (p, a, r, j) => (j === 0 || j === 1 ? B2 : B1) });
+      tube(b, skirtRings(body, waist, yEnd, long ? 0.12 * sc : 0.07 * sc, botO), { seg: 40, capStart: false, capEnd: false, colorFn: (p, a, r, j) => (j === 0 || j === 1 ? B2 : B1) });
     }
   }
   // ---------------------------------------------------------------- tops
@@ -65,24 +80,40 @@ export function buildClothes(ctx) {
     const hemY = { hoodie: body.yHip - 0.05 * sc, tshirt: body.yHip - 0.03 * sc, tank: body.yHip - 0.02 * sc, jacket: body.yHip - 0.06 * sc, sweater: body.yHip - 0.04 * sc,
       jersey: body.yHip - 0.04 * sc, dress: body.yHip + 0.06 * sc, robe: body.yHip + 0.06 * sc, tunic: body.yHip - 0.13 * sc, blazer: body.yHip - 0.07 * sc, apron: body.yHip - 0.03 * sc }[s] ?? body.yHip;
     const neckY = s === 'tank' ? body.ySh - 0.005 * sc : body.yNeck + 0.004;
+    const hem = tuck ? body.yHip + 0.03 * sc : hemY;
     const flare = { hoodie: 0.012, jacket: 0.016, tunic: 0.04, blazer: 0.012 }[s] || 0.004;
     const sleeve = { hoodie: 0.985, tshirt: 0.38, tank: 0, jacket: 0.985, sweater: 0.985, jersey: 0.42, dress: 0.2, robe: 0.95, tunic: 0.55, blazer: 0.985, apron: 0.38 }[s];
-    const torso = body.torsoRings(hemY, neckY, { offset: o * (s === 'jacket' || s === 'blazer' ? 1.5 : 1), flare: flare * sc, steps: 18 });
+    const torso = body.torsoRings(hem, neckY, { offset: topO * (s === 'jacket' || s === 'blazer' ? 1.15 : 1), flare: tuck ? 0 : flare * sc, steps: 24, n: 2.15 });
     const N = torso.length - 1;
-    tube(b, torso, { seg: 32, capStart: false, capEnd: false, colorFn: (p, a, r, j) => {
+    tube(b, torso, { seg: 44, capStart: false, capEnd: false, colorFn: (p, a, r, j) => {
       const x = p.x, frontStrip = front(a) && Math.abs(x) < body.r.chest[0] * 0.2 + 0.004;
-      if ((s === 'hoodie' || s === 'sweater' || s === 'jersey') && j <= 1) return C2;                    // hem rib
-      if (s === 'hoodie' && front(a) && j >= 3 && j <= 7 && Math.abs(x) < body.r.waist[0] * 0.62) return mix(C1, C2, 0.55);   // pocket
+      if ((s === 'hoodie' || s === 'sweater' || s === 'jersey') && j <= 1 && !tuck) return C2;                    // hem rib
+      if (s === 'hoodie' && front(a) && j >= 3 && j <= 7 && Math.abs(Math.cos(a)) < 0.5) return mix(C1, C2, 0.55);   // pocket (edges follow the mesh, so they stay straight)
       if ((s === 'jacket') && frontStrip) return C2;                                                       // open front shows the shirt
       if (s === 'blazer' && front(a) && Math.abs(x) < Math.min(body.r.chest[0] * 0.3, (p.y - body.yChest + 0.03 * sc) * 0.38) && p.y > body.yChest - 0.03 * sc) return C2; // V lapel
       if (s === 'jersey' && Math.abs(Math.cos(a)) > 0.93) return C2;                                        // side stripes
-      if ((s === 'tunic' || s === 'robe' || s === 'dress') && Math.abs(p.y - (body.yHip + 0.065 * sc)) < 0.014 * sc) return C2;   // belt / sash
-      if (j >= N - 1 && s !== 'tank') return C2;                                                          // collar
       return C1;
     } });
+    // rolled collar rib around the neckline: a clean, solid edge where the garment meets the neck
+    if (s !== 'tank' && s !== 'sweater') {
+      const top = torso[N], loop = [], M = 40;
+      for (let k = 0; k <= M; k++) {
+        const a = (k / M) * Math.PI * 2, [x, z] = superXY(a, top.r[0], top.r[1], top.n || 2);
+        loop.push({ c: V(top.c.x + x, top.y + 0.001 * sc, top.c.z + z), r: [0.0062 * sc, 0.0048 * sc], w: top.w, hint: V(0, 1, 0) });
+      }
+      tube(b, loop, { seg: 10, capStart: false, capEnd: false, color: C2 });
+    }
+    // belt / sash as its own band, so its edges are straight all the way round
+    if (s === 'tunic' || s === 'robe' || s === 'dress') {
+      const yb = body.yHip + 0.065 * sc;
+      // follow the garment's own (flared) surface at that height, just outside it
+      const at = (y) => { const k = torso.findIndex((r) => r.y >= y); const r1 = torso[Math.max(1, k)], r0 = torso[Math.max(0, k - 1)], t = (y - r0.y) / ((r1.y - r0.y) || 1);
+        return { c: r0.c.clone().lerp(r1.c, t), r: [lerp(r0.r[0], r1.r[0], t) + o * 0.45, lerp(r0.r[1], r1.r[1], t) + o * 0.45], n: 2.15, w: body.torsoWeights(y) }; };
+      tube(b, [at(yb - 0.013 * sc), at(yb), at(yb + 0.013 * sc)], { seg: 44, capStart: false, capEnd: false, color: C2 });
+    }
     if (sleeve > 0) for (const side of ['left', 'right']) {
-      const rings = body.armRings(side, 0.04, sleeve, { offset: o * (s === 'jacket' || s === 'blazer' ? 1.3 : 0.9), steps: 12, flare: (s === 'robe' ? 0.06 : s === 'tshirt' || s === 'jersey' ? 0.008 : 0) * sc });
-      tube(b, rings, { seg: 16, hint: V(0, 1, 0), capStart: false, capEnd: false, colorFn: (p, a, r, j) => {
+      const rings = body.armRings(side, -0.05, sleeve, { offset: topO * (s === 'jacket' || s === 'blazer' ? 1.1 : 0.85), steps: 16, flare: (s === 'robe' ? 0.06 : s === 'tshirt' || s === 'jersey' ? 0.008 : 0) * sc });
+      tube(b, rings, { seg: 22, hint: V(0, 1, 0), capStart: false, capEnd: false, colorFn: (p, a, r, j) => {
         if ((s === 'hoodie' || s === 'sweater') && j >= rings.length - 2) return C2;
         if (s === 'jersey' && j >= rings.length - 3 && j < rings.length - 1) return C2;
         if (s === 'robe' && j >= rings.length - 2) return C2;
@@ -197,3 +228,9 @@ function buildShoe(b, body, side, style, S1, S2, o) {
 
 export function shade(hex, amt) { const c = new THREE.Color(hex), h = {}; c.getHSL(h); c.setHSL(h.h, h.s, Math.max(0, Math.min(1, h.l + amt))); return '#' + c.getHexString(); }
 function mix(a, b, t) { return a.clone().lerp(b, t); }
+function catmullLocal(pts, t) {
+  const n = pts.length - 1, f = Math.min(0.9999, Math.max(0, t)) * n, i = Math.floor(f), u = f - i;
+  const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[Math.min(n, i + 1)], p3 = pts[Math.min(n, i + 2)];
+  const q = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (-a + 3 * b - 3 * c + d) * u * u * u);
+  return V(q(p0.x, p1.x, p2.x, p3.x), q(p0.y, p1.y, p2.y, p3.y), q(p0.z, p1.z, p2.z, p3.z));
+}
