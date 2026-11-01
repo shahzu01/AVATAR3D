@@ -58,7 +58,7 @@ function renderer() {
   return R;
 }
 const memo = new Map();
-const STORE = 'kaelthumb5:';   // bump when character geometry changes so cached tiles are re-rendered
+const STORE = 'kaelthumb6:';   // bump when character geometry changes so cached tiles are re-rendered
 const lsGet = (k) => { try { return localStorage.getItem(STORE + k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(STORE + k, v); } catch { /* full or blocked: memory cache still works */ } };
 export function cachedThumb(key) { return memo.get(key) || lsGet(key) || null; }

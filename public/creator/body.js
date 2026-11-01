@@ -1,7 +1,8 @@
 // Body: proportions from sliders, skeleton (VRM humanoid names), body surface and shared shape functions
 // that clothing uses so every outfit fits every body.
 import * as THREE from 'three';
-import { V, clamp, lerp, smooth, tube } from './geom.js';
+import { V, clamp, lerp, smooth, tube, frameFor } from './geom.js';
+import { kitBody } from './kit.js';
 
 const FINGERS = ['Index', 'Middle', 'Ring', 'Little'];
 
@@ -45,6 +46,38 @@ export class Body {
       leg: [0.08, 0.06, 0.047].map((x) => x * sc * (0.75 + 0.5 * (b.legs ?? 0.5)) * f),
     };
     this.footLen = 0.17 * sc; this.footW = 0.05 * sc * f;
+    // sculpted body shapes from the Blender body kit (falls back to plain tubes without it)
+    this.kit = kitBody(species.style === 'animal' ? 'animal' : 'human');
+    this.kb = clamp(((b.build ?? 0.5) - 0.5) * 2, -0.5, 1);
+    this.kc = clamp(((b.chest ?? 0.5) - 0.5) * 2, -0.5, 1);
+  }
+
+  // ---------------------------------------------------------------- body kit lookups
+  /** Torso height y -> kit height (warped so hips, waist, chest and shoulders line up with the sculpt). */
+  torsoU(y) {
+    const sc = this.sc, keys = [[this.yHip - 0.085 * sc, 0], [this.yHip, 0.12], [lerp(this.yHip, this.ySh, 0.33), 0.4], [this.yChest + 0.02 * sc, 0.65], [this.ySh, 0.95], [this.yNeck + 0.004, 1]];
+    if (y <= keys[0][0]) return 0;
+    for (let i = 0; i < keys.length - 1; i++) if (y <= keys[i + 1][0]) return lerp(keys[i][1], keys[i + 1][1], (y - keys[i][0]) / (keys[i + 1][0] - keys[i][0] || 1));
+    return 1;
+  }
+  /** Per-angle surface offset for a ring (used by tube's r.off). axes(w) maps a world direction to the part's [X, Z]. */
+  ringOff(part, h, T, hint, cloth, axes, gain = 1) {
+    const map = this.kit?.[part]; if (!map || gain <= 0) return undefined;
+    const { N, B } = frameFor(T, hint), f = cloth ? map.cloth : map.skin, kb = this.kb, kc = this.kc;
+    return (a) => {
+      const c = Math.cos(a), s = Math.sin(a);
+      const [X, Z] = axes(B.x * c + N.x * s, B.y * c + N.y * s, B.z * c + N.z * s);
+      return f(h, Math.atan2(X, Z), kb, kc) * gain;
+    };
+  }
+  /** Sculpted torso offset at height y in a horizontal direction (dx, dz); cloth fills hollows. */
+  torsoOff(y, dx, dz, cloth = true) { const m = this.kit?.torso; return m ? m[cloth ? 'cloth' : 'skin'](this.torsoU(y), Math.atan2(dx, dz), this.kb, this.kc) : 0; }
+  /** Largest torso offset all the way round at height y (for skirts and other loose garments). */
+  torsoMaxOff(y) { if (!this.kit) return 0; let m = 0; for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; m = Math.max(m, this.torsoOff(y, Math.sin(a), Math.cos(a))); } return m; }
+  /** Front (sign=1) or back (sign=-1) surface z of the torso at height y and side position x, including the sculpt. */
+  torsoZ(y, sign = 1, x = 0, cloth = true) {
+    const [rx, rz, cz] = this.torsoAt(y), k = Math.min(0.95, Math.abs(x) / rx);
+    return cz + sign * rz * Math.sqrt(1 - k * k) * (1 + this.torsoOff(y, x / rx, sign * Math.sqrt(1 - k * k), cloth));
   }
 
   // ---------------------------------------------------------------- skeleton
@@ -102,8 +135,10 @@ export class Body {
   // ---------------------------------------------------------------- shared shape functions
   /** Torso cross-section at height y: [rx, rz, centerZ]. */
   torsoAt(y) {
-    const r = this.r, keys = [
-      [this.yHip - 0.085 * this.sc, [r.hip[0] * 0.88, r.hip[1] * 0.9]],
+    const r = this.r, sc = this.sc, keys = [
+      // the pelvis tapers into the tops of the thighs, so the legs grow out of it with no shelf or bottom edge
+      [this.yHip - 0.1 * sc, [this.hipX * 1.05, r.leg[0] * 0.95]],
+      [this.yHip - 0.05 * sc, [this.hipX + r.leg[0] * 0.85, Math.max(r.hip[1] * 0.92, r.leg[0] * 1.15)]],
       [this.yHip, r.hip], [lerp(this.yHip, this.ySh, 0.33), r.waist], [this.yChest + 0.02 * this.sc, r.chest],
       [this.ySh - 0.01 * this.sc, r.shoulder], [this.ySh + 0.012 * this.sc, [r.shoulder[0] * 0.55, r.shoulder[1] * 0.85]],
       [this.yNeck + 0.004, [r.neck * 1.3, r.neck * 1.2]],
@@ -128,10 +163,12 @@ export class Body {
       const y = lerp(yBottom, yTop, i / steps);
       let [rx, rz, cz] = this.torsoAt(y);
       // around the hips the torso must contain both thighs (so shirts and jackets never show the legs poking out)
-      const k = smooth(this.yHip + 0.07 * this.sc, this.yHip - 0.01 * this.sc, y);
-      if (k > 0) { rx = Math.max(rx, lerp(rx, (this.hipX + this.r.leg[0]) * 1.1, k)); rz = Math.max(rz, lerp(rz, this.r.leg[0] * 1.3, k)); }
+      // (a long, gentle curve from the waist, so there's no shelf at the top of the hips)
+      const k = smooth(this.yHip + 0.16 * this.sc, this.yHip - 0.02 * this.sc, y) * (1 - smooth(this.yHip - 0.035 * this.sc, this.yHip - 0.1 * this.sc, y));
+      if (k > 0) { rx = Math.max(rx, lerp(rx, (this.hipX + this.r.leg[0]) * 1.06, k)); rz = Math.max(rz, lerp(rz, this.r.leg[0] * 1.25, k)); }
       const fl = flare * (1 - i / steps) ** 2;
-      rings.push({ c: V(0, y, cz), r: [rx + offset + fl, rz + offset + fl * 0.8], n, w: weights ? weights(y) : this.torsoWeights(y), color, y });
+      rings.push({ c: V(0, y, cz), r: [rx + offset + fl, rz + offset + fl * 0.8], n, w: weights ? weights(y) : this.torsoWeights(y), color, y,
+        off: this.ringOff('torso', this.torsoU(y), V(0, 1, 0), V(0, 0, 1), offset > 0, (x, _y, z) => [x, z]) });
     }
     return rings;
   }
@@ -143,18 +180,20 @@ export class Body {
     for (let i = 0; i <= steps; i++) {
       const t = lerp(t0, t1, i / steps), x = start + s * t * total;
       const d = Math.abs(x - ua.x) / (this.upperArmLen + this.lowerArmLen);
-      const rad = d < 0.53 ? lerp(r0 * 1.02, r1, smooth(0, 0.53, d)) : lerp(r1, r2, smooth(0.53, 1, d));
+      let rad = d < 0.53 ? lerp(r0 * 1.02, r1, smooth(0, 0.53, d)) : lerp(r1, r2, smooth(0.53, 1, d));
+      if (this.kit) rad *= 1 + 0.22 * (1 - smooth(0.0, 0.12, t));   // rounder shoulder root, so the arm grows out of the torso instead of plugging into it
       const e = smooth(0.42, 0.62, d), h = smooth(0.92, 1.02, d);
       const shoulderW = 1 - smooth(-0.04, 0.1, (x - ua.x) * s);
       const fl = flare * smooth(t1 - 0.25, t1, t) ;
       rings.push({ c: V(x, ua.y - 0.002, ua.z), r: [rad + offset + fl, rad * 0.92 + offset + fl], n: 2, t,
+        off: this.ringOff('arm', t, V(s, 0, 0), V(0, 1, 0), offset > 0, (_x, y, z) => [y, z]),
         w: this.W({ [`${side}Shoulder`]: shoulderW * 0.6, [`${side}UpperArm`]: (1 - e) * (1 - shoulderW * 0.6), [`${side}LowerArm`]: e * (1 - h), [`${side}Hand`]: h }) });
     }
     return rings;
   }
   legRings(side, t0, t1, { offset = 0, steps = 14, flare = 0 } = {}) {
     const s = side === 'left' ? 1 : -1;
-    const top = this.yHip + 0.035 * this.sc, bot = this.yAnkle - 0.005, [r0, r1, r2] = this.r.leg;
+    const top = this.yHip - 0.012 * this.sc, bot = this.yAnkle - (this.kit ? 0.022 * this.sc : 0.005), [r0, r1, r2] = this.r.leg;   // starts inside the pelvis, ends inside the foot   // starts just inside the pelvis
     const rings = [];
     for (let i = 0; i <= steps; i++) {
       const t = lerp(t0, t1, i / steps), y = lerp(top, bot, t);
@@ -164,6 +203,7 @@ export class Body {
       const xx = s * lerp(this.hipX * 0.88, this.hipX * 1.02, smooth(this.yAnkle, this.yUpLeg, y));
       const fl = flare * smooth(t1 - 0.3, t1, t);
       rings.push({ c: V(xx, y, 0.004 * this.sc), r: [rad + offset + fl, rad * 0.97 + offset + fl], n: 2, t, hint: V(0, 0, 1),
+        off: this.ringOff('leg', t, V(0, -1, 0), V(0, 0, 1), offset > 0, (x, _y, z) => [s * x, z], smooth(0.05, 0.2, t)),   // fades out where the thigh enters the pelvis
         w: this.W({ hips: hipW, [`${side}UpperLeg`]: (1 - kn) * (1 - hipW), [`${side}LowerLeg`]: kn }) });
     }
     return rings;
@@ -175,7 +215,7 @@ export class Body {
     const sp = this.sp, sc = this.sc;
     const cf = colors.bodyColor;                  // fn(pos, part) -> THREE.Color
     // torso
-    tube(bld, this.torsoRings(this.yHip - 0.085 * sc, this.yNeck + 0.004, { steps: 26, n: 2.15 }), { seg: 40, colorFn: (p) => cf(p, 'torso'), capEnd: false });
+    tube(bld, this.torsoRings(this.yHip - 0.1 * sc, this.yNeck + 0.004, { steps: 30, n: 2.15 }), { seg: 48, colorFn: (p) => cf(p, 'torso'), capEnd: false });
     // neck
     const neckRings = [];
     for (let i = 0; i <= 4; i++) {
@@ -185,7 +225,7 @@ export class Body {
     tube(bld, neckRings, { seg: 24, colorFn: (p) => cf(p, 'neck'), capStart: false, capEnd: false });
     for (const side of ['left', 'right']) {
       tube(bld, this.armRings(side, 0, 1, { steps: 20 }), { seg: 22, hint: V(0, 1, 0), colorFn: (p) => cf(p, 'arm') });
-      tube(bld, this.legRings(side, 0, 1, { steps: 20 }), { seg: 24, colorFn: (p) => cf(p, 'leg') });
+      tube(bld, this.legRings(side, 0, 1, { steps: 22 }), { seg: 24, capStart: false, colorFn: (p) => cf(p, 'leg') });
       this.buildHand(bld, side, cf);
       if (!colors.hideFeet) this.buildFoot(bld, side, cf, sp.paws);
     }
@@ -198,7 +238,8 @@ export class Body {
     for (let i = 0; i <= 6; i++) {
       const t = i / 6, x = wr.x + s * (t * L * 0.56 - 0.01 * sc);
       const w = lerp(this.r.arm[2] * 1.05, spread * 0.78 + 0.006 * sc * fat, smooth(0, 0.45, t)) * (1 - 0.1 * smooth(0.85, 1, t));
-      pr.push({ c: V(x, wr.y - 0.004 * sc, 0.002), r: [w, (0.02 * sc) * fat * (1 - 0.15 * t)], n: 2.8, w: this.W({ [`${side}Hand`]: 1 }), hint: V(0, 1, 0) });
+      pr.push({ c: V(x, wr.y - 0.004 * sc, 0.002), r: [w, (0.02 * sc) * fat * (1 - 0.15 * t)], n: 2.8, w: this.W({ [`${side}Hand`]: 1 }), hint: V(0, 1, 0),
+        off: this.ringOff('palm', t, V(s, 0, 0), V(0, 1, 0), false, (_x, y, z) => [y, z]) });
     }
     // rotate cross-section: tube's N is the hint (up), B spans the palm width (z)
     tube(bld, pr, { seg: 16, hint: V(0, 1, 0), colorFn: (p) => cf(p, 'hand') });
@@ -236,9 +277,13 @@ export class Body {
     const L = this.footLen * (paw ? 0.95 : 1), w = this.footW * (paw ? 1.25 : 1);
     for (let i = 0; i <= 8; i++) {
       const t = i / 8, z = lerp(-0.035 * sc, L * 0.82, t);
-      const h = lerp(0.055 * sc, 0.024 * sc, smooth(0.2, 1, t)) * (paw ? 1.2 : 1);
-      rings.push({ c: V(an.x + s * 0.004 * sc * t, h * 0.55, z), r: [w * (0.75 + 0.35 * Math.sin(Math.PI * Math.min(1, t * 1.25))) * (t > 0.95 ? 0.6 : 1), h * 0.6], n: 2.5,
-        w: this.W({ [`${side}Foot`]: 1 - smooth(0.45, 0.7, t), [`${side}Toes`]: smooth(0.45, 0.7, t) }), hint: V(0, 1, 0) });
+      // the back of the foot is tall and wide enough to hold the ankle, so leg and foot join without a ring
+      const h = (this.kit ? lerp(0.074 * sc, 0.024 * sc, smooth(0.12, 1, t)) : lerp(0.055 * sc, 0.024 * sc, smooth(0.2, 1, t))) * (paw ? 1.2 : 1);
+      let wr = w * (0.75 + 0.35 * Math.sin(Math.PI * Math.min(1, t * 1.25))) * (t > 0.95 ? 0.6 : 1);
+      if (this.kit) wr = Math.max(wr, this.r.leg[2] * 1.06 * (1 - smooth(0.22, 0.5, t)));
+      rings.push({ c: V(an.x + s * 0.004 * sc * t, h * 0.55, z), r: [wr, h * 0.6], n: 2.5,
+        w: this.W({ [`${side}Foot`]: 1 - smooth(0.45, 0.7, t), [`${side}Toes`]: smooth(0.45, 0.7, t) }), hint: V(0, 1, 0),
+        off: this.ringOff('foot', t, V(0, 0, 1), V(0, 1, 0), false, (x, y) => [s * x, y]) });
     }
     tube(bld, rings, { seg: 16, hint: V(0, 1, 0), colorFn: (p) => cf(p, 'foot') });
   }
