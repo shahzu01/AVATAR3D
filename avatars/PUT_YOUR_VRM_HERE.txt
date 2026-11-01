@@ -1,0 +1,2 @@
+Put your .vrm avatar files in this folder (for example Kael.vrm), or import them in the Avatar Library.
+They are kept out of GitHub on purpose.

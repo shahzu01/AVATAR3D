@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Character Creator · Kael Studio</title>
+<style>
+  :root { --bg:#0f1014; --panel:#181a21; --panel2:#1e2029; --line:#2a2d38; --text:#e9e8ef; --muted:#9a9cab; --acc:#a35cff; --ok:#3ccf91; --bad:#ff6b7a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 18px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:17px; margin:0; } header h1 b { color:var(--acc); }
+  header nav { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .btnlink { color:var(--text); background:#22252f; border:1px solid var(--line); border-radius:8px; padding:6px 11px; text-decoration:none; }
+  button, select, input[type=text] { font:inherit; color:var(--text); background:#22252f; border:1px solid var(--line); border-radius:8px; padding:6px 11px; }
+  button { cursor:pointer; } button:hover:not(:disabled) { border-color:var(--acc); } button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  main { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(360px, 1fr); gap:16px; padding:16px 18px; max-width:1500px; margin:0 auto; }
+  @media (max-width: 980px) { main { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .left { position:sticky; top:12px; align-self:start; }
+  .viewer { position:relative; height:min(72vh, 760px); min-height:420px; border-radius:10px; overflow:hidden; background:#15161c; }
+  .viewer.checker { background:repeating-conic-gradient(#20222a 0 25%, #1a1c23 0 50%) 0 0/24px 24px; }
+  .viewer .busy { position:absolute; top:10px; right:12px; font-size:12px; color:var(--muted); background:rgba(0,0,0,.4); padding:3px 8px; border-radius:99px; opacity:0; transition:opacity .2s; }
+  .viewer .busy.on { opacity:1; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .muted { color:var(--muted); font-size:12px; }
+  .tabs { display:flex; gap:2px; flex-wrap:wrap; border-bottom:1px solid var(--line); margin:-4px -4px 12px; padding:0 4px; }
+  .tabs button { border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--muted); padding:8px 9px; }
+  .tabs button.on { color:var(--text); border-bottom-color:var(--acc); }
+  h3 { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:16px 0 8px; font-weight:600; }
+  h3:first-child { margin-top:4px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; }
+  .chips button { padding:5px 10px; font-size:13px; border-radius:99px; }
+  .chips button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .chips.small button { padding:3px 9px; font-size:12px; }
+  .sw { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .sw button { width:26px; height:26px; border-radius:50%; padding:0; border:2px solid #0000; box-shadow:inset 0 0 0 1px rgba(255,255,255,.15); }
+  .sw button.on { border-color:#fff; }
+  .sw input[type=color] { width:30px; height:28px; padding:0; border:1px solid var(--line); border-radius:8px; background:#22252f; }
+  .slider { display:grid; grid-template-columns:120px 1fr 44px; align-items:center; gap:8px; margin:6px 0; color:var(--muted); font-size:13px; }
+  .slider input { accent-color:var(--acc); width:100%; }
+  .presets { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px; }
+  .presets button { display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 6px; border-radius:10px; }
+  .presets .em { font-size:28px; }
+  .presets .nm { font-size:12px; }
+  .save { border-top:1px solid var(--line); margin-top:16px; padding-top:12px; }
+  .status { font-size:13px; min-height:18px; } .status.ok { color:var(--ok); } .status.error { color:var(--bad); }
+  .acc { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #22242d; flex-wrap:wrap; }
+  .acc label { display:flex; gap:8px; align-items:center; min-width:150px; }
+  .hidden { display:none !important; }
+  kbd { background:#2a2d38; border-radius:4px; padding:0 5px; font-size:12px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/", "@pixiv/three-vrm": "/vendor/three-vrm/three-vrm.module.js" } }
+</script>
+</head>
+<body>
+<header>
+  <h1><b>Kael</b> Studio · Character Creator</h1>
+  <nav>
+    <button id="undo" title="Undo (⌘Z)">↶ Undo</button><button id="redo" title="Redo (⇧⌘Z)">↷ Redo</button>
+    <a class="btnlink" href="/library.html">Avatar library</a><a class="btnlink" href="/tracker.html">Studio</a>
+  </nav>
+</header>
+<main>
+  <section class="left">
+    <div class="panel">
+      <div class="viewer" id="viewer"><div class="busy" id="busy">updating…</div></div>
+      <div class="row">
+        <span class="muted">View</span>
+        <button data-view="front">Front</button><button data-view="threequarter">¾</button><button data-view="side">Side</button><button data-view="back">Back</button><button data-view="front-full">Full body</button>
+        <button data-zoom="0.8">＋</button><button data-zoom="1.25">－</button>
+        <select id="bg"><option value="dark">Dark</option><option value="light">Light</option><option value="green">Green</option><option value="transparent">Transparent</option></select>
+      </div>
+      <div class="row"><span class="muted">Test</span><span class="chips small" id="motions"></span></div>
+      <div class="row"><span class="muted">Face</span><span class="chips small" id="testExpr"></span></div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="tabs" id="tabs"></div>
+    <div id="tabBody"></div>
+    <div class="save">
+      <div class="row"><input type="text" id="name" maxlength="60" placeholder="Character name" style="flex:1;min-width:180px"><label class="muted"><input type="checkbox" id="makeActive"> Use as my active avatar</label></div>
+      <div class="row"><button class="primary" id="save">Save to library</button><button id="saveCopy" class="hidden">Save as a copy</button><span class="status" id="status"></span></div>
+      <p class="muted">Tip: <kbd>⌘Z</kbd> undo · drag the preview to turn it · scroll to zoom.</p>
+    </div>
+  </section>
+</main>
+<script type="module" src="/creator.js"></script>
+</body>
+</html>

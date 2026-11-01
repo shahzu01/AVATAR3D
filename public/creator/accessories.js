@@ -1,0 +1,166 @@
+// Accessories. Mostly rigid to the head; scarf/choker to the neck; backpack and wings to the chest.
+import { V, lerp, smooth, col, Builder, surface, tube, blob } from './geom.js';
+
+/** Ring (torus) around an axis. */
+function ring(b, center, axis, R, r, { color, weights, nu = 32, nv = 10, sx = 1, sy = 1, arc = Math.PI * 2, a0 = 0 }) {
+  const ax = axis.clone().normalize();
+  const t1 = Math.abs(ax.y) < 0.9 ? V(0, 1, 0).cross(ax).normalize() : V(1, 0, 0).cross(ax).normalize();
+  const t2 = ax.clone().cross(t1).normalize();
+  surface(b, nu, nv, (u, v) => {
+    const a = a0 + u * arc, bb = v * Math.PI * 2;
+    const cdir = t1.clone().multiplyScalar(Math.cos(a) * sx).addScaledVector(t2, Math.sin(a) * sy);
+    const n = cdir.clone().normalize();
+    const p = center.clone().addScaledVector(cdir, R).addScaledVector(n, Math.cos(bb) * r).addScaledVector(ax, Math.sin(bb) * r);
+    return { pos: p, color, weights };
+  }, { closeU: arc >= Math.PI * 2 - 1e-6 });
+}
+
+export function buildAccessories(ctx) {
+  const { recipe, body, shape } = ctx;
+  const list = recipe.accessories || [];
+  if (!list.length) return {};
+  const b = new Builder(), glow = new Builder();
+  const { rx, ry, rz } = body.head, c = body.headC, sc = body.sc;
+  const hw = body.W({ head: 1 }), cw = body.W({ chest: 1 });
+  const surf = (dir, out = 0) => shape(dir.clone().normalize()).multiplyScalar(1 + out).add(c);
+  const dirOf = (az, el) => V(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+  const hasHair = recipe.hair?.style && !['none', 'tuft'].includes(recipe.hair.style);
+  const hairOut = hasHair ? (['curly'].includes(recipe.hair.style) ? 0.2 : 0.09) : 0.015;
+  // eye positions (same layout as the drawn face)
+  const f = recipe.face || {}, animal = ctx.sp.style === 'animal';
+  const eyeX = rx * (0.27 + 0.16 * (f.eyeSpacing ?? 0.5)), eyeY = c.y + ry * ((animal ? 0.06 : -0.1) + 0.24 * ((f.eyeHeight ?? 0.5) - 0.5));
+  const eyeH = ry * 0.27 * (0.7 + 0.65 * (f.eyeSize ?? 0.5)) * (animal ? 0.95 : 1.22);
+  const eyeZ = (s) => { const d = V(s * eyeX / rx, (eyeY - c.y) / ry, 0.8).normalize(); return surf(d).z; };
+  const earAnchor = (s) => surf(V(s, animal ? 0.15 : -0.02, -0.05), 0.0);
+  const bandOver = (out, width, color, w = hw, elFrom = 0.05) => {    // band from ear to ear over the top
+    const pts = [];
+    for (let i = 0; i <= 16; i++) { const t = i / 16, a = lerp(-Math.PI / 2, Math.PI / 2, t); const dir = V(Math.sin(a), Math.max(elFrom, Math.cos(a)), -0.05); pts.push(surf(dir, out + 0.015)); }
+    tube(b, pts.map((p) => ({ c: p, r: [width, 0.006 * sc], w, hint: p.clone().sub(c).normalize() })), { seg: 8, color });
+  };
+  for (const acc of list) {
+    const C = col(acc.color || '#1f2026'), dark = C.clone().multiplyScalar(0.55), lite = C.clone().lerp(col('#ffffff'), 0.35);
+    switch (acc.id) {
+      case 'headset': case 'headphones': {
+        const big = acc.id === 'headphones';
+        bandOver(hairOut, 0.014 * sc * (big ? 1.2 : 1), C);
+        for (const s of [1, -1]) {
+          const p = earAnchor(s).add(V(s * 0.012 * sc, 0, 0));
+          blob(b, p, [0.022 * sc, rx * (big ? 0.34 : 0.27), rx * (big ? 0.34 : 0.27)], { nu: 18, nv: 12, color: C, weights: hw, deform: (q, d) => { if (Math.abs(d.x) > 0.6) q.x *= 0.6; return q; } });
+          blob(glow, p.clone().add(V(s * 0.019 * sc, 0, 0)), [0.004 * sc, rx * (big ? 0.24 : 0.19), rx * (big ? 0.24 : 0.19)], { nu: 16, nv: 8, color: col('#7af0ff'), weights: hw });
+        }
+        if (!big) {     // microphone boom
+          const s0 = earAnchor(1).add(V(0.02 * sc, -0.01 * sc, 0.01 * sc)), m = V(rx * 0.35, c.y - ry * 0.5, surf(V(0.3, -0.5, 0.8)).z + 0.03 * sc);
+          tube(b, [s0, s0.clone().lerp(m, 0.5).add(V(0.03 * sc, -0.02 * sc, 0)), m].map((p) => ({ c: p, r: [0.004 * sc, 0.004 * sc], w: hw })), { seg: 6, color: dark });
+          blob(b, m, [0.011 * sc, 0.011 * sc, 0.011 * sc], { nu: 10, nv: 8, color: dark, weights: hw });
+        }
+        break;
+      }
+      case 'glassesRound': case 'glassesSquare': case 'sunglasses': {
+        const R = eyeH * 0.82, z = Math.max(eyeZ(1), eyeZ(-1)) + 0.012 * sc;
+        for (const s of [1, -1]) {
+          const ctr = V(s * eyeX, eyeY, z);
+          const sq = acc.id !== 'glassesRound';
+          ring(b, ctr, V(0, 0, 1), R, 0.0035 * sc, { color: C, weights: hw, sx: sq ? 1.15 : 1, sy: sq ? 0.8 : 1 });
+          if (acc.id === 'sunglasses') blob(b, ctr, [R * 1.15, R * 0.8, 0.002 * sc], { nu: 16, nv: 6, color: col('#15151c'), weights: hw });
+          // temple arm back to the ear
+          const e = earAnchor(s).add(V(0, 0.01 * sc, 0.01 * sc));
+          tube(b, [ctr.clone().add(V(s * R * 1.1, 0, -0.004)), V(s * (rx * 0.98 + 0.004), eyeY, lerp(z, e.z, 0.5)), e].map((p) => ({ c: p, r: [0.0028 * sc, 0.0028 * sc], w: hw })), { seg: 6, color: C });
+        }
+        tube(b, [V(-eyeX + R * 0.95, eyeY + R * 0.1, z), V(0, eyeY + R * 0.28, z + 0.006 * sc), V(eyeX - R * 0.95, eyeY + R * 0.1, z)].map((p) => ({ c: p, r: [0.003 * sc, 0.003 * sc], w: hw })), { seg: 6, color: C });
+        break;
+      }
+      case 'cap': case 'beanie': {
+        const beanie = acc.id === 'beanie';
+        surface(b, 36, 14, (u, v) => {
+          const th = u * Math.PI * 2, ph = v * (beanie ? 0.47 : 0.42) * Math.PI;
+          const dir = V(Math.sin(ph) * Math.sin(th), Math.cos(ph), Math.sin(ph) * Math.cos(th));
+          return { pos: surf(dir, hairOut + (beanie ? 0.05 : 0.03) + (beanie ? 0.08 * (1 - v) : 0)), color: beanie && v > 0.82 ? dark : C, weights: hw };
+        }, { flip: true });
+        if (beanie) blob(b, surf(V(0, 1, -0.05), hairOut + 0.2), [rx * 0.2, rx * 0.2, rx * 0.2], { nu: 12, nv: 10, color: lite, weights: hw, deform: (q, d) => q.multiplyScalar(1 + 0.1 * Math.sin(d.x * 12) * Math.sin(d.y * 10)) });
+        else {
+          const bp = surf(V(0, 0.28, 1), hairOut + 0.04);
+          blob(b, bp.add(V(0, -0.005 * sc, rz * 0.32)), [rx * 0.62, 0.006 * sc, rz * 0.5], { nu: 22, nv: 6, color: dark, weights: hw, deform: (q, d) => { if (d.z < 0) q.z *= 0.3; q.y -= q.z * 0.18; return q; } });
+          blob(b, surf(V(0, 1, 0), hairOut + 0.05), [0.01 * sc, 0.006 * sc, 0.01 * sc], { nu: 8, nv: 6, color: dark, weights: hw });
+        }
+        break;
+      }
+      case 'crown': {
+        const top = surf(V(0, 1, -0.1), hairOut), Rr = rx * 0.42;
+        ring(b, top.clone().add(V(0, 0.005 * sc, 0)), V(0, 1, 0), Rr, 0.008 * sc, { color: C, weights: hw, sy: 0.9 });
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2, base = top.clone().add(V(Math.sin(a) * Rr, 0.008 * sc, Math.cos(a) * Rr * 0.9));
+          tube(b, [base, base.clone().add(V(0, 0.035 * sc, 0))].map((p, k) => ({ c: p, r: [0.012 * sc * (1 - k * 0.9) + 0.001, 0.006 * sc * (1 - k * 0.9) + 0.001], w: hw, hint: V(Math.sin(a), 0, Math.cos(a)) })), { seg: 6, color: C });
+          blob(b, base.clone().add(V(Math.sin(a) * 0.004, 0.012 * sc, Math.cos(a) * 0.004)), [0.005 * sc, 0.005 * sc, 0.005 * sc], { nu: 8, nv: 6, color: col(i % 2 ? '#e0333f' : '#3f8cff'), weights: hw });
+        }
+        break;
+      }
+      case 'horns': for (const s of [1, -1]) {
+        const base = surf(dirOf(s * 0.55, 0.85), hairOut * 0.6);
+        const pts = [base, base.clone().add(V(s * 0.03 * sc, 0.05 * sc, -0.01 * sc)), base.clone().add(V(s * 0.07 * sc, 0.075 * sc, -0.04 * sc)), base.clone().add(V(s * 0.085 * sc, 0.06 * sc, -0.08 * sc))];
+        const rings = []; for (let k = 0; k <= 10; k++) { const t = k / 10; rings.push({ c: catmullLocal(pts, t), r: [0.02 * sc * (1 - t) + 0.001, 0.02 * sc * (1 - t) + 0.001], w: hw, color: C.clone().lerp(lite, t) }); }
+        tube(b, rings, { seg: 10 });
+      } break;
+      case 'halo': ring(glow, c.clone().add(V(0, ry * 1.25 + hairOut * ry, -0.02 * sc)), V(0, 1, 0.15), rx * 0.55, 0.007 * sc, { color: col(acc.color || '#ffe27a'), weights: hw }); break;
+      case 'bow': {
+        const p = surf(dirOf(0.7, 0.8), hairOut + 0.04);
+        for (const s of [1, -1]) blob(b, p.clone().add(V(s * 0.035 * sc, 0, 0)), [0.035 * sc, 0.024 * sc, 0.012 * sc], { nu: 14, nv: 8, color: C, weights: hw, deform: (q, d) => { q.y *= 1 - 0.5 * Math.max(0, -d.x * s); return q; } });
+        blob(b, p, [0.013 * sc, 0.014 * sc, 0.014 * sc], { nu: 10, nv: 8, color: dark, weights: hw });
+        break;
+      }
+      case 'flower': {
+        const p = surf(dirOf(-0.95, 0.45), hairOut + 0.03);
+        for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; blob(b, p.clone().add(V(-0.004, Math.sin(a) * 0.016 * sc, Math.cos(a) * 0.016 * sc)), [0.006 * sc, 0.013 * sc, 0.013 * sc], { nu: 10, nv: 6, color: C, weights: hw }); }
+        blob(b, p.clone().add(V(-0.006 * sc, 0, 0)), [0.006 * sc, 0.008 * sc, 0.008 * sc], { nu: 8, nv: 6, color: col('#ffd43f'), weights: hw });
+        break;
+      }
+      case 'bandana': {
+        const rings = [];
+        for (let i = 0; i <= 28; i++) { const a = (i / 28) * Math.PI * 2; const dir = V(Math.sin(a), 0.42 + 0.06 * Math.cos(a), Math.cos(a)); rings.push(surf(dir, hairOut + 0.02)); }
+        tube(b, rings.map((p) => ({ c: p, r: [0.018 * sc, 0.004 * sc], w: hw, hint: p.clone().sub(c).normalize() })), { seg: 6, color: C });
+        const k = surf(V(0, 0.42, -1), hairOut + 0.03);
+        for (const s of [1, -1]) tube(b, [k, k.clone().add(V(s * 0.03 * sc, -0.05 * sc, -0.02 * sc))].map((p, i) => ({ c: p, r: [0.012 * sc * (1 - i * 0.6), 0.004 * sc], w: hw, hint: V(0, 0, -1) })), { seg: 6, color: C });
+        break;
+      }
+      case 'scarf': {
+        const rr = body.r.neck + 0.022 * sc;
+        ring(b, V(0, body.ySh + 0.012 * sc, 0), V(0, 1, 0), rr, 0.02 * sc, { color: C, weights: body.W({ neck: 0.4, chest: 0.6 }), sy: 0.95 });
+        const p0 = V(body.r.neck * 0.6, body.ySh, rr + 0.012 * sc);
+        tube(b, [p0, p0.clone().add(V(0.012 * sc, -0.08 * sc, 0.01 * sc)), p0.clone().add(V(0.02 * sc, -0.16 * sc, 0.0))].map((p, i) => ({ c: p, r: [0.026 * sc, 0.008 * sc], w: cw, hint: V(0, 0, 1), color: i === 2 ? dark : C })), { seg: 8 });
+        break;
+      }
+      case 'choker': {
+        const rr = body.r.neck * 1.04;
+        ring(b, V(0, lerp(body.yNeck, body.yHead, 0.3), -0.004 * sc), V(0, 1, 0), rr, 0.004 * sc, { color: C, weights: body.W({ neck: 1 }) });
+        blob(b, V(0, lerp(body.yNeck, body.yHead, 0.3) - 0.012 * sc, rr + 0.003 * sc), [0.007 * sc, 0.009 * sc, 0.004 * sc], { nu: 8, nv: 6, color: col('#ff4f86'), weights: body.W({ neck: 1 }) });
+        break;
+      }
+      case 'earrings': for (const s of [1, -1]) {
+        const e = animal ? surf(dirOf(s * 0.9, 0.7), 0.02) : earAnchor(s).add(V(s * 0.006 * sc, -ry * 0.25, 0));
+        ring(b, e.clone().add(V(0, -0.012 * sc, 0)), V(1, 0, 0), 0.011 * sc, 0.0022 * sc, { color: C, weights: hw, nu: 16, nv: 6 });
+      } break;
+      case 'backpack': {
+        const z = -body.r.chest[1] - 0.06 * sc;
+        blob(b, V(0, lerp(body.yHip, body.ySh, 0.55), z), [body.r.chest[0] * 0.75, (body.ySh - body.yHip) * 0.42, 0.06 * sc], { nu: 20, nv: 14, color: C, weights: cw, deform: (q, d) => { const k = 2.8; q.x = Math.sign(q.x) * Math.abs(q.x) ** 1 ; void k; void d; return q; } });
+        blob(b, V(0, lerp(body.yHip, body.ySh, 0.42), z - 0.05 * sc), [body.r.chest[0] * 0.5, (body.ySh - body.yHip) * 0.18, 0.025 * sc], { nu: 14, nv: 8, color: dark, weights: cw });
+        for (const s of [1, -1]) { const x = s * body.r.chest[0] * 0.45; tube(b, [V(x, body.ySh - 0.02 * sc, -body.r.chest[1] - 0.012 * sc), V(x * 1.15, body.ySh + 0.012 * sc, 0), V(x * 1.1, body.yChest, body.r.chest[1] + 0.016 * sc), V(x * 1.0, body.yHip + 0.06 * sc, body.r.waist[1] + 0.014 * sc)].map((p) => ({ c: p, r: [0.012 * sc, 0.004 * sc], w: body.torsoWeights(p.y, p.x), hint: p.z >= 0 ? V(0, 0.3, 1) : V(0, 0.3, -1) })), { seg: 6, color: dark }); }
+        break;
+      }
+      case 'wings': for (const s of [1, -1]) {
+        const root = V(s * 0.04 * sc, body.yChest + 0.04 * sc, -body.r.chest[1] - 0.01 * sc);
+        for (let k = 0; k < 3; k++) {
+          const tip = root.clone().add(V(s * (0.16 - k * 0.03) * sc, (0.08 - k * 0.07) * sc, -0.05 * sc));
+          tube(b, [root, root.clone().lerp(tip, 0.5).add(V(0, 0.03 * sc, 0)), tip].map((p, i) => ({ c: p, r: [0.03 * sc * (1 - i * 0.45), 0.005 * sc], w: cw, hint: V(0, 0, -1), color: k === 0 ? C : lite })), { seg: 8 });
+        }
+      } break;
+    }
+  }
+  return { main: b, glow };
+}
+
+function catmullLocal(pts, t) {
+  const n = pts.length - 1, f = Math.min(0.9999, Math.max(0, t)) * n, i = Math.floor(f), u = f - i;
+  const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[Math.min(n, i + 1)], p3 = pts[Math.min(n, i + 2)];
+  const q = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (-a + 3 * b - 3 * c + d) * u * u * u);
+  return V(q(p0.x, p1.x, p2.x, p3.x), q(p0.y, p1.y, p2.y, p3.y), q(p0.z, p1.z, p2.z, p3.z));
+}
+void smooth;

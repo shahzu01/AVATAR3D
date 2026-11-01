@@ -19,10 +19,7 @@ npm run setup
 
 ## Every stream
 
-```
-cd ~/Downloads/KaelStudio
-npm start
-```
+Double-click **Kael Studio** on your Desktop. (Or in Terminal: `cd ~/Downloads/KaelStudio && npm start`.)
 
 Then:
 
@@ -53,16 +50,52 @@ Use the **Website** action. Turn on "GET request in background" and set the URL 
 
 Any app that sends the **VMC protocol** (for example waidayo, or iFacialMocap through a VMC bridge) can drive the face with Apple's ARKit tracking. Send it to your Mac's IP address on port **39539**. The **iPhone (VMC)** chip turns green when data arrives. Webcam body and hand tracking keep working at the same time.
 
-## Your own avatar
+## Avatar Library
 
-Use **Upload .vrm** in the Look panel, or drop the file into `avatars/`. VRM 0.x and 1.0 both work. Models with ARKit "Perfect Sync" blendshapes, like Kael, get full face tracking. Other models fall back to basic blink, mouth and smile.
+Open **Avatar library** from the Studio's Look panel (or http://localhost:3939/library.html).
+
+- **Import My 3D Avatar:** choose or drag in a `.vrm` (VRM 1.0 or 0.x). Kael Studio checks the file first: type, size, damage, and links to outside files are not allowed. It then shows a 3D preview you can rotate and zoom, with front, ¾, side, back and full-body views, light and background presets, expression buttons and test motions (wave, nod, look around, blink). A report lists what the model supports: humanoid rig, fingers, expressions, Perfect Sync face tracking, blinking, lip sync, eye control, spring bones, textures, size and facing direction. Name it and save it.
+- `.glb` models can be stored and previewed, but they have no VRM humanoid rig, so they cannot be driven by tracking.
+- **Create a New Avatar** opens the Character Creator (below).
+- Each avatar page has **Set as active avatar** (OBS and the Studio switch instantly), **Rename**, **Duplicate settings**, **Download original**, **Replace file…** and **Delete** (with confirmation).
+- **Stream presentation** settings are saved per avatar: position, turn and size in the shot, camera framing, background, light preset, blinking on/off, and eye, mouth and expression strength.
+
+## Character Creator
+
+Open it from **Create a New Avatar** in the library (or http://localhost:3939/creator.html).
+
+- **Start:** 12 ready-made characters (Raccoon Gamer, Fox Ranger, Neko Streamer, Panda Chef, Wolf Knight, Bunny Idol, Tiger Athlete, Bear Buddy, Mouse Inventor, Anime Hero, Elf Mage, Idol Star), two randomize buttons, and 11 species: human, elf, cat, fox, wolf, raccoon, bear, panda, bunny, tiger, mouse.
+- **Body:** height, head size, leg length, build, shoulders, chest, waist, hips, arm and leg thickness, outline thickness.
+- **Face:** 9 eye styles plus eye colour, size, spacing, height and tilt; eyelashes; 7 brow styles; 7 mouths; noses; snout length; markings (bandit mask, panda patches, freckles, cheek marks, whisker dots, star, scar, blush).
+- **Fur & skin:** main, muzzle/belly, markings, inner-ear and nose colours; patterns (stripes, spots, socks, tuxedo, dark tips).
+- **Ears & tail:** 10 ear types and 8 tails, with sizes. Bunny ears, tails and long hair swing as you move.
+- **Hair:** 14 styles with a main colour and a tip colour.
+- **Outfit:** 11 tops, 6 bottoms, 5 kinds of shoes, each with colours.
+- **Accessories:** up to 6 of 18 (gaming headset, headphones, glasses, sunglasses, cap, beanie, crown, horns, halo, bow, flower, scarf, choker, earrings, backpack, wings, bandana), each with a colour.
+- **Test:** idle, wave, nod, look around, blink, talk, and 16 face expressions on the preview.
+- **Undo / redo** (⌘Z / ⇧⌘Z). Name it and press **Save to library**. Later, use **Edit in creator** on its library page; OBS updates as soon as you save.
+
+Faces are drawn toon-style and driven by all 52 face-tracking inputs, so blinking, the mouth, brows, gaze and emotions follow your webcam (or iPhone). Extra stream expressions for Stream Deck buttons: `HeartEyes`, `StarEyes`, `Crying`, `Sweat`, `Dizzy`, `Pout`, `Shocked`, `Thinking`, plus the usual `Joy`, `Laughing`, `Angry`, `Sad`, `Surprised`, `Embarrassed`, `Smug`, `Wink_L`. For example: `http://localhost:3939/api/trigger/HeartEyes`.
+
+A created character is saved as a small recipe file (`.kaelchar.json`), so it works only inside Kael Studio. It is not a .vrm for other apps.
+
+Where things are kept (inside the KaelStudio folder):
+
+| Folder | What |
+|---|---|
+| `library/files/` | Your imported files, stored unchanged |
+| `library/library.json` | Names, settings and capability reports |
+| `library/trash/` | Deleted or replaced files. Nothing is destroyed; empty it yourself when you are sure |
+| `avatars/` | Still works: any `.vrm` dropped here appears in the library automatically and stays where it is |
+
+Limits (changeable in `settings.json` under `importLimits`): 300 MB per file, 4 million triangles, 16384 px textures. Models over 300k triangles get a "may lower the frame rate" warning.
 
 ## Troubleshooting
 
 - **Avatar moves the wrong way:** tick **Mirror movement**. If only winks are swapped, tick **Swap face left/right**.
 - **Jittery:** raise **Smoothing**. **Laggy:** lower it.
 - **Low fps on the M2:** set **Body every** to 3rd frame, or untick Hands when you don't need fingers.
-- **OBS shows nothing:** check that `npm start` is still running in Terminal, then right-click the source and choose Refresh.
+- **OBS shows nothing:** check Kael Studio is running (click the Desktop icon: it offers Open or Quit when running), then right-click the source and choose Refresh.
 
 ## How it works
 

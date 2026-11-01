@@ -32,6 +32,8 @@
   code { background:#22252f; padding:1px 6px; border-radius:6px; font-size:12px; }
   .muted { color:var(--muted); font-size:12px; }
   #log { height:90px; overflow:auto; font:12px ui-monospace, Menlo, monospace; color:var(--muted); background:#121318; border-radius:8px; padding:6px 8px; }
+  .btnlink { color:var(--text); background:#22252f; border:1px solid var(--line); border-radius:8px; padding:6px 10px; text-decoration:none; }
+  .btnlink:hover { border-color:var(--acc); }
   kbd { background:#2a2d38; border-radius:4px; padding:0 5px; font-size:12px; }
 </style>
 <script type="importmap">
@@ -88,8 +90,9 @@
   <div class="card">
     <h2>Look</h2>
     <div class="row">
-      <label>Avatar <select id="avatarSel"></select></label>
-      <label>Upload .vrm <input type="file" id="upload" accept=".vrm"></label>
+      <label>Active avatar <select id="avatarSel"></select></label>
+      <a class="btnlink" href="/library.html" target="_blank">Avatar library</a>
+      <a class="btnlink" href="/library.html#import" target="_blank">Import a VRM…</a>
     </div>
     <div class="row">
       <label>Camera <select id="cam"><option value="head">Head</option><option value="bust">Bust</option><option value="half">Half body</option><option value="full">Full body</option></select></label>

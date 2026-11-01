@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avatar Library · Kael Studio</title>
+<style>
+  :root { --bg:#0f1014; --panel:#181a21; --panel2:#1e2029; --line:#2a2d38; --text:#e9e8ef; --muted:#9a9cab; --acc:#a35cff; --ok:#3ccf91; --warn:#f0b44c; --bad:#ff6b7a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:17px; margin:0; } header h1 b { color:var(--acc); }
+  header nav { margin-left:auto; display:flex; gap:8px; }
+  a { color:#c9a4ff; }
+  main { padding:18px; max-width:1280px; margin:0 auto; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 12px; }
+  button, select, input[type=text] { font:inherit; color:var(--text); background:#22252f; border:1px solid var(--line); border-radius:8px; padding:6px 11px; }
+  button { cursor:pointer; } button:hover:not(:disabled) { border-color:var(--acc); } button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  button.danger { color:var(--bad); }
+  .btnlink { color:var(--text); background:#22252f; border:1px solid var(--line); border-radius:8px; padding:6px 11px; text-decoration:none; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+  .card.clickable { cursor:pointer; } .card.clickable:hover { border-color:var(--acc); }
+  .card .thumb { aspect-ratio:1; background:repeating-conic-gradient(#20222a 0 25%, #1a1c23 0 50%) 0 0/20px 20px; display:grid; place-items:center; color:var(--muted); font-size:42px; }
+  .card .thumb img { width:100%; height:100%; object-fit:cover; }
+  .card .body { padding:10px 12px 12px; display:flex; flex-direction:column; gap:6px; }
+  .card .name { font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .choice { padding:22px 18px; gap:8px; min-height:200px; justify-content:center; text-align:center; align-items:center; }
+  .choice .big { font-size:34px; }
+  .choice.disabled { opacity:.6; cursor:default; }
+  .badges { display:flex; flex-wrap:wrap; gap:5px; }
+  .badge { font-size:11px; padding:2px 7px; border-radius:99px; background:#262935; color:var(--muted); }
+  .badge.active { background:rgba(163,92,255,.2); color:#d4b8ff; }
+  .badge.full { background:rgba(60,207,145,.14); color:var(--ok); }
+  .badge.standard, .badge.basic { background:rgba(240,180,76,.14); color:var(--warn); }
+  .badge.preview-only { background:rgba(255,107,122,.13); color:var(--bad); }
+  .split { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(0, 1fr); gap:16px; }
+  @media (max-width: 960px) { .split { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .viewer { position:relative; aspect-ratio:4/3.4; border-radius:10px; overflow:hidden; background:#15161c; }
+  .viewer.checker { background:repeating-conic-gradient(#20222a 0 25%, #1a1c23 0 50%) 0 0/24px 24px; }
+  .viewer canvas { display:block; }
+  .viewer .overlay { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); pointer-events:none; text-align:center; padding:20px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .row label, label.inline { color:var(--muted); font-size:13px; display:flex; align-items:center; gap:6px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; max-height:150px; overflow:auto; padding:2px; }
+  .chips button { padding:3px 9px; font-size:12px; border-radius:99px; }
+  .chips button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin:-4px -4px 12px; padding:0 4px; }
+  .tabs button { border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--muted); padding:8px 10px; }
+  .tabs button.on { color:var(--text); border-bottom-color:var(--acc); }
+  table.kv { width:100%; border-collapse:collapse; font-size:13px; }
+  table.kv td { padding:5px 4px; border-bottom:1px solid #22242d; vertical-align:top; }
+  table.kv td:first-child { color:var(--muted); width:42%; }
+  .yes { color:var(--ok); } .no { color:var(--bad); } .part { color:var(--warn); }
+  .issues { list-style:none; margin:8px 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .issues li { padding:7px 10px; border-radius:8px; background:var(--panel2); font-size:13px; border-left:3px solid var(--muted); }
+  .issues li.error { border-left-color:var(--bad); } .issues li.warn { border-left-color:var(--warn); } .issues li.ok { border-left-color:var(--ok); }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:34px 18px; text-align:center; color:var(--muted); }
+  .drop.over { border-color:var(--acc); background:rgba(163,92,255,.06); }
+  .progress { height:8px; background:#22252f; border-radius:99px; overflow:hidden; margin:8px 0; }
+  .progress > div { height:100%; width:0; background:var(--acc); transition:width .15s; }
+  .fileinfo { display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; margin:10px 0; }
+  .fileinfo span:nth-child(odd) { color:var(--muted); }
+  .muted { color:var(--muted); font-size:12px; }
+  .status { font-size:13px; margin:6px 0; }
+  .status.error { color:var(--bad); } .status.ok { color:var(--ok); }
+  input[type=range] { accent-color:var(--acc); width:130px; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; place-items:center; z-index:10; padding:16px; }
+  .modal.open { display:grid; }
+  .modal .box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; max-width:440px; width:100%; }
+  .modal h3 { margin:0 0 8px; font-size:16px; }
+  .modal p { color:var(--muted); margin:0 0 14px; }
+  .modal .actions { display:flex; gap:8px; justify-content:flex-end; }
+  .hidden { display:none !important; }
+  iframe.stream { width:100%; aspect-ratio:16/9; border:0; border-radius:10px; background:repeating-conic-gradient(#20222a 0 25%, #1a1c23 0 50%) 0 0/20px 20px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/", "@pixiv/three-vrm": "/vendor/three-vrm/three-vrm.module.js" } }
+</script>
+</head>
+<body>
+<header>
+  <h1><b>Kael</b> Studio · Avatar Library</h1>
+  <nav><a class="btnlink" href="#">Library</a><a class="btnlink" href="/tracker.html">Back to Studio</a></nav>
+</header>
+<main>
+  <!-- ======================= library ======================= -->
+  <section id="vLibrary">
+    <h2>Add an avatar</h2>
+    <div class="grid" style="margin-bottom:26px">
+      <a class="card choice clickable" id="createCard" href="/creator.html" style="text-decoration:none;color:inherit">
+        <div class="big">✏️</div><div class="name">Create a New Avatar</div>
+        <div class="muted">Build an animal or anime-style character from ready-made parts: heads, faces, hair, outfits, accessories and colors. Ready for live tracking.</div>
+      </a>
+      <div class="card choice clickable" id="importCard">
+        <div class="big">📦</div><div class="name">Import My 3D Avatar</div>
+        <div class="muted">Use a VRM you already own (VRM 1.0 or 0.x). GLB models can be stored and previewed.</div>
+      </div>
+    </div>
+    <h2>My avatars</h2>
+    <div class="grid" id="libGrid"></div>
+    <p class="muted" id="libEmpty" style="display:none">No avatars yet. Import one above.</p>
+  </section>
+
+  <!-- ======================= import ======================= -->
+  <section id="vImport" class="hidden">
+    <div class="split">
+      <div class="panel">
+        <h2 id="impTitle">Import my 3D avatar</h2>
+        <div class="viewer" id="impViewer"><div class="overlay" id="impOverlay">Choose a file to preview it here.</div></div>
+        <div class="row" id="impViewRow"></div>
+      </div>
+      <div class="panel">
+        <div class="drop" id="drop">
+          <div style="font-size:30px">⬆️</div>
+          <p>Drag a <b>.vrm</b> file here, or</p>
+          <button class="primary" id="pick">Choose file…</button>
+          <input type="file" id="file" accept=".vrm,.glb" class="hidden">
+          <p class="muted" id="limitNote"></p>
+        </div>
+        <div id="impInfo" class="hidden">
+          <div class="fileinfo" id="fileinfo"></div>
+          <div class="progress"><div id="bar"></div></div>
+          <div class="status" id="impStatus"></div>
+          <div id="impReport"></div>
+          <div id="impSave" class="hidden">
+            <div class="row"><label>Name <input type="text" id="impName" maxlength="60" size="26"></label></div>
+            <div class="row"><label class="inline"><input type="checkbox" id="impActive"> Use as my active avatar after saving</label></div>
+            <div class="row">
+              <button class="primary" id="impSaveBtn">Save to library</button>
+              <button id="impCancel">Cancel</button>
+            </div>
+          </div>
+          <div class="row" id="impRetry"><button id="impAgain" class="hidden">Choose another file</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= avatar detail ======================= -->
+  <section id="vDetail" class="hidden">
+    <div class="split">
+      <div class="panel">
+        <div class="row" style="margin-top:0"><h2 style="margin:0" id="dName"></h2><span class="badges" id="dBadges"></span></div>
+        <div class="viewer" id="dViewer"><div class="overlay" id="dOverlay">Loading…</div></div>
+        <div class="row" id="dViewRow"></div>
+      </div>
+      <div class="panel">
+        <div class="row" style="margin-top:0">
+          <button class="primary" id="dActivate">Set as active avatar</button>
+          <button id="dRename">Rename</button>
+          <button id="dDuplicate">Duplicate settings</button>
+          <a class="btnlink" id="dDownload" href="#">Download original</a>
+          <a class="btnlink hidden" id="dEdit" href="#">Edit in creator</a>
+          <button id="dReplace">Replace file…</button>
+          <button class="danger" id="dDelete">Delete</button>
+          <input type="file" id="replaceFile" accept=".vrm,.glb" class="hidden">
+        </div>
+        <div class="status" id="dStatus"></div>
+        <div class="tabs" id="dTabs">
+          <button data-tab="caps" class="on">Capabilities</button><button data-tab="present">Stream presentation</button><button data-tab="file">File &amp; licence</button>
+        </div>
+        <div id="tab-caps"></div>
+        <div id="tab-present" class="hidden"></div>
+        <div id="tab-file" class="hidden"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="modal"><div class="box">
+  <h3 id="mTitle"></h3><p id="mText"></p>
+  <input type="text" id="mInput" class="hidden" maxlength="60" style="width:100%;margin-bottom:14px">
+  <div class="actions"><button id="mCancel">Cancel</button><button class="primary" id="mOk">OK</button></div>
+</div></div>
+<script type="module" src="/library.js"></script>
+</body>
+</html>

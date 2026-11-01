@@ -45,21 +45,20 @@ function loadSettings(s) {
   refreshAvatars();
 }
 async function refreshAvatars() {
-  const { avatars } = await (await fetch('/api/avatars')).json();
-  $('avatarSel').innerHTML = avatars.map((a) => `<option ${a === settings.avatar ? 'selected' : ''}>${a}</option>`).join('') || '<option>(drop a .vrm in the avatars folder)</option>';
+  const { avatars, activeId } = await (await fetch('/api/avatars')).json();
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('avatarSel').innerHTML = avatars.map((a) => `<option value="${a.id}" ${a.id === activeId ? 'selected' : ''}>${esc(a.name)}</option>`).join('') || '<option value="">(no avatar yet: open the library)</option>';
 }
 bind('cam', 'camera', String, 'change'); bind('zoom', 'cameraOffset.zoom', Number); bind('offY', 'cameraOffset.y', Number); bind('offX', 'cameraOffset.x', Number);
 bind('bg', 'background', String, 'change'); bind('bgColor', 'backgroundColor'); bind('lightColor', 'lightColor'); bind('lightIntensity', 'lightIntensity', Number);
 bind('rimColor', 'rimColor'); bind('rimIntensity', 'rimIntensity', Number); bind('idleMotion', 'idleMotion', Boolean, 'change');
 bind('chatCommands', 'chatCommands', Boolean, 'change'); bind('mirror', 'mirror', Boolean, 'change');
-$('avatarSel').addEventListener('change', (e) => saveSettings({ avatar: e.target.value }));
-$('twitchSave').onclick = () => saveSettings({ twitchChannel: $('twitch').value.trim() });
-$('upload').addEventListener('change', async (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  log(`uploading ${f.name} (${(f.size / 1e6).toFixed(1)} MB)…`);
-  const r = await fetch(`/api/avatar?name=${encodeURIComponent(f.name)}`, { method: 'POST', body: f });
-  log(r.ok ? `${f.name} uploaded and selected` : `upload failed: ${await r.text()}`); refreshAvatars();
+$('avatarSel').addEventListener('change', async (e) => {
+  if (!e.target.value) return;
+  const r = await fetch(`/api/library/${e.target.value}/activate`, { method: 'POST' });
+  const j = await r.json(); log(r.ok ? `active avatar: ${j.avatar.name}` : j.error);
 });
+$('twitchSave').onclick = () => saveSettings({ twitchChannel: $('twitch').value.trim() });
 const obs = `${location.origin}/avatar.html`; $('obsUrl').textContent = obs; $('apiEx').textContent = `${location.origin}/api/trigger/joy`;
 $('copyUrl').onclick = () => navigator.clipboard.writeText(obs);
 

@@ -25,6 +25,9 @@ const amb = new THREE.HemisphereLight(0xffffff, 0x444455, 0.9); scene.add(amb);
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); frameCamera(); });
 
 // ------------------------------------------------------------------ state
+const rig = new THREE.Group(); scene.add(rig);     // per-avatar position / rotation / scale
+let tune = { blink: true, gaze: 1, mouth: 1, expressions: 1 };
+let headTop = 1.75;
 let vrm = null, settings = {}, exprMap = new Map(), headRest = new THREE.Vector3(0, 1.45, 0), modelHeight = 1.7, loadedName = null;
 const track = { frame: null, recv: 0, vmc: null, vmcRecv: 0 };
 const active = [];        // triggered expressions { names:{expr:w}, start, dur, intensity }
@@ -73,35 +76,60 @@ function arkitFallback(bs) {
 }
 
 // ------------------------------------------------------------------ loading
-async function loadAvatar(name) {
-  if (!name || name === loadedName) return;
-  loadedName = name; say(`Loading ${name}…`);
-  const loader = new GLTFLoader(); loader.register((p) => new VRMLoaderPlugin(p));
+async function loadAvatar(url, name = url, kind = 'vrm') {
+  if (!url || url === loadedName) return;
+  loadedName = url; say(`Loading ${name}…`);
   try {
-    const gltf = await loader.loadAsync(`/avatars/${encodeURIComponent(name)}`);
-    const v = gltf.userData.vrm;
-    VRMUtils.removeUnnecessaryVertices(gltf.scene);
-    VRMUtils.combineSkeletons?.(gltf.scene);
-    isVRM0 = v.meta?.metaVersion === '0';
-    VRMUtils.rotateVRM0(v);
+    let v;
+    if (kind === 'created') {                 // character made in the Kael Studio creator: built from its recipe
+      const [recipe, { buildCharacter }] = await Promise.all([fetch(url).then((r) => { if (!r.ok) throw new Error('character file missing'); return r.json(); }), import('/creator/build.js')]);
+      if (loadedName !== url) return;
+      v = buildCharacter(recipe);
+      isVRM0 = false;
+    } else {
+      const loader = new GLTFLoader(); loader.register((p) => new VRMLoaderPlugin(p));
+      const gltf = await loader.loadAsync(url);
+      if (!gltf.userData.vrm) throw new Error('not a VRM avatar');
+      v = gltf.userData.vrm;
+      VRMUtils.removeUnnecessaryVertices(gltf.scene);
+      VRMUtils.combineSkeletons?.(gltf.scene);
+      isVRM0 = v.meta?.metaVersion === '0';
+      VRMUtils.rotateVRM0(v);
+    }
     v.scene.traverse((o) => { o.frustumCulled = false; });
-    if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
-    vrm = v; scene.add(vrm.scene);
+    if (vrm) { rig.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
+    vrm = v; rig.add(vrm.scene);
     if (vrm.lookAt) vrm.lookAt.autoUpdate = false;
     buildExprMap();
-    vrm.scene.updateMatrixWorld(true);
-    const head = vrm.humanoid.getNormalizedBoneNode('head');
-    head.getWorldPosition(headRest);
-    const box = new THREE.Box3().setFromObject(vrm.scene); modelHeight = box.max.y - box.min.y;
-    frameCamera(); say('');
+    measure(); say('');
     window.__avatarReady = { name, expressions: exprMap.size, perfectSync: hasExpr('eyeBlinkLeft') && hasExpr('jawOpen') };
   } catch (e) { say(`Could not load ${name}: ${e.message}`); console.error(e); loadedName = null; }
+}
+function measure() {                 // camera framing is based on the avatar at its natural size and position
+  if (!vrm) return;
+  const keep = [rig.position.clone(), rig.rotation.clone(), rig.scale.clone()];
+  rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0); rig.scale.setScalar(1);
+  rig.updateMatrixWorld(true);
+  vrm.humanoid.getNormalizedBoneNode('head').getWorldPosition(headRest);
+  const box = new THREE.Box3().setFromObject(vrm.scene); modelHeight = box.max.y - Math.min(0, box.min.y);
+  headTop = Math.min(box.max.y, headRest.y + 0.9);
+  rig.position.copy(keep[0]); rig.rotation.copy(keep[1]); rig.scale.copy(keep[2]); rig.updateMatrixWorld(true);
+  frameCamera();
+}
+function applyTransform(tr = {}) {
+  const sc = tr.scale || 1;              // scale around the head so the face stays in the chosen framing
+  rig.position.set(tr.x || 0, (tr.y || 0) + headRest.y * (1 - sc), 0);
+  rig.rotation.set(0, THREE.MathUtils.degToRad(tr.rotY || 0), 0);
+  rig.scale.setScalar(sc);
+  vrm?.resetSprings?.();
 }
 
 // ------------------------------------------------------------------ camera / look
 function frameCamera() {
   const o = settings.cameraOffset || { x: 0, y: 0, zoom: 1 };
-  const presets = { head: [headRest.y + 0.02, 0.85], bust: [headRest.y - 0.12, 1.55], half: [headRest.y - 0.38, 2.5], full: [modelHeight * 0.52, 4.6] };
+  const hs = Math.max(0.2, headTop - headRest.y);          // head size above the head bone (big for chibi / mascot heads)
+  const presets = { head: [(headTop + headRest.y) / 2 - 0.02, Math.max(0.85, (hs + 0.12) * 2.3)], bust: [(headTop + headRest.y - 0.36) / 2, Math.max(1.55, (hs + 0.38) * 2.55)],
+    half: [(headTop + headRest.y - 0.85) / 2, Math.max(2.5, (hs + 0.9) * 2.4)], full: [modelHeight * 0.52, Math.max(4.6, modelHeight * 2.9)] };
   const [ty, dist] = presets[settings.camera] || presets.bust;
   const d = dist / (o.zoom || 1);
   camera.position.set(o.x || 0, ty + (o.y || 0), d);
@@ -114,8 +142,10 @@ function applySettings(s) {
   key.color.set(s.lightColor || '#ffffff'); key.intensity = 1.6 * (s.lightIntensity ?? 1);
   amb.intensity = 0.9 * (s.lightIntensity ?? 1);
   rim.color.set(s.rimColor || '#a35cff'); rim.intensity = 1.2 * (s.rimIntensity ?? 0.6);
-  frameCamera();
-  loadAvatar(s.avatar);
+  tune = { blink: true, gaze: 1, mouth: 1, expressions: 1, ...(s.active?.tracking || {}) };
+  applyTransform(s.active?.transform);
+  if (s.active) loadAvatar(s.active.url, s.active.name, s.active.kind).then(() => applyTransform(s.active?.transform));
+  else say('No avatar selected. Open the Avatar Library to import one.');
 }
 
 // ------------------------------------------------------------------ thrown items (viewer interaction)
@@ -271,7 +301,12 @@ function update(dt, t) {
   const em = vrm.expressionManager;
   if (em) {
     const vals = {};
-    const add = (k, v) => { if (v > 0) vals[k] = Math.min(1, (vals[k] || 0) + v); };
+    const MOUTH = /^(jaw|mouth|aa|ih|ou|ee|oh)/i, BLINK = /blink/i;
+    const add = (k, v, kind) => {
+      if (BLINK.test(k) && !tune.blink && kind !== 'trigger') return;
+      if (MOUTH.test(k)) v *= tune.mouth; else if (kind !== 'trigger') v *= tune.expressions;
+      if (v > 0) vals[k] = Math.min(1, (vals[k] || 0) + v);
+    };
     const bs = face?.bs;
     if (bs && faceW > 0) {
       const perfectSync = hasExpr('jawOpen');
@@ -294,13 +329,13 @@ function update(dt, t) {
       const a = active[i], el = t - a.start;
       if (el > a.dur) { active.splice(i, 1); continue; }
       const env = Math.min(1, el / 0.25, (a.dur - el) / 0.4) * a.intensity;
-      for (const [k, w] of Object.entries(a.names)) add(k, w * env);
+      for (const [k, w] of Object.entries(a.names)) add(k, w * env, 'trigger');
     }
     for (const e of em.expressions) em.setValue(e.expressionName, vals[e.expressionName] || 0);
   }
   // --- gaze (eye bones via lookAt)
   if (vrm.lookAt) {
-    const g = face?.gaze || { yaw: 0, pitch: 0 };
+    const g0 = face?.gaze || { yaw: 0, pitch: 0 }, g = { yaw: g0.yaw * tune.gaze, pitch: g0.pitch * tune.gaze };
     lastGaze.yaw += ((g.yaw * faceW) - lastGaze.yaw) * Math.min(1, dt * 18);
     lastGaze.pitch += ((g.pitch * faceW) - lastGaze.pitch) * Math.min(1, dt * 18);
     vrm.lookAt.yaw = lastGaze.yaw; vrm.lookAt.pitch = lastGaze.pitch;
