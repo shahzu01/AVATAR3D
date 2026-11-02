@@ -107,7 +107,8 @@ export const HUMAN_TYPES = {
   female: ['Balanced', 'Hourglass', 'Pear', 'Apple', 'Apple/Round', 'Rectangle', 'Inverted triangle', 'Tall', 'Slender', 'Athletic', 'Petite', 'Curvy / Plus', 'Tall / Long torso'],
   male: ['Balanced', 'Ectomorph', 'Slim runner', 'Average', 'Athletic', 'Swimmer', 'Hero', 'Bodybuilder', 'Stocky', 'Endomorph', 'Heavyweight'],
 };
-export const HUMAN_SPECIES = { human: 'Human', elf: 'Elf' };
+export const HUMAN_SPECIES = { human: 'Human', elf: 'Elf', fox: 'Fox', wolf: 'Wolf', cat: 'Cat', tiger: 'Tiger', bear: 'Bear', panda: 'Panda', raccoon: 'Raccoon', bunny: 'Bunny' };
+export const ANIMALS = ['fox', 'wolf', 'cat', 'tiger', 'bear', 'panda', 'raccoon', 'bunny'];
 export const thumbUrl = (kind, gender, name) => `${HUMAN_BASE}thumbs/${gender}_${kind}_${hairSlug(name)}.png`;
 export const FEMALE_HAIR = ['Pixie cut', 'Bob', 'Long waves', 'Braided ponytail', 'Afro curls', 'Messy bun', 'Double buns', 'Bangs & straight', 'Side braid', 'High ponytail'];
 export const MALE_HAIR = ['Short crew cut', 'Classic pompadour', 'Messy textured quiff', 'Undercut slick back', 'Buzz cut', 'Long wavy + beard', 'Short spiky', 'Man bun', 'Curly afro', 'Side part comb over'];
@@ -182,10 +183,67 @@ export async function loadHuman(recipe) {
     for (const [k, i] of Object.entries(o.morphTargetDictionary)) {
       if (k.startsWith('Body_')) o.morphTargetInfluences[i] = k === type.morph ? 1 : 0;
       if (k.startsWith('Species_')) o.morphTargetInfluences[i] = k === sp ? 1 : 0;
+      if (k === 'HideHead') o.morphTargetInfluences[i] = ANIMALS.includes(r.species) ? 1 : 0;
     }
   });
   applyHumanColours(vrm, r);
-  try { await attachHair(vrm, r, meta.types[0].bones.head[0]); } catch (e) { console.warn('hair', e); }
+  const animal = ANIMALS.includes(r.species);
+  if (animal) { try { await attachAnimal(vrm, r, meta.types[0].bones); } catch (e) { console.warn('animal', e); } }
+  else { try { await attachHair(vrm, r, meta.types[0].bones.head[0]); } catch (e) { console.warn('hair', e); } }
   vrm.userData = { ...vrm.userData, human: r };
   return vrm;
+}
+
+// ------------------------------------------------------------------ animal species: head (with its own face shapes), eyes, tail
+function attachToBone(vrm, boneName, obj, basisPos) {
+  const bone = vrm.humanoid.getRawBoneNode(boneName);
+  vrm.scene.updateMatrixWorld(true);
+  const q = new THREE.Quaternion(); bone.getWorldQuaternion(q);
+  bone.add(obj); obj.quaternion.copy(q).invert();
+  obj.position.copy(toGL(basisPos).negate().applyQuaternion(obj.quaternion));
+}
+function vcolMaterial() { return new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp() }); }
+async function attachAnimal(vrm, r, basisBones) {
+  const url = `${HUMAN_BASE}animals/${r.gender === 'male' ? 'male' : 'female'}_${r.species}.glb`;
+  const gltf = await new GLTFLoader().parseAsync((await getBin(url)).slice(0), '');
+  const root = gltf.scene, parts = {};
+  root.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.material = vcolMaterial(); if (o.morphTargetInfluences) o.material.morphTargets = true; } if (o.name) parts[o.name] = o; });
+  // hide the human head parts that the animal head replaces
+  vrm.scene.traverse((o) => { if (o.isMesh && /^(Eyes|BrowsLashes|Teeth)/.test(o.name)) o.visible = false; });
+  const furHex = { fox: '#e9792f', wolf: '#8e94a2', cat: '#f2f0f4', tiger: '#ef8b2c', bear: '#8a5a3c', panda: '#f4f4f6', raccoon: '#9a9ca6', bunny: '#f1e6dd' }[r.species];
+  findMat(vrm, /^Skin/).forEach((m) => setMToon(m, furHex, shadeOf(furHex, 0.62)));
+  const headGroup = new THREE.Group(); headGroup.name = 'AnimalHeadRoot';
+  const head = parts.AnimalHead, eyeL = parts.AnimalEyeL, eyeR = parts.AnimalEyeR, tail = parts.AnimalTail;
+  for (const o of [head, eyeL, eyeR]) if (o) headGroup.add(o);
+  attachToBone(vrm, 'head', headGroup, basisBones.head[0]);
+  let tailGroup = null;
+  if (tail) { tailGroup = new THREE.Group(); tailGroup.add(tail); attachToBone(vrm, 'hips', tailGroup, basisBones.hips[0]); }
+  const eyeRest = [eyeL?.quaternion.clone(), eyeR?.quaternion.clone()];
+  const dict = head?.morphTargetDictionary || {}, inf = head?.morphTargetInfluences || [];
+  const tailRest = tail?.quaternion.clone(); const tailState = { ang: new THREE.Vector2(), vel: new THREE.Vector2(), prev: null };
+  vrm.__animalSync = (dt = 1 / 60) => {
+    const em = vrm.expressionManager; const g = (n) => { try { return em?.getValue(n) || 0; } catch { return 0; } };
+    const set = (k, v) => { if (k in dict) inf[dict[k]] = Math.min(1, Math.max(0, v)); };
+    const blink = g('blink'), happy = g('happy'), sad = g('sad'), angry = g('angry'), surpr = g('surprised'), relaxed = g('relaxed');
+    set('eyeBlinkLeft', Math.max(g('eyeBlinkLeft'), g('blinkLeft'), blink)); set('eyeBlinkRight', Math.max(g('eyeBlinkRight'), g('blinkRight'), blink));
+    set('eyeWideLeft', Math.max(g('eyeWideLeft'), surpr)); set('eyeWideRight', Math.max(g('eyeWideRight'), surpr));
+    set('eyeSquintLeft', Math.max(g('eyeSquintLeft'), happy * 0.5)); set('eyeSquintRight', Math.max(g('eyeSquintRight'), happy * 0.5));
+    set('jawOpen', Math.max(g('jawOpen'), g('aa'), g('oh') * 0.7, g('ee') * 0.4, g('ih') * 0.3, g('ou') * 0.25, surpr * 0.4));
+    set('mouthSmileLeft', Math.max(g('mouthSmileLeft'), happy, relaxed * 0.5)); set('mouthSmileRight', Math.max(g('mouthSmileRight'), happy, relaxed * 0.5));
+    set('mouthFrownLeft', Math.max(g('mouthFrownLeft'), sad * 0.7, angry * 0.4)); set('mouthFrownRight', Math.max(g('mouthFrownRight'), sad * 0.7, angry * 0.4));
+    set('browDownLeft', Math.max(g('browDownLeft'), angry)); set('browDownRight', Math.max(g('browDownRight'), angry));
+    set('browInnerUp', Math.max(g('browInnerUp'), sad * 0.9, surpr * 0.8));
+    set('browOuterUpLeft', Math.max(g('browOuterUpLeft'), surpr * 0.8)); set('browOuterUpRight', Math.max(g('browOuterUpRight'), surpr * 0.8));
+    set('mouthPucker', Math.max(g('mouthPucker'), g('ou')));
+    const yaw = THREE.MathUtils.degToRad(vrm.lookAt?.yaw || 0), pitch = THREE.MathUtils.degToRad(vrm.lookAt?.pitch || 0);
+    [eyeL, eyeR].forEach((e, i) => { if (!e) return; e.quaternion.copy(eyeRest[i]).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-pitch, 0, yaw))); });
+    if (tail) {             // tail sways with hip motion
+      const hips = vrm.humanoid.getRawBoneNode('hips'); const p = new THREE.Vector3(); hips.getWorldPosition(p);
+      if (tailState.prev) { const v = p.clone().sub(tailState.prev).divideScalar(Math.max(dt, 1e-3)); tailState.vel.x += -v.x * 2.5 * dt * 60; tailState.vel.y += v.z * 2.5 * dt * 60; }
+      tailState.prev = p; const t = performance.now() / 1000;
+      tailState.vel.addScaledVector(tailState.ang, -dt * 40).multiplyScalar(Math.exp(-dt * 4));
+      tailState.ang.addScaledVector(tailState.vel, dt).clampLength(0, 0.5);
+      tail.quaternion.copy(tailRest).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(tailState.ang.y, 0, tailState.ang.x + Math.sin(t * 1.3) * 0.06)));
+    }
+  };
 }

@@ -349,7 +349,7 @@ function loop() {
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
   update(dt, t);
   updateItems(dt);
-  vrm?.update(dt); vrm?.__hairSprings?.(dt);
+  vrm?.update(dt); vrm?.__hairSprings?.(dt); vrm?.__animalSync?.(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }

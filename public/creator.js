@@ -3,7 +3,7 @@ import { AvatarViewer } from '/viewer.js';
 import { SPECIES, OPTIONS, SWATCHES, PRESETS, ACCESSORY_LIMIT, defaultRecipe, randomRecipe, withSpecies } from '/creator/catalog.js';
 import { faceThumb, requestThumb, cachedThumb, clearThumbQueue } from '/creator/thumbs.js';
 import { ICON, topbar, wireRanges, paintRange, toast } from '/ui.js';
-import { defaultHuman, HUMAN_SPECIES, HUMAN_TYPES, FEMALE_HAIR, MALE_HAIR, SKIN_TONES, HAIR_COLORS, EYE_COLORS, thumbUrl } from '/human.js';
+import { defaultHuman, ANIMALS, HUMAN_SPECIES, HUMAN_TYPES, FEMALE_HAIR, MALE_HAIR, SKIN_TONES, HAIR_COLORS, EYE_COLORS, thumbUrl } from '/human.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -169,6 +169,7 @@ function humanTab(r, st) {
     h += section('Body type') + tiles('bodyType', HUMAN_TYPES[r.gender], r.bodyType, 'body');
     h += `<div class="rnd"><button data-cartoon>Switch to a cartoon character</button><button data-flow>${ICON.start || ''} Run the setup again</button></div>`;
   } else if (tab === 'body') h += section('Body type') + tiles('bodyType', HUMAN_TYPES[r.gender], r.bodyType, 'body');
+  else if (tab === 'hair' && ANIMALS.includes(r.species)) h += `<p class="hint">Animal species have fur instead of hair. Pick Human or Elf on the Start panel to choose a hairstyle.</p>`;
   else if (tab === 'hair') {
     const list = ['None', ...(r.gender === 'male' ? MALE_HAIR : FEMALE_HAIR)];
     if (st === 'style') h += section('Hairstyle') + tiles('hair', list, r.hair, 'hair') + `<p class="hint">Long hair, ponytails and braids swing as you move.</p>`;
