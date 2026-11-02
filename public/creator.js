@@ -3,6 +3,7 @@ import { AvatarViewer } from '/viewer.js';
 import { SPECIES, OPTIONS, SWATCHES, PRESETS, ACCESSORY_LIMIT, defaultRecipe, randomRecipe, withSpecies } from '/creator/catalog.js';
 import { faceThumb, requestThumb, cachedThumb, clearThumbQueue } from '/creator/thumbs.js';
 import { ICON, topbar, wireRanges, paintRange, toast } from '/ui.js';
+import { defaultHuman, HUMAN_TYPES, FEMALE_HAIR, MALE_HAIR, SKIN_TONES, HAIR_COLORS, EYE_COLORS, thumbUrl } from '/human.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -83,14 +84,31 @@ const CATS = [
   { id: 'outfit', label: 'Outfit', icon: 'outfit', sub: 'Tops, bottoms and shoes', tabs: [['top', 'Top'], ['bottom', 'Bottom'], ['shoes', 'Shoes']] },
   { id: 'extras', label: 'Extras', icon: 'extras', sub: `Accessories (up to ${ACCESSORY_LIMIT})`, tabs: [] },
 ];
-$('tabs').innerHTML = CATS.map((c, i) => `${i === 1 ? '<span class="sep"></span>' : ''}<button data-tab="${c.id}" title="${c.label}">${ICON[c.icon]}<span>${c.label}</span></button>`).join('');
+const CATS_H = [   // realistic humans (Blender models): fewer, bigger choices
+  { id: 'start', label: 'Start', icon: 'start', sub: 'Male or Female, and the body type', tabs: [['character', 'Character']] },
+  { id: 'body', label: 'Body', icon: 'body', sub: 'Body type', tabs: [] },
+  { id: 'hair', label: 'Hair', icon: 'hair', sub: 'Style and colour', tabs: [['style', 'Style'], ['color', 'Colour']] },
+  { id: 'colors', label: 'Skin & eyes', icon: 'fur', sub: 'Skin tone and eye colour', tabs: [] },
+  { id: 'outfit', label: 'Outfit', icon: 'outfit', sub: 'Clothing colour', tabs: [] },
+];
+const isHuman = () => recipe.kind === 'human';
+const cats = () => (isHuman() ? CATS_H : CATS);
+function renderRail() {
+  $('tabs').innerHTML = cats().map((c, i) => `${i === 1 ? '<span class="sep"></span>' : ''}<button data-tab="${c.id}" title="${c.label}">${ICON[c.icon]}<span>${c.label}</span></button>`).join('');
+  if (!cats().some((c) => c.id === tab)) tab = 'start';
+  const st = cats().find((c) => c.id === tab); if (st.tabs.length && !st.tabs.some(([k]) => k === subtab[tab])) subtab[tab] = st.tabs[0][0];
+}
+renderRail();
 $('tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; if (document.body.classList.contains('panel-closed')) { document.body.classList.remove('panel-closed'); setTimeout(() => viewer.resize(), 280); } renderTab(); };
 $('subtabs').onclick = (e) => { const b = e.target.closest('[data-sub]'); if (!b) return; subtab[tab] = b.dataset.sub; renderTab(); };
 
 // ------------------------------------------------------------------ control builders
 const get = (path) => path.split('.').reduce((o, k) => o?.[k], recipe);
 const getDefault = (path) => path.split('.').reduce((o, k) => o?.[k], DEFAULTS);
-const set = (path, v) => change((r) => { const ks = path.split('.'), last = ks.pop(); ks.reduce((o, k) => (o[k] ??= {}), r)[last] = v; });
+const set = (path, v) => change((r) => {
+  const ks = path.split('.'), last = ks.pop(); ks.reduce((o, k) => (o[k] ??= {}), r)[last] = v;
+  if (r.kind === 'human' && path === 'gender') { const d = defaultHuman(v); if (!HUMAN_TYPES[v].includes(r.bodyType)) r.bodyType = 'Balanced'; if (!['None', ...(v === 'male' ? MALE_HAIR : FEMALE_HAIR)].includes(r.hair)) r.hair = d.hair; }
+});
 const animal = () => SPECIES[recipe.species].style === 'animal';
 const section = (t) => `<div class="section-t">${t}<span class="line"></span></div>`;
 function swatches(path, list) {
@@ -139,15 +157,36 @@ function flushThumbs() {
 const noAcc = (r) => { r.accessories = []; return r; };
 
 // ------------------------------------------------------------------ panel content
+const chips = (path, list, cur, labels) => `<div class="chips" data-chips="${path}">${list.map((v) => `<button class="${v === cur ? 'on' : ''}" data-v="${esc(v)}">${esc(labels?.[v] ?? v)}</button>`).join('')}</div>`;
+const tiles = (path, list, cur, kind) => `<div class="thumbs big" data-chips="${path}">${list.map((v) => `<button class="thumb ${v === cur ? 'on' : ''}" data-v="${esc(v)}" title="${esc(v)}"><span class="img"><img src="${thumbUrl(kind, recipe.gender, v)}" alt="" onerror="this.remove()"></span><span class="lbl">${esc(v)}</span></button>`).join('')}</div>`;
+const swatchList = (path, map, cur) => `<div class="chips" data-chips="${path}">${Object.entries(map).map(([k, c]) => `<button class="${k === cur ? 'on' : ''}" data-v="${esc(k)}"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${Array.isArray(c) ? c[0] : c};margin-right:6px;vertical-align:-1px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)"></span>${esc(k)}</button>`).join('')}</div>`;
+function humanTab(r, st) {
+  let h = '';
+  if (tab === 'start') {
+    h += section('Starting anatomy') + chips('gender', ['female', 'male'], r.gender, { female: 'Female', male: 'Male' })
+      + `<p class="hint">Realistic human made in Blender. Switching Male / Female keeps your colours.</p>`;
+    h += section('Body type') + tiles('bodyType', HUMAN_TYPES[r.gender], r.bodyType, 'body');
+    h += `<div class="rnd"><button data-cartoon>Switch to a cartoon character</button><button data-flow>${ICON.start || ''} Run the setup again</button></div>`;
+  } else if (tab === 'body') h += section('Body type') + tiles('bodyType', HUMAN_TYPES[r.gender], r.bodyType, 'body');
+  else if (tab === 'hair') {
+    const list = ['None', ...(r.gender === 'male' ? MALE_HAIR : FEMALE_HAIR)];
+    if (st === 'style') h += section('Hairstyle') + tiles('hair', list, r.hair, 'hair') + `<p class="hint">Long hair, ponytails and braids swing as you move.</p>`;
+    else h += section('Hair and brow colour') + swatchList('hairColor', HAIR_COLORS, r.hairColor);
+  } else if (tab === 'colors') h += section('Skin tone') + swatchList('skin', SKIN_TONES, r.skin) + section('Eye colour') + swatchList('eyeColor', { brown: '#6b3a1e', hazel: '#8a6a2a', green: '#4f7a3a', blue: '#3f6fb0', grey: '#8a96a3' }, r.eyeColor);
+  else if (tab === 'outfit') h += section('Clothing colour') + swatches('clothing', ['#2b2b31', '#e8e9f2', '#5b6bd6', '#c43a3a', '#2f8f5b', '#e0a43a', '#d97aa8', '#7a4fc2', '#1f3a5a', '#8a5a3c']);
+  return h;
+}
 function renderTab() {
-  const cat = CATS.find((c) => c.id === tab), st = subtab[tab];
+  renderRail();
+  const cat = cats().find((c) => c.id === tab), st = subtab[tab];
   $('tabs').querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   $('catTitle').textContent = cat.label; $('catSub').textContent = cat.sub;
   $('subtabsWrap').classList.toggle('hidden', !cat.tabs.length);
   $('subtabs').innerHTML = cat.tabs.map(([k, l]) => `<button data-sub="${k}" class="${k === st ? 'on' : ''}">${l}</button>`).join('');
   const r = recipe;
   let h = '';
-  if (tab === 'start') {
+  if (isHuman()) h = humanTab(r, st);
+  else if (tab === 'start') {
     if (st === 'character') {
       h += section('Starting anatomy') + grid('presentation', PRESENTATIONS, 'full', { big: true, angle: 0.5, recipeFor: (v) => noAcc(withValue('presentation', v)) })
         + `<p class="hint">Male and Female set the starting body for every species. Every slider stays free afterwards.</p>`;
@@ -257,6 +296,7 @@ function bindTab() {
   body.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => { change((r) => { for (const k of Object.keys(r)) delete r[k]; Object.assign(r, clone(PRESETS[+b.dataset.preset])); }); $('name').value = recipe.name; toast(`Loaded ${recipe.name}`); }));   // a ready-made character comes exactly as it is
   body.querySelectorAll('[data-random]').forEach((b) => (b.onclick = () => { change((r) => Object.assign(r, randomRecipe(Math.random() * 1e9, b.dataset.random === 'species' ? { species: r.species } : {}))); $('name').value = recipe.name; }));
   body.querySelector('[data-flow]')?.addEventListener('click', () => openFlow());
+  body.querySelector('[data-cartoon]')?.addEventListener('click', () => { const g = recipe.gender; change((r) => { for (const k of Object.keys(r)) delete r[k]; Object.assign(r, recipeFromFlow({ presentation: g, species: 'human', bodyType: 'balanced' })); }); $('name').value = recipe.name; });
   const sp = body.querySelector('[data-species]');
   if (sp) sp.onclick = (e) => { const v = e.target.closest('[data-v]')?.dataset.v; if (!v || v === recipe.species) return; change((r) => { withSpecies(r, v, true); r.ears.type = 'auto'; r.tail.type = 'auto'; r.face.nose = 'auto'; if (SPECIES[v].style === 'human' && r.face.markings === 'mask') r.face.markings = 'none'; }); };
   body.querySelectorAll('[data-acc]').forEach((el) => (el.onchange = () => change((r) => {
@@ -269,6 +309,13 @@ function bindTab() {
 // ------------------------------------------------------------------ equipped list (click to jump)
 const label = (k, id) => OPTIONS[k]?.find((o) => o.id === id)?.label || id;
 function renderEquipped() {
+  if (isHuman()) {
+    const r = recipe, rows = [['start', 'character', 'Character', `${r.gender === 'male' ? 'Male' : 'Female'} · realistic`], ['body', '', 'Body type', r.bodyType], ['hair', 'style', 'Hair', r.hair], ['hair', 'color', 'Hair colour', r.hairColor], ['colors', '', 'Skin', r.skin], ['colors', '', 'Eyes', r.eyeColor]];
+    $('equipped').innerHTML = `<h3>Equipped <button class="ghost" id="eqClose" title="Hide">×</button></h3>` + rows.map(([t, s2, k, v]) => `<button class="it" data-jt="${t}" data-js="${s2}"><span class="ic">${EMOJI.human}</span><span><small>${k}</small>${esc(v)}</span></button>`).join('');
+    $('eqClose').onclick = () => { document.body.classList.add('equip-closed'); updateShift(); };
+    $('equipped').querySelectorAll('[data-jt]').forEach((b) => (b.onclick = () => { tab = b.dataset.jt; if (b.dataset.js) subtab[tab] = b.dataset.js; document.body.classList.remove('panel-closed'); renderTab(); }));
+    return;
+  }
   const r = recipe, sp = SPECIES[r.species];
   const rows = [
     ['start', 'species', 'Species', `${EMOJI[r.species]} ${sp.label}`, null],
@@ -345,11 +392,14 @@ const FLOW_STEPS = [
   { title: 'Who are you creating?', sub: 'Choose the starting anatomy. You can change it, and every slider, at any time.', key: 'presentation',
     items: () => PRESENTATIONS.map((o) => ({ ...o, recipe: anatomyPreview(recipeFromFlow({ ...flow, presentation: o.id, species: 'human' })) })) },
   { title: 'Pick a species', sub: 'Each species has its own head, ears, tail and paws.', key: 'species',
-    items: () => Object.entries(SPECIES).map(([k, sp]) => ({ id: k, label: `${EMOJI[k]} ${sp.label}`, recipe: recipeFromFlow({ ...flow, species: k }) })) },
+    items: () => [{ id: 'realhuman', label: '🧑 Realistic human (new)', img: thumbUrl('body', flow.presentation === 'male' ? 'male' : 'female', 'Balanced') },
+      ...Object.entries(SPECIES).map(([k, sp]) => ({ id: k, label: `${EMOJI[k]} ${sp.label}`, recipe: recipeFromFlow({ ...flow, species: k }) }))] },
   { title: 'Choose a body type', sub: 'A starting shape, not a limit: fine-tune everything in the Creator.', key: 'bodyType',
-    items: () => BODY_TYPES.map((o) => ({ ...o, hint: BODY_TYPE_HINT[o.id], recipe: recipeFromFlow({ ...flow, bodyType: o.id }) })) },
+    items: () => (flow.species === 'realhuman'
+      ? HUMAN_TYPES[flow.presentation === 'male' ? 'male' : 'female'].map((n) => ({ id: n, label: n, img: thumbUrl('body', flow.presentation === 'male' ? 'male' : 'female', n) }))
+      : BODY_TYPES.map((o) => ({ ...o, hint: BODY_TYPE_HINT[o.id], recipe: recipeFromFlow({ ...flow, bodyType: o.id }) }))) },
 ];
-function openFlow() { clearThumbQueue(); flow.step = 0; flow.presentation = recipe.presentation || null; flow.species = recipe.species; flow.bodyType = recipe.bodyType || 'balanced'; $('flow').classList.remove('hidden'); renderFlow(); }
+function openFlow() { clearThumbQueue(); flow.step = 0; flow.presentation = recipe.presentation || recipe.gender || null; flow.species = isHuman() ? 'realhuman' : recipe.species; flow.bodyType = recipe.bodyType || 'balanced'; $('flow').classList.remove('hidden'); renderFlow(); }
 function closeFlow() { $('flow').classList.add('hidden'); clearThumbQueue(); renderTab(); }   // panel thumbnails resume
 function renderFlow() {
   const st = FLOW_STEPS[flow.step], items = st.items();
@@ -357,6 +407,7 @@ function renderFlow() {
   $('flowTitle').textContent = st.title; $('flowSub').textContent = st.sub;
   $('flowGrid').className = `flowgrid n${items.length > 6 ? 'many' : items.length}`;
   $('flowGrid').innerHTML = items.map((it) => {
+    if (it.img) return `<button class="fcard ${flow[st.key] === it.id ? 'on' : ''}" data-fv="${esc(it.id)}"><span class="img"><img src="${it.img}" alt="" onerror="this.remove()"></span><span class="lbl">${esc(it.label)}</span></button>`;
     const key = `flow:${st.key}:${it.id}:${hash(thumbBasis(it.recipe, 'full'))}`, hit = cachedThumb(key);
     requestThumb(key, it.recipe, 'full', 0.5, (url) => { document.querySelectorAll(`[data-fkey="${CSS.escape(key)}"]`).forEach((el) => { el.classList.remove('loading'); el.innerHTML = `<img src="${url}" alt="">`; }); });
     return `<button class="fcard ${flow[st.key] === it.id ? 'on' : ''}" data-fv="${esc(it.id)}"><span class="img ${hit ? '' : 'loading'}" data-fkey="${key}">${hit ? `<img src="${hit}" alt="">` : ''}</span><span class="lbl">${esc(it.label)}</span>${it.hint ? `<span class="hint">${esc(it.hint)}</span>` : ''}</button>`;
@@ -366,6 +417,12 @@ function renderFlow() {
   $('flowNext').disabled = !flow[st.key];
 }
 function finishFlow() {
+  if (flow.species === 'realhuman') {
+    const g = flow.presentation === 'male' ? 'male' : 'female', fresh = { ...defaultHuman(g), bodyType: HUMAN_TYPES[g].includes(flow.bodyType) ? flow.bodyType : 'Balanced', name: 'New character' };
+    change((r) => { for (const k of Object.keys(r)) delete r[k]; Object.assign(r, fresh); });
+    $('name').value = recipe.name; tab = 'hair'; subtab.hair = 'style'; renderTab(); renderEquipped(); closeFlow();
+    toast(`Realistic ${g} ready to customize`); return;
+  }
   const fresh = recipeFromFlow(flow);
   change((r) => { for (const k of Object.keys(r)) delete r[k]; Object.assign(r, fresh); });
   $('name').value = recipe.name; tab = 'body'; subtab.body = 'size'; renderTab(); renderEquipped(); closeFlow();
@@ -374,6 +431,7 @@ function finishFlow() {
 $('flowGrid').onclick = (e) => {
   const b = e.target.closest('[data-fv]'); if (!b) return;
   const st = FLOW_STEPS[flow.step]; flow[st.key] = b.dataset.fv;
+  if (st.key === 'species') flow.bodyType = b.dataset.fv === 'realhuman' ? 'Balanced' : (BODY_TYPES.some((o) => o.id === flow.bodyType) ? flow.bodyType : 'balanced');
   if (flow.step < FLOW_STEPS.length - 1) { flow.step++; renderFlow(); } else renderFlow();
 };
 $('flowBack').onclick = () => { if (flow.step > 0) { flow.step--; renderFlow(); } };
@@ -385,12 +443,12 @@ $('flowSkip').onclick = () => closeFlow();
   if (editId) {
     try {
       const [{ avatar }, rec] = await Promise.all([fetch(`/api/library/${editId}`).then((r) => r.json()), fetch(`/api/library/${editId}/file`).then((r) => r.json())]);
-      recipe = { ...defaultRecipe(), ...rec, name: avatar.name };
+      recipe = rec.kind === 'human' ? { ...defaultHuman(rec.gender), ...rec, name: avatar.name } : { ...defaultRecipe(), ...rec, name: avatar.name };
       $('save').textContent = 'Save changes'; $('saveCopy').classList.remove('hidden');
       document.title = `Editing ${avatar.name} · Kael Studio`;
       const lib = await fetch('/api/library').then((r) => r.json());
       $('makeActive').checked = lib.activeId === editId;
-      tab = 'face';
+      tab = rec.kind === 'human' ? 'hair' : 'face';
     } catch { setStatus('Could not open that character. Starting a new one instead.', 'error'); }
   }
   $('name').value = recipe.name;
