@@ -3,7 +3,7 @@ import { AvatarViewer } from '/viewer.js';
 import { SPECIES, OPTIONS, SWATCHES, PRESETS, ACCESSORY_LIMIT, defaultRecipe, randomRecipe, withSpecies } from '/creator/catalog.js';
 import { faceThumb, requestThumb, cachedThumb, clearThumbQueue } from '/creator/thumbs.js';
 import { ICON, topbar, wireRanges, paintRange, toast } from '/ui.js';
-import { defaultHuman, HUMAN_TYPES, FEMALE_HAIR, MALE_HAIR, SKIN_TONES, HAIR_COLORS, EYE_COLORS, thumbUrl } from '/human.js';
+import { defaultHuman, HUMAN_SPECIES, HUMAN_TYPES, FEMALE_HAIR, MALE_HAIR, SKIN_TONES, HAIR_COLORS, EYE_COLORS, thumbUrl } from '/human.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -165,6 +165,7 @@ function humanTab(r, st) {
   if (tab === 'start') {
     h += section('Starting anatomy') + chips('gender', ['female', 'male'], r.gender, { female: 'Female', male: 'Male' })
       + `<p class="hint">Realistic human made in Blender. Switching Male / Female keeps your colours.</p>`;
+    h += section('Species') + chips('species', Object.keys(HUMAN_SPECIES), r.species || 'human', HUMAN_SPECIES);
     h += section('Body type') + tiles('bodyType', HUMAN_TYPES[r.gender], r.bodyType, 'body');
     h += `<div class="rnd"><button data-cartoon>Switch to a cartoon character</button><button data-flow>${ICON.start || ''} Run the setup again</button></div>`;
   } else if (tab === 'body') h += section('Body type') + tiles('bodyType', HUMAN_TYPES[r.gender], r.bodyType, 'body');
@@ -310,7 +311,7 @@ function bindTab() {
 const label = (k, id) => OPTIONS[k]?.find((o) => o.id === id)?.label || id;
 function renderEquipped() {
   if (isHuman()) {
-    const r = recipe, rows = [['start', 'character', 'Character', `${r.gender === 'male' ? 'Male' : 'Female'} · realistic`], ['body', '', 'Body type', r.bodyType], ['hair', 'style', 'Hair', r.hair], ['hair', 'color', 'Hair colour', r.hairColor], ['colors', '', 'Skin', r.skin], ['colors', '', 'Eyes', r.eyeColor]];
+    const r = recipe, rows = [['start', 'character', 'Character', `${r.gender === 'male' ? 'Male' : 'Female'} · ${HUMAN_SPECIES[r.species || 'human']}`], ['body', '', 'Body type', r.bodyType], ['hair', 'style', 'Hair', r.hair], ['hair', 'color', 'Hair colour', r.hairColor], ['colors', '', 'Skin', r.skin], ['colors', '', 'Eyes', r.eyeColor]];
     $('equipped').innerHTML = `<h3>Equipped <button class="ghost" id="eqClose" title="Hide">×</button></h3>` + rows.map(([t, s2, k, v]) => `<button class="it" data-jt="${t}" data-js="${s2}"><span class="ic">${EMOJI.human}</span><span><small>${k}</small>${esc(v)}</span></button>`).join('');
     $('eqClose').onclick = () => { document.body.classList.add('equip-closed'); updateShift(); };
     $('equipped').querySelectorAll('[data-jt]').forEach((b) => (b.onclick = () => { tab = b.dataset.jt; if (b.dataset.js) subtab[tab] = b.dataset.js; document.body.classList.remove('panel-closed'); renderTab(); }));

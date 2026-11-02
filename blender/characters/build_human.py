@@ -342,6 +342,23 @@ PRESETS = {
     'surprised': mix(browOuterUpLeft=0.8, browOuterUpRight=0.8, browInnerUp=0.8, eyeWideLeft=0.8, eyeWideRight=0.8, jawOpen=0.4),
 }
 print('expressions', len(EXPR), 'presets', len(PRESETS), f'{time.time() - t0:.0f}s')
+# species shape keys (human-based species): elf ears
+SPECIES_KEYS = {}
+elf = []
+for side in ('l', 'r'):
+    elf += [(f'ears/{side}-ear-shape-pointed', 1.0), (f'ears/{side}-ear-scale-vert-incr', 0.8), (f'ears/{side}-ear-rot-backward', 0.35),
+            (f'ears/{side}-ear-flap-incr', 0.4), (f'ears/{side}-ear-scale-incr', 0.25)]
+Pe, _, _, _ = mh.build(TYPES[0][1] + elf); Pe = Pe * rec0['s']
+Ve, _, _, _ = subdivide(Pe, BASE['faces'], 1)
+dE = Ve - Vs0
+# lengthen the ear tips: points of the outer ear above its middle are pulled up, back and out
+hc, hR = recipes.headfit(Pu0)
+earz = hc[2] - 0.035
+ear = (np.linalg.norm(Ve - Vs0, axis=1) > 2e-4) & (np.abs(Ve[:, 0]) > hR[0] * 0.8)   # only vertices the MakeHuman ear targets move
+t = np.clip((Ve[:, 2] - earz) / 0.035, 0, 1) ** 1.6 * ear * (Ve[:, 2] < earz + 0.05) * np.clip((np.abs(Ve[:, 0]) - hR[0] * 0.8) / 0.012, 0, 1)
+dE += np.stack([np.sign(Ve[:, 0]) * 0.012 * t, 0.014 * t, 0.032 * t], 1)
+print('elf ear verts', int(ear.sum()))
+SPECIES_KEYS['Species_Elf'] = dE
 
 # ------------------------------------------------------------------ brows + lashes (basis), transferred to types / expressions
 import face as facemod
@@ -392,6 +409,7 @@ def add_key(ob, name, X):
 Wg = {g: BASE['W'][:, k] for k, g in enumerate(BASE['GN'])}
 body = mesh_obj('Body', rec0['Vt'], BASE['Fs'], Wg)
 for rec in data[1:]: add_key(body, slug(rec['name']), rec['Vt'])
+for k, d in SPECIES_KEYS.items(): add_key(body, k, rec0['Vt'] + d)
 for k, d in EXPR.items(): add_key(body, k, rec0['Vt'] + d)
 garm_obs = []
 for gi, (G, gv0) in enumerate(zip(GARM, rec0['Gt'])):

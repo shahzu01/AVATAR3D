@@ -17,7 +17,7 @@ export const HAIR_COLORS = { black: '#1b1716', 'dark brown': '#3b2a22', brown: '
 export const EYE_COLORS = { brown: '#ffffff', hazel: '#ffe9b0', green: '#c8f0b4', blue: '#b8d6ff', grey: '#dfe4ea' };
 
 export function defaultHuman(gender = 'female') {
-  return { kind: 'human', gender, bodyType: 'Balanced', hair: gender === 'female' ? 'Pixie cut' : 'Short crew cut',
+  return { kind: 'human', gender, species: 'human', bodyType: 'Balanced', hair: gender === 'female' ? 'Pixie cut' : 'Short crew cut',
     skin: 'light', hairColor: 'dark brown', eyeColor: 'brown', clothing: '#2b2b31', name: gender === 'female' ? 'Human Female' : 'Human Male' };
 }
 export function humanFiles(gender) { const g = gender === 'male' ? 'Male' : 'Female'; return { vrm: `${HUMAN_BASE}Human_${g}.vrm`, meta: `${HUMAN_BASE}Human_${g}.json`, hair: `${HUMAN_BASE}hair_${gender === 'male' ? 'male' : 'female'}/` }; }
@@ -107,6 +107,7 @@ export const HUMAN_TYPES = {
   female: ['Balanced', 'Hourglass', 'Pear', 'Apple', 'Apple/Round', 'Rectangle', 'Inverted triangle', 'Tall', 'Slender', 'Athletic', 'Petite', 'Curvy / Plus', 'Tall / Long torso'],
   male: ['Balanced', 'Ectomorph', 'Slim runner', 'Average', 'Athletic', 'Swimmer', 'Hero', 'Bodybuilder', 'Stocky', 'Endomorph', 'Heavyweight'],
 };
+export const HUMAN_SPECIES = { human: 'Human', elf: 'Elf' };
 export const thumbUrl = (kind, gender, name) => `${HUMAN_BASE}thumbs/${gender}_${kind}_${hairSlug(name)}.png`;
 export const FEMALE_HAIR = ['Pixie cut', 'Bob', 'Long waves', 'Braided ponytail', 'Afro curls', 'Messy bun', 'Double buns', 'Bangs & straight', 'Side braid', 'High ponytail'];
 export const MALE_HAIR = ['Short crew cut', 'Classic pompadour', 'Messy textured quiff', 'Undercut slick back', 'Buzz cut', 'Long wavy + beard', 'Short spiky', 'Man bun', 'Curly afro', 'Side part comb over'];
@@ -177,7 +178,11 @@ export async function loadHuman(recipe) {
   VRMUtils.removeUnnecessaryVertices(gltf.scene);
   vrm.scene.traverse((o) => {                       // start from the basis body; only the chosen body type is applied
     if (!o.isMesh || !o.morphTargetDictionary) return;
-    for (const [k, i] of Object.entries(o.morphTargetDictionary)) if (k.startsWith('Body_')) o.morphTargetInfluences[i] = k === type.morph ? 1 : 0;
+    const sp = r.species && r.species !== 'human' ? 'Species_' + r.species[0].toUpperCase() + r.species.slice(1) : null;
+    for (const [k, i] of Object.entries(o.morphTargetDictionary)) {
+      if (k.startsWith('Body_')) o.morphTargetInfluences[i] = k === type.morph ? 1 : 0;
+      if (k.startsWith('Species_')) o.morphTargetInfluences[i] = k === sp ? 1 : 0;
+    }
   });
   applyHumanColours(vrm, r);
   try { await attachHair(vrm, r, meta.types[0].bones.head[0]); } catch (e) { console.warn('hair', e); }
