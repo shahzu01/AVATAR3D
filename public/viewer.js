@@ -245,7 +245,7 @@ export class AvatarViewer {
       if (this.motion !== 'blink' && this.expr === null && this.vrm.expressionManager) for (const e of this.vrm.expressionManager.expressions) this.vrm.expressionManager.setValue(e.expressionName, 0);
       this.pose(t);
       this.vrm.lookAt?.update?.(dt);
-      this.vrm.update(dt);
+      this.vrm.update(dt); this.vrm.__hairSprings?.(dt); this.vrm.__animalSync?.(dt);
     }
     this.mixer?.update(dt);
     this.controls.update();

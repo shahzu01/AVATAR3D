@@ -91,6 +91,9 @@ def vjoints(jp):
                 b = f'finger{f}-{k + 1}.{s}'; J[S + fn + sname] = (H(b), T(b))
     return J
 
+def ss_(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t)
+
 # ------------------------------------------------------------------ helpers
 def rot_between(a, b):
     a = a / np.linalg.norm(a); b = b / np.linalg.norm(b); v = np.cross(a, b); c = a @ b
@@ -410,6 +413,10 @@ Wg = {g: BASE['W'][:, k] for k, g in enumerate(BASE['GN'])}
 body = mesh_obj('Body', rec0['Vt'], BASE['Fs'], Wg)
 for rec in data[1:]: add_key(body, slug(rec['name']), rec['Vt'])
 for k, d in SPECIES_KEYS.items(): add_key(body, k, rec0['Vt'] + d)
+# HideHead: pull the human head inside the animal head (used by animal species)
+hc_, hR_ = recipes.headfit(Pu0)
+Xh = rec0['Vt']; ramp = ss_(hc_[2] - 0.16, hc_[2] - 0.11, Xh[:, 2])
+add_key(body, 'HideHead', Xh + (hc_ + np.array([0, 0.01, -0.03]) - Xh) * (0.45 * ramp)[:, None])
 for k, d in EXPR.items(): add_key(body, k, rec0['Vt'] + d)
 garm_obs = []
 for gi, (G, gv0) in enumerate(zip(GARM, rec0['Gt'])):
