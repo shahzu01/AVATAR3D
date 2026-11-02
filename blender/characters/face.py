@@ -57,7 +57,7 @@ def lashes(S, rim, eye_c, rng, n_up=95, n_lo=18, scale=1.0):
             q = [p]; d = d0
             for j in range(4):
                 d = _n(d + up * curl * 0.35); q.append(q[-1] + d * Ln / 4)
-            S.lock(q, 0.00016, 0.00014, bend=0.0, taper=1.2, nseg=8, ring=4, out_hint=outw)
+            S.lock(q, 0.00011, 0.0001, bend=0.0, taper=1.2, nseg=6, ring=3, out_hint=outw)
 
 def brows(S, eye_c, side, rng, n=230, female=True):
     """Arched brow of short strands hugging the skin."""
@@ -78,7 +78,7 @@ def brows(S, eye_c, side, rng, n=230, female=True):
             nx = q[-1] + d * L / 3
             nx = S.proj(nx, 0.0013 + 0.0003 * j)
             q.append(nx); d = _n(d + np.array([sx * 0.15, 0, -0.1]))
-        S.lock(q, 0.0005, 0.0003, bend=0.0, taper=1.5, nseg=6, ring=4)
+        S.lock(q, 0.00038, 0.00025, bend=0.0, taper=1.5, nseg=5, ring=3)
 
 def raytri(o, D, A, B, C):
     """Moller-Trumbore: rays D (m,3) from o against triangles; returns nearest t per ray (inf if none)."""
@@ -116,7 +116,7 @@ def build(P, faces, eye_centers, female=True, seed=4):
         R.append(margin(P, T, ec))
     for rim, ec in zip(R, eye_centers):
         lashes(S, rim, ec, rng, n_up=95 if female else 75, scale=1.0 if female else 0.75)
-        brows(S, ec, np.sign(ec[0]), rng, n=230 if female else 320, female=female)
+        brows(S, ec, np.sign(ec[0]), rng, n=170 if female else 260, female=female)
     return np.array(S.V), np.array(S.F)
 
 def _tris(faces):

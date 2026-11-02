@@ -12,6 +12,10 @@ class Engine(Hair):
         self.P = P[sel]; self.N = self.Nb[sel]; self.tree = cKDTree(self.P)
         self.V = []; self.F = []; self.rng = np.random.default_rng(seed)
 
+    def surfnorm(self, q):
+        dd, k = self.tree.query(q, k=8); n = _n(self.N[k].mean(0))
+        return n if dd[0] < 0.05 else _n(q - self.c)
+
     def surf(self, q):
         dd, k = self.tree.query(q, k=6); return self.P[k].mean(0), _n(self.N[k].mean(0)), dd[0]
 
@@ -59,7 +63,7 @@ class Engine(Hair):
                     tgt = _n(tgt - sn * (tgt @ sn))
                 d = tgt if d is None else _n(d * 0.65 + tgt * 0.35 + rng.normal(0, jitter, 3))
                 q2 = q + d * step
-                if waves and freed:
+                if waves and (freed or q[2] < c[2] - 0.1):
                     side = _n(np.cross(d, sn)); q2 = q2 + side * waves * np.cos(ph + k * step / wavelen * 6.28) * step * 3
                 sp, sn, dist = self.surf(q2)
                 h = (q2 - sp) @ sn
@@ -170,6 +174,8 @@ def style(name, P, T, head):
             rel = q - c; fr = -rel[1] / R[1]
             sgn = 1.0 if q[0] >= px else -1.0
             v = np.array([sgn * 0.5, 0.0, -1.0]) + radial(q, u, 0.25)
+            if rel[2] < -0.09:                         # below the jaw: hang straight, drift slightly in toward the body
+                v = np.array([-0.35 * np.sign(rel[0]) * min(1, abs(rel[0]) / 0.12), 0.12 * np.sign(rel[1]), -1.0])
             if sweep and fr > 0.55 and rel[2] > -0.01: v = np.array([sweep, -0.3, -0.7])
             elif not sweep and fr > 0.45: v = np.array([sgn * 1.0, 0.5, -0.6])
             return v
@@ -182,14 +188,15 @@ def style(name, P, T, head):
         E.flow(520, part_flow(-0.03), hem_by(chin + 0.02, chin + 0.01, chin + 0.03), taper=6.0, th=0.005,
                roots_keep=lambda u: u[2] > 0.2 and E.hairline(u))
     elif name == 'Long waves':
-        E.flow(520, part_flow(0.0), hem_by(shoulder - 0.04, shoulder - 0.06, shoulder - 0.09), waves=0.2, wavelen=0.08, jitter=0.015,
-               w=(0.015, 0.022), maxlen=120)
+        E.flow(560, part_flow(0.0), hem_by(shoulder - 0.06, shoulder - 0.08, shoulder - 0.11), waves=0.2, wavelen=0.08, jitter=0.01,
+               w=(0.016, 0.024), maxlen=140, fall=False, off=0.007)
     elif name == 'Bangs & straight':
         def f(q, u):
             rel = q - c
             if -rel[1] / R[1] > 0.5 and rel[2] > -0.02: return np.array([0, -0.55, -0.85])
+            if rel[2] < -0.09: return np.array([-0.35 * np.sign(rel[0]) * min(1, abs(rel[0]) / 0.12), 0.12 * np.sign(rel[1]), -1.0])
             return np.array([np.sign(q[0]) * 0.3, 0.0, -1.0]) + radial(q, u, 0.2)
-        E.flow(560, f, hem_by(brow + 0.014, shoulder - 0.05, shoulder - 0.06), taper=8.0, th=0.0045, maxlen=120,
+        E.flow(560, f, hem_by(brow + 0.014, shoulder - 0.05, shoulder - 0.07), taper=8.0, th=0.0045, maxlen=140, fall=False, off=0.007,
                roots_keep=lambda u: u[2] > 0.15 and E.hairline(u))
     elif name in ('High ponytail', 'Braided ponytail'):
         G = c + np.array([0, 0.07, 0.07]) if name == 'High ponytail' else c + np.array([0, 0.095, 0.0])
@@ -267,7 +274,10 @@ def male_style(name, P, T, head):
     def toward_back(q, u):
         rel = q - c; return np.array([0.15 * np.sign(rel[0]), 1.0, -0.35 - 0.6 * max(0, -rel[2] / R[2])])
     if name == 'Buzz cut':
-        shell(E, T, lambda u: E.hairline(u, nape=-0.45, front=0.42), 0.0022)
+        shell(E, T, lambda u: E.hairline(u, nape=-0.45, front=0.42), 0.0035)
+        def tg(q, u): rel = q - c; return np.array([0.1 * np.sign(rel[0]), -0.4 if rel[1] < -0.02 else 0.5, -0.3])
+        E.flow(1600, tg, lambda u: -9, steps_fn=lambda u: 2, fall=False, w=(0.006, 0.009), off=0.003,
+               roots_keep=lambda u: E.hairline(u, nape=-0.45, front=0.42), lift_fn=lambda u: 0.0015, taper=1.2, guard=False, th=0.0025)
     elif name == 'Short crew cut':
         shell(E, T, lambda u: E.hairline(u, nape=-0.45, front=0.42), 0.002)
         def tg(q, u): rel = q - c; return np.array([0.1 * np.sign(rel[0]), -0.6 if rel[1] < -0.02 else 0.6, 0.2])

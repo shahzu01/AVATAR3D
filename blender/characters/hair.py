@@ -40,7 +40,7 @@ class Hair:
         for i in range(m):
             t = i / (m - 1)
             tg = _n(path[min(i + 1, m - 1)] - path[max(i - 1, 0)])
-            nrm = _n(path[i] - self.c) if out_hint is None else out_hint
+            nrm = (self.surfnorm(path[i]) if hasattr(self, 'surfnorm') else _n(path[i] - self.c)) if out_hint is None else out_hint
             sd = _n(np.cross(tg, nrm)); nr = np.cross(sd, tg)
             w = w0 * (1 - t ** st_taper) ** 0.9 + 0.0006; th = th0 * (1 - 0.85 * t) + 0.0004
             for j in range(ring):

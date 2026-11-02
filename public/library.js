@@ -170,7 +170,7 @@ function capsHtml(src, checks) {
     <div class="badges" style="margin-bottom:8px"><span class="badge ${src.suitability.level}">${LEVEL[src.suitability.level]}</span>
       ${src.suitability.tracking ? '<span class="badge full">Can be used live</span>' : '<span class="badge preview-only">Cannot be used live</span>'}</div>
     <table class="kv">
-      <tr><td>Format</td><td>${f.type === 'Kael Studio character' ? 'Made in the Kael Studio creator' : `${esc(f.type)}${f.vrmVersion ? ' ' + esc(f.vrmVersion) : ''} (${esc(f.container)}${f.specVersion ? `, spec ${esc(f.specVersion)}` : ''})`}</td></tr>
+      <tr><td>Format</td><td>${f.type === 'Kael Studio character' ? 'Made in the Kael Studio creator' : f.type === 'Kael Studio realistic human' ? 'Realistic human made in the Kael Studio creator' : `${esc(f.type)}${f.vrmVersion ? ' ' + esc(f.vrmVersion) : ''} (${esc(f.container)}${f.specVersion ? `, spec ${esc(f.specVersion)}` : ''})`}</td></tr>
       <tr><td>Model name</td><td>${esc(src.meta?.name || '—')}${src.meta?.authors?.length ? ` by ${esc(src.meta.authors.join(', '))}` : ''}</td></tr>
       <tr><td>Humanoid rig</td><td>${hum}</td></tr>
       <tr><td>Fingers</td><td>${c.humanoid.fingers ? yn(true, `${c.humanoid.fingers} finger bones`) : yn(false)}</td></tr>

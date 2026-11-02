@@ -84,7 +84,8 @@ async function loadAvatar(url, name = url, kind = 'vrm') {
     if (kind === 'created') {                 // character made in the Kael Studio creator: built from its recipe
       const [recipe, { buildCharacter }] = await Promise.all([fetch(url).then((r) => { if (!r.ok) throw new Error('character file missing'); return r.json(); }), import('/creator/build.js')]);
       if (loadedName !== url) return;
-      v = buildCharacter(recipe);
+      v = recipe.kind === 'human' ? await (await import('/human.js')).loadHuman(recipe) : buildCharacter(recipe);
+      if (loadedName !== url) return;
       isVRM0 = false;
     } else {
       const loader = new GLTFLoader(); loader.register((p) => new VRMLoaderPlugin(p));
@@ -348,7 +349,7 @@ function loop() {
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
   update(dt, t);
   updateItems(dt);
-  vrm?.update(dt);
+  vrm?.update(dt); vrm?.__hairSprings?.(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }

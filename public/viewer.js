@@ -73,8 +73,7 @@ export class AvatarViewer {
   /** Show a character made in the creator (a recipe object, or a URL to one). */
   async loadCreated(recipeOrUrl, { keepCamera = false } = {}) {
     const recipe = typeof recipeOrUrl === 'string' ? await fetch(recipeOrUrl).then((r) => { if (!r.ok) throw new Error('character file missing'); return r.json(); }) : recipeOrUrl;
-    const { buildCharacter } = await import('/creator/build.js');
-    const v = buildCharacter(recipe);
+    const v = recipe.kind === 'human' ? await (await import('/human.js')).loadHuman(recipe) : (await import('/creator/build.js')).buildCharacter(recipe);
     const cam = keepCamera && this.model ? { p: this.camera.position.clone(), t: this.controls.target.clone() } : null;
     this.unload();
     this.vrm = v; this.gltf = null; this.isVRM0 = false; this.model = v.scene;

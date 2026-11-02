@@ -158,7 +158,7 @@ async function libraryApi(req, res, url) {
 // ------------------------------------------------------------------ static files
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.wasm': 'application/wasm', '.png': 'image/png', '.svg': 'image/svg+xml',
-  '.vrm': 'application/octet-stream', '.task': 'application/octet-stream', '.map': 'application/json' };
+  '.vrm': 'application/octet-stream', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg', '.task': 'application/octet-stream', '.map': 'application/json' };
 const MOUNTS = [
   ['/vendor/three/', path.join(ROOT, 'node_modules/three/')],
   ['/vendor/three-vrm/', path.join(ROOT, 'node_modules/@pixiv/three-vrm/lib/')],
