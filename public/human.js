@@ -18,7 +18,7 @@ export const EYE_COLORS = { brown: '#ffffff', hazel: '#ffe9b0', green: '#c8f0b4'
 
 export function defaultHuman(gender = 'female') {
   return { kind: 'human', gender, species: 'human', bodyType: 'Balanced', hair: gender === 'female' ? 'Pixie cut' : 'Short crew cut',
-    skin: 'light', hairColor: 'dark brown', eyeColor: 'brown', clothing: '#2b2b31', name: gender === 'female' ? 'Human Female' : 'Human Male' };
+    skin: 'light', hairColor: 'dark brown', eyeColor: 'brown', clothing: '#2b2b31', outfit: 'basic', harnessColor: '#5a3a26', name: gender === 'female' ? 'Human Female' : 'Human Male' };
 }
 export function humanFiles(gender) { const g = gender === 'male' ? 'Male' : 'Female'; return { vrm: `${HUMAN_BASE}Human_${g}.vrm`, meta: `${HUMAN_BASE}Human_${g}.json`, hair: `${HUMAN_BASE}hair_${gender === 'male' ? 'male' : 'female'}/` }; }
 export async function humanMeta(gender) { return getJSON(humanFiles(gender).meta); }
@@ -98,6 +98,7 @@ export function applyHumanColours(vrm, r) {
   findMat(vrm, /^Brows|^Hair/).forEach((m) => setMToon(m, hc, shadeOf(hc)));
   const cl = r.clothing || '#2b2b31';
   findMat(vrm, /^Cloth/).forEach((m) => setMToon(m, cl, shadeOf(cl, 0.5)));
+  const hcol = r.harnessColor || '#5a3a26'; findMat(vrm, /^Leather/).forEach((m) => setMToon(m, hcol, shadeOf(hcol, 0.5)));
   const ec = EYE_COLORS[r.eyeColor] || '#ffffff';
   findMat(vrm, /^Eyes/).forEach((m) => setMToon(m, ec, shadeOf(ec, 0.85)));
 }
@@ -187,6 +188,7 @@ export async function loadHuman(recipe) {
     }
   });
   applyHumanColours(vrm, r);
+  vrm.scene.traverse((o) => { if (o.isMesh && /^Harness/.test(o.name)) o.visible = r.outfit === 'harness'; });
   const animal = ANIMALS.includes(r.species);
   if (animal) { try { await attachAnimal(vrm, r, meta.types[0].bones); } catch (e) { console.warn('animal', e); } }
   else { try { await attachHair(vrm, r, meta.types[0].bones.head[0]); } catch (e) { console.warn('hair', e); } }

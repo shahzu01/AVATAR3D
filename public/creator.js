@@ -175,7 +175,8 @@ function humanTab(r, st) {
     if (st === 'style') h += section('Hairstyle') + tiles('hair', list, r.hair, 'hair') + `<p class="hint">Long hair, ponytails and braids swing as you move.</p>`;
     else h += section('Hair and brow colour') + swatchList('hairColor', HAIR_COLORS, r.hairColor);
   } else if (tab === 'colors') h += section('Skin tone') + swatchList('skin', SKIN_TONES, r.skin) + section('Eye colour') + swatchList('eyeColor', { brown: '#6b3a1e', hazel: '#8a6a2a', green: '#4f7a3a', blue: '#3f6fb0', grey: '#8a96a3' }, r.eyeColor);
-  else if (tab === 'outfit') h += section('Clothing colour') + swatches('clothing', ['#2b2b31', '#e8e9f2', '#5b6bd6', '#c43a3a', '#2f8f5b', '#e0a43a', '#d97aa8', '#7a4fc2', '#1f3a5a', '#8a5a3c']);
+  else if (tab === 'outfit') h += section('Outfit') + chips('outfit', ['basic', 'harness'], r.outfit || 'basic', { basic: 'Basic', harness: 'With harness' })
+    + (r.outfit === 'harness' ? section('Harness colour') + swatches('harnessColor', ['#5a3a26', '#2a1d18', '#1f2026', '#8a5a3c', '#c43a3a', '#2f8f5b']) : '') + section('Clothing colour') + swatches('clothing', ['#2b2b31', '#e8e9f2', '#5b6bd6', '#c43a3a', '#2f8f5b', '#e0a43a', '#d97aa8', '#7a4fc2', '#1f3a5a', '#8a5a3c']);
   return h;
 }
 function renderTab() {
