@@ -75,6 +75,8 @@ class Engine(Hair):
                     if h < o: q2 = q2 + sn * (o - h)
                 pts.append(q2)
                 if q2[2] < hz: break
+                r2 = q2 - c
+                if guard and r2[1] < -0.045 and abs(r2[0]) < 0.062 and c[2] - 0.16 < q2[2] < c[2] + 0.028: break   # never over the eyes/face
             if len(pts) < 4: continue
             pts = pts[::2] if len(pts) > 10 else pts
             self.lock(pts, rng.uniform(*w), th, bend=0.15, taper=taper)
@@ -146,18 +148,22 @@ class Engine(Hair):
             self.lock(pts, rng.uniform(0.012, 0.017), 0.006, bend=0.1, taper=3.0, out_hint=None)
         return self
 
-    def curls(self, n=900, L=(0.05, 0.085), coil=0.009, turns=(2.0, 3.5), w=0.0055):
+    def curls(self, n=900, L=(0.05, 0.085), coil=0.009, turns=(2.0, 3.5), w=0.0055, shape=None):
         rng = self.rng; c = self.c
-        rs = self.roots(n, lambda u: u[2] > -0.35 and self.hairline(u, nape=-0.4, front=0.4))
+        rs = self.roots(n, lambda u: u[2] > -0.4 and (self.hairline(u, nape=-0.45, front=0.4) or (abs(u[0]) > 0.6 and -0.3 < u[2] < 0.4 and u[1] > -0.2)))
         for p, nrm, u in rs:
             out = _n(nrm * 0.75 + _n(p - c) * 0.5 + np.array([0, 0, -0.15]) * (u[2] < 0.3))
             a = _n(np.cross(out, rng.normal(0, 1, 3))); b = np.cross(out, a)
             Ln = rng.uniform(*L); tn = rng.uniform(*turns); ph = rng.uniform(0, 6.28); pts = []
+            if shape is not None:                                  # grow until the tip reaches the outer silhouette
+                sc_, sR = shape; q0 = (p - sc_) / sR; dq = out / sR
+                A = dq @ dq; B = 2 * q0 @ dq; Cc = q0 @ q0 - 1; disc = B * B - 4 * A * Cc
+                if disc > 0: Ln = max(0.02, (-B + np.sqrt(disc)) / (2 * A)) * rng.uniform(0.9, 1.05)
             for t in np.linspace(0, 1, 26):
                 ang = ph + t * tn * 6.283
                 q = p + out * Ln * t + (a * np.cos(ang) + b * np.sin(ang)) * coil * (0.3 + t)
                 pts.append(q)
-            self.lock(pts, w, w * 0.8, bend=0.0, taper=3.0, nseg=50, ring=7, out_hint=out)
+            self.lock(pts, w, w * 0.8, bend=0.0, taper=3.0, nseg=26, ring=6, out_hint=out)
         return self
 
     def out(self): return np.array(self.V), np.array(self.F)
@@ -175,7 +181,7 @@ def style(name, P, T, head):
             sgn = 1.0 if q[0] >= px else -1.0
             v = np.array([sgn * 0.5, 0.0, -1.0]) + radial(q, u, 0.25)
             if rel[2] < -0.09:                         # below the jaw: hang straight, drift slightly in toward the body
-                v = np.array([-0.35 * np.sign(rel[0]) * min(1, abs(rel[0]) / 0.12), 0.12 * np.sign(rel[1]), -1.0])
+                v = np.array([0.05 * np.sign(rel[0]), 0.3 + 0.2 * np.sign(rel[1]), -1.0])
             if sweep and fr > 0.55 and rel[2] > -0.01: v = np.array([sweep, -0.3, -0.7])
             elif not sweep and fr > 0.45: v = np.array([sgn * 1.0, 0.5, -0.6])
             return v
@@ -188,15 +194,15 @@ def style(name, P, T, head):
         E.flow(520, part_flow(-0.03), hem_by(chin + 0.02, chin + 0.01, chin + 0.03), taper=6.0, th=0.005,
                roots_keep=lambda u: u[2] > 0.2 and E.hairline(u))
     elif name == 'Long waves':
-        E.flow(560, part_flow(0.0), hem_by(shoulder - 0.06, shoulder - 0.08, shoulder - 0.11), waves=0.2, wavelen=0.08, jitter=0.01,
+        E.flow(560, part_flow(0.0), hem_by(shoulder - 0.06, shoulder + 0.03, shoulder - 0.11), waves=0.2, wavelen=0.08, jitter=0.01,
                w=(0.016, 0.024), maxlen=140, fall=False, off=0.007)
     elif name == 'Bangs & straight':
         def f(q, u):
             rel = q - c
             if -rel[1] / R[1] > 0.5 and rel[2] > -0.02: return np.array([0, -0.55, -0.85])
-            if rel[2] < -0.09: return np.array([-0.35 * np.sign(rel[0]) * min(1, abs(rel[0]) / 0.12), 0.12 * np.sign(rel[1]), -1.0])
+            if rel[2] < -0.09: return np.array([0.05 * np.sign(rel[0]), 0.3 + 0.2 * np.sign(rel[1]), -1.0])
             return np.array([np.sign(q[0]) * 0.3, 0.0, -1.0]) + radial(q, u, 0.2)
-        E.flow(560, f, hem_by(brow + 0.014, shoulder - 0.05, shoulder - 0.07), taper=8.0, th=0.0045, maxlen=140, fall=False, off=0.007,
+        E.flow(560, f, hem_by(brow + 0.026, shoulder + 0.03, shoulder - 0.07), taper=8.0, th=0.0045, maxlen=140, fall=False, off=0.007,
                roots_keep=lambda u: u[2] > 0.15 and E.hairline(u))
     elif name in ('High ponytail', 'Braided ponytail'):
         G = c + np.array([0, 0.07, 0.07]) if name == 'High ponytail' else c + np.array([0, 0.095, 0.0])
@@ -231,7 +237,7 @@ def style(name, P, T, head):
             E.bun(G + _n(G - c) * 0.025, r=0.03, n=26, axis=_n(G - c))
     elif name == 'Afro curls':
         E.flow(300, part_flow(0.0), hem_by(brow + 0.03, c[2] - 0.02, c[2] - 0.07), fall=False, w=(0.012, 0.018))
-        E.curls(1000, L=(0.045, 0.07), coil=0.007, w=0.011, turns=(1.5, 2.5))
+        E.curls(1800, coil=0.009, w=0.012, turns=(2.0, 3.5), shape=(c + np.array([0, 0.015, -0.01]), R * np.array([1.7, 1.6, 1.7])))
     return E.out()
 
 def shell(E, T, keep, off=0.0025):
