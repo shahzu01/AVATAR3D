@@ -236,7 +236,8 @@ def style(name, P, T, head):
 
 def shell(E, T, keep, off=0.0025):
     """Buzz/undercut layer: offset copy of scalp faces."""
-    c, R = E.c, E.R; P = E.Pb; N = E.Nb
+    c, R = E.c, E.R; P = E.Pb; N = E.Nb.copy()
+    flip = np.einsum('ij,ij->i', N, P - c) < 0; N[flip] *= -1          # make sure normals point out of the head
     u = (P - c) / R; un = u / np.linalg.norm(u, axis=1, keepdims=True)
     ok = np.array([keep(x) for x in un]) & (np.linalg.norm(u, axis=1) < 1.6)
     F = [t for t in T if ok[t].all()]
@@ -276,7 +277,7 @@ def male_style(name, P, T, head):
     if name == 'Buzz cut':
         shell(E, T, lambda u: E.hairline(u, nape=-0.45, front=0.42), 0.0035)
         def tg(q, u): rel = q - c; return np.array([0.1 * np.sign(rel[0]), -0.4 if rel[1] < -0.02 else 0.5, -0.3])
-        E.flow(1600, tg, lambda u: -9, steps_fn=lambda u: 2, fall=False, w=(0.006, 0.009), off=0.003,
+        E.flow(4200, tg, lambda u: -9, steps_fn=lambda u: 4, fall=False, w=(0.0035, 0.005), off=0.0025, step=0.0028,
                roots_keep=lambda u: E.hairline(u, nape=-0.45, front=0.42), lift_fn=lambda u: 0.0015, taper=1.2, guard=False, th=0.0025)
     elif name == 'Short crew cut':
         shell(E, T, lambda u: E.hairline(u, nape=-0.45, front=0.42), 0.002)
