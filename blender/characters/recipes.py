@@ -50,8 +50,23 @@ def shorts(P, N, J, length=0.17):
     zr = J['root'][0][2]; zh = J['upperleg02.L'][0][2]; z = P[:, 2]
     return (z < zr + 0.025) & (z > zh - length)
 
+def harness(P, N, J):
+    """Cross-chest straps (front and back) plus a waist belt."""
+    x, y, z = P.T
+    zs = J['clavicle.L'][1][2]; zw = J['root'][0][2] + 0.045
+    out = np.zeros(len(P), bool)
+    for sg in (1, -1):
+        a = np.array([sg * 0.11, zs - 0.01]); b = np.array([-sg * 0.10, zw])          # shoulder -> opposite waist
+        d = b - a; t = np.clip(((x - a[0]) * d[0] + (z - a[1]) * d[1]) / (d @ d), 0, 1)
+        dist = np.hypot(x - (a[0] + t * d[0]), z - (a[1] + t * d[1]))
+        out |= (dist < 0.014) & (z > zw - 0.01)
+    out |= (np.abs(z - zw) < 0.018)                                                     # belt
+    out |= (np.abs(x) < 0.045) & (np.abs(z - (zs - 0.01 + zw) / 2 - 0.03) < 0.035) & (y < 0)   # chest ring plate
+    return out
+
 GARMENTS = {'female': [('bra', bra, 0.004, 0.0025, 140), ('shorts', lambda P, N, J: shorts(P, N, J, 0.1), 0.0035)],
             'male': [('shorts', lambda P, N, J: shorts(P, N, J, 0.2), 0.0035)]}
+for _g in GARMENTS.values(): _g.append(('harness', harness, 0.012, 0.003, 80))
 ARMS = {'female': 8, 'male': 30}
 MUSCLE = {'female': 0.35, 'male': 1.0}
 HAIR = {'male': 'male_messy', 'female': 'female_pixie'}

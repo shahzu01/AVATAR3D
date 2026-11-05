@@ -525,7 +525,9 @@ SKIN = ('#e9bfa3', '#c98f78')
 body.data.materials.append(mtoon('Skin', SKIN[0], SKIN[1], outline=0.0006))
 body.data.materials.append(mtoon('MouthInner', '#5a2a2c', '#2e1415'))
 teeth.data.materials.append(mtoon('Teeth', '#f2efe8', '#c9c4ba', cull=False))
-for ob in garm_obs: ob.data.materials.append(mtoon('Cloth_' + ob.name, '#2b2b31', '#16161b', cull=False, outline=0.0005))
+for ob in garm_obs:
+    if ob.name == 'Harness': ob.data.materials.append(mtoon('Leather_Harness', '#5a3a26', '#2e1d13', cull=False, outline=0.0006))
+    else: ob.data.materials.append(mtoon('Cloth_' + ob.name, '#2b2b31', '#16161b', cull=False, outline=0.0005))
 eyes.data.materials.append(mtoon('Eyes', '#ffffff', '#c8c8cc', tex=mh.DATA + '/eyes/materials/brown_eye.png', toony=0.5))
 strands.data.materials.append(mtoon('Brows', '#2b211c', '#17110e', cull=False))
 

@@ -8,7 +8,7 @@ class Engine(Hair):
     def __init__(self, P, T, head, seed=3):
         self.c, self.R = np.asarray(head[0]), np.asarray(head[1])
         self.Pb = P; self.Nb = vnormals(P, T)
-        sel = P[:, 2] > self.c[2] - 0.6                 # head, neck, shoulders, upper back
+        sel = (P[:, 2] > self.c[2] - 0.6) & ((np.abs(P[:, 0]) < 0.12) | (P[:, 2] > self.c[2] - 0.17))   # head, neck, torso (not the arms)
         self.P = P[sel]; self.N = self.Nb[sel]; self.tree = cKDTree(self.P)
         self.V = []; self.F = []; self.rng = np.random.default_rng(seed)
 
