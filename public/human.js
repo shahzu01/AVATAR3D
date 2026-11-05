@@ -183,7 +183,7 @@ export async function loadHuman(recipe) {
     for (const [k, i] of Object.entries(o.morphTargetDictionary)) {
       if (k.startsWith('Body_')) o.morphTargetInfluences[i] = k === type.morph ? 1 : 0;
       if (k.startsWith('Species_')) o.morphTargetInfluences[i] = k === sp ? 1 : 0;
-      if (k === 'HideHead') o.morphTargetInfluences[i] = ANIMALS.includes(r.species) ? 1 : 0;
+      if (k === 'HideHead' || k === 'Paws') o.morphTargetInfluences[i] = ANIMALS.includes(r.species) ? 1 : 0;
     }
   });
   applyHumanColours(vrm, r);
@@ -212,6 +212,7 @@ async function attachAnimal(vrm, r, basisBones) {
   vrm.scene.traverse((o) => { if (o.isMesh && /^(Eyes|BrowsLashes|Teeth)/.test(o.name)) o.visible = false; });
   const furHex = { fox: '#e9792f', wolf: '#8e94a2', cat: '#f2f0f4', tiger: '#ef8b2c', bear: '#8a5a3c', panda: '#f4f4f6', raccoon: '#9a9ca6', bunny: '#f1e6dd' }[r.species];
   findMat(vrm, /^Skin/).forEach((m) => setMToon(m, furHex, shadeOf(furHex, 0.62)));
+  furPattern(vrm, r.species);
   const headGroup = new THREE.Group(); headGroup.name = 'AnimalHeadRoot';
   const head = parts.AnimalHead, eyeL = parts.AnimalEyeL, eyeR = parts.AnimalEyeR, tail = parts.AnimalTail;
   for (const o of [head, eyeL, eyeR]) if (o) headGroup.add(o);
@@ -246,4 +247,44 @@ async function attachAnimal(vrm, r, basisBones) {
       tail.quaternion.copy(tailRest).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(tailState.ang.y, 0, tailState.ang.x + Math.sin(t * 1.3) * 0.06)));
     }
   };
+}
+
+// fur markings on the body: dark "gloves and socks", pale belly, from bone weights and position
+const FUR = {   // base, belly (or null), limbs (or null)
+  fox: ['#e9792f', '#fbf4ea', '#2a2228'], wolf: ['#8e94a2', '#e7e9ef', '#4b4f5a'], cat: ['#f2f0f4', null, null], tiger: ['#ef8b2c', '#fbf4ea', null],
+  bear: ['#8a5a3c', null, '#5a3a26'], panda: ['#f4f4f6', null, '#24242a'], raccoon: ['#9a9ca6', '#ecebf0', '#2b2c33'], bunny: ['#f1e6dd', '#ffffff', null] };
+function furPattern(vrm, species) {
+  const [baseH, bellyH, limbH] = FUR[species] || [];
+  if (!baseH) return;
+  const base = new THREE.Color(baseH), belly = bellyH && new THREE.Color(bellyH), limb = limbH && new THREE.Color(limbH);
+  const H = vrm.humanoid, idx = (n) => { const b = H.getRawBoneNode(n); return b; };
+  vrm.scene.traverse((o) => {
+    if (!o.isSkinnedMesh || ![].concat(o.material).some((m) => /^Skin/.test(m.name))) return;
+    const g = o.geometry, pos = g.attributes.position, sw = g.attributes.skinWeight, si = g.attributes.skinIndex, nrm = g.attributes.normal;
+    const bones = o.skeleton.bones.map((b) => b.name);
+    const limbBones = new Set(); const upperLimb = new Set();
+    o.skeleton.bones.forEach((b, i) => {
+      const hn = Object.entries(H.humanBones).find(([, v]) => v?.node === b)?.[0] || '';
+      if (/Hand|Thumb|Index|Middle|Ring|Little|Foot|Toes/.test(hn)) limbBones.add(i);
+      if (/LowerArm|LowerLeg/.test(hn)) upperLimb.add(i);
+      if (species === 'panda' && /UpperArm|Shoulder|UpperLeg/.test(hn)) limbBones.add(i);
+    });
+    const box = new THREE.Box3().setFromBufferAttribute(pos), h = box.max.y - box.min.y;
+    const col = new Float32Array(pos.count * 3), c = new THREE.Color();
+    for (let v = 0; v < pos.count; v++) {
+      c.copy(base);
+      let wl = 0, wu = 0;
+      for (let k = 0; k < 4; k++) { const b = si.getComponent(v, k), w = sw.getComponent(v, k); if (limbBones.has(b)) wl += w; if (upperLimb.has(b)) wu += w; }
+      if (belly) {                     // front of torso and throat
+        const y = (pos.getY(v) - box.min.y) / h, front = nrm.getZ(v), x = Math.abs(pos.getX(v));
+        const t = THREE.MathUtils.smoothstep(front, 0.25, 0.7) * THREE.MathUtils.smoothstep(y, 0.5, 0.58) * (1 - THREE.MathUtils.smoothstep(y, 0.84, 0.9)) * (1 - THREE.MathUtils.smoothstep(x, 0.07, 0.12)) * (1 - wl - wu);
+        c.lerp(belly, Math.max(0, t));
+      }
+      if (limb) c.lerp(limb, Math.min(1, wl + wu * 0.6));
+      col[v * 3] = c.r; col[v * 3 + 1] = c.g; col[v * 3 + 2] = c.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    o.material = [].concat(o.material).map((m) => (/^Skin/.test(m.name) ? Object.assign(new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp() }), { name: 'SkinFur' }) : m));
+    if (o.material.length === 1) o.material = o.material[0];
+  });
 }

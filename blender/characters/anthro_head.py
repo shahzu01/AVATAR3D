@@ -38,7 +38,8 @@ def sculpt(s, name):
             for a, l, z, y in ((8, 0.05, 1.71, -0.01), (28, 0.058, 1.69, 0.0), (50, 0.052, 1.668, 0.012)):
                 ar = np.radians(a); dd = _n(V(sg * np.cos(ar), 0.3, -np.sin(ar)))
                 p0 = V(sg * 0.085, y, z)
-                s.add(flat(rcone(p0, p0 + dd * l * p['tuft'], 0.03, 0.009), p0, (0, 0.4, 1), 0.6), 0.025)
+                dd = _n(dd + V(0, 0.45, 0))                                     # swept back, thinner, pointed
+                s.add(flat(rcone(p0, p0 + dd * l * p['tuft'] * 0.8, 0.022, 0.003), p0, (0, 0.4, 1), 0.55), 0.02)
         eye = V(sg * EYE[0], EYE[1], EYE[2])
         s.sub(ellip(eye + V(0, -0.006, 0), (0.025, 0.016, 0.015), rot((0, 1, 0), sg * 12)), 0.008)            # socket
         s.add(ellip(eye + V(sg * 0.002, -0.011, 0.019), (0.027, 0.011, 0.007), rot((0, 1, 0), sg * 15)), 0.016)  # brow
