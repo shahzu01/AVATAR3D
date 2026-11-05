@@ -417,6 +417,20 @@ for k, d in SPECIES_KEYS.items(): add_key(body, k, rec0['Vt'] + d)
 hc_, hR_ = recipes.headfit(Pu0)
 Xh = rec0['Vt']; ramp = ss_(hc_[2] - 0.16, hc_[2] - 0.11, Xh[:, 2])
 add_key(body, 'HideHead', Xh + (hc_ + np.array([0, 0.01, -0.03]) - Xh) * (0.45 * ramp)[:, None])
+# Paws: shorter, thicker fingers and rounder toes (used by animal species)
+GN = BASE['GN']; Wb = BASE['W']; Nt = vnormals(Xh, BASE['Fs']); Dp = np.zeros_like(Xh)
+for S in ('left', 'right'):
+    hand = Jt0[S + 'Hand'][0]; mid = Jt0[S + 'MiddleProximal'][0]
+    for f in ('Thumb', 'Index', 'Middle', 'Ring', 'Little'):
+        segs = ('Metacarpal', 'Proximal', 'Distal') if f == 'Thumb' else ('Proximal', 'Intermediate', 'Distal')
+        wf = sum(Wb[:, GN.index(S + f + sg)] for sg in segs if S + f + sg in GN)
+        base_ = Jt0[S + f + segs[0 if f != 'Thumb' else 1]][0]
+        Dp += ((base_ - Xh) * 0.22 + Nt * 0.0025) * wf[:, None]          # pull fingertips in, fatten
+    wh = Wb[:, GN.index(S + 'Hand')]
+    Dp += Nt * 0.002 * wh[:, None]
+    wt = Wb[:, GN.index(S + 'Toes')]; ft = Jt0[S + 'Toes'][0]
+    Dp += ((ft - Xh) * np.array([0.25, 0.1, 0.0]) + Nt * 0.003) * wt[:, None]
+add_key(body, 'Paws', Xh + Dp)
 for k, d in EXPR.items(): add_key(body, k, rec0['Vt'] + d)
 garm_obs = []
 for gi, (G, gv0) in enumerate(zip(GARM, rec0['Gt'])):
