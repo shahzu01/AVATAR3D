@@ -7,6 +7,7 @@ sys.path.insert(0, '/home/claude/kael/fox')
 import numpy as np, bpy
 import mh, recipes, anthro_head as ah
 from sdf import Scene, rcone, chain, _n
+from body import flat
 
 G, NAMES, OUT = sys.argv[1], sys.argv[2].split(','), sys.argv[3]; os.makedirs(OUT, exist_ok=True)
 d = pickle.load(open(f'/tmp/claude-0/basis_{G}.pkl', 'rb'))
@@ -119,9 +120,37 @@ for name in NAMES:
     def key(nm, D): keys[nm] = D * k
     # jaw: rotate the lower jaw about a hinge behind the cheeks
     lower = ss(0.006, -0.006, z - zline) * ss(-0.035, -0.06, y) * ss(0.075 * p['sw'], 0.05 * p['sw'], ax)
-    hinge = ah.V(0, -0.02, 1.705); a = math.radians(13)
+    hinge = ah.V(0, -0.02, 1.705); a = math.radians(-14)
     rel = T - hinge; Rx = np.array([[1, 0, 0], [0, math.cos(a), math.sin(a)], [0, -math.sin(a), math.cos(a)]])
-    key('jawOpen', (rel @ Rx.T - rel) * lower[:, None])
+    band = ss(0.007, 0.0, np.abs(z - zline)) * ss(-0.06, -0.075, y) * ss(0.05 * p['sw'], 0.035 * p['sw'], ax)
+    inward = np.stack([-x * 0.5, np.full_like(x, 0.008), np.zeros_like(x)], 1)          # lips roll in so the mouth opens onto the inside
+    key('jawOpen', (rel @ Rx.T - rel) * lower[:, None] + inward * band[:, None])
+    # ---------------- mouth interior: dark cavity, tongue and teeth (template coords); lower parts ride on the jaw
+    MV = []; MF = []; MC = []; Mlow = []
+    def addpart(sc_, col, low):
+        v_, f_ = sc_.mesh(); v_, f_ = decimate(v_, f_[:, ::-1], 1500)
+        n0 = len(MV); MV.extend(v_); MF.extend((f_ + n0).tolist()); MC.extend([lin(col)] * len(v_))
+        Mlow.extend(low(v_) if callable(low) else [low] * len(v_))
+    mback = ah.V(0, -0.075, 1.697); mfront = jt + ah.V(0, 0.012, 0.007)
+    cav = Scene(np.minimum(mback, mfront) - 0.04, np.maximum(mback, mfront) + 0.04, 0.0012)
+    cav.add(flat(rcone(mback, mfront, 0.016 * p['sw'], 0.005), (mback + mfront) / 2, (0, 0, 1), 0.7), 0.004)
+    def lowfn(v_):
+        yy_ = np.clip((v_[:, 1] - (-0.09)) / (jt[1] - 0.004 - (-0.09)), 0, 1); zl_ = 1.693 + (jt[2] + 0.0085 - 1.693) * yy_
+        return list(ss(0.003, -0.003, v_[:, 2] - zl_))
+    addpart(cav, '#3a1216', lowfn)
+    tg = Scene(np.minimum(mback, mfront) - 0.04, np.maximum(mback, mfront) + 0.04, 0.0012)
+    tg.add(flat(rcone(mback + ah.V(0, -0.005, -0.006), mfront + ah.V(0, 0.008, -0.004), 0.011 * p['sw'], 0.004), (mback + mfront) / 2, (0, 0, 1), 0.45), 0.003)
+    addpart(tg, '#c95a68', 1.0)
+    if name not in ('bunny',):
+        for sg in (1, -1):
+            for frac, up in ((0.75, True), (0.72, False)):
+                pt = mback + (mfront - mback) * frac + ah.V(sg * 0.007 * p['sw'], 0, 0.004 if up else -0.004)
+                th_ = Scene(pt - 0.02, pt + 0.02, 0.0006)
+                th_.add(rcone(pt, pt + ah.V(0, -0.001, -0.007 if up else 0.006), 0.0028, 0.0006), 0.001)
+                addpart(th_, '#f4f1ea', 0.0 if up else 1.0)
+    MV = np.array(MV); Mlow = np.array(Mlow)
+    relm = MV - hinge
+    mouth_jaw = (relm @ Rx.T - relm) * Mlow[:, None]
     for sg, S in ((1, 'Left'), (-1, 'Right')):
         corner = ah.V(sg * 0.034 * p['sw'], -0.09, 1.693)
         w = bump(T, corner, 0.03)
@@ -155,8 +184,8 @@ for name in NAMES:
     LV = np.array(LV)
     from scipy.spatial import cKDTree
     LC = C[cKDTree(T).query(LV)[1]]                    # lids take the fur colour around the eye
-    allT = np.concatenate([T, LV]); nH = len(T)
-    F = np.concatenate([hf, np.array(LF) + nH]); Cc = np.concatenate([C, LC])
+    allT = np.concatenate([T, LV, MV]); nH = len(T); nL = len(LV)
+    F = np.concatenate([hf, np.array(LF) + nH, np.array(MF) + nH + nL]); Cc = np.concatenate([C, LC, np.array(MC)])
     Vw = (allT - tM) * k + Mw
     me = bpy.data.meshes.new('AnimalHead'); me.from_pydata(Vw.tolist(), [], F.tolist()); me.update()
     for poly in me.polygons: poly.use_smooth = True
@@ -169,6 +198,7 @@ for name in NAMES:
         D = np.zeros_like(Vw)
         if nm in keys: D[:nH] = keys[nm]
         for n0, dd in lid_keys.get(nm, []): D[nH + n0: nH + n0 + len(dd)] = dd * k
+        if nm == 'jawOpen': D[nH + nL:] = mouth_jaw * k
         kb = ob.shape_key_add(name=nm, from_mix=False); kb.data.foreach_set('co', (Vw + D).astype(np.float32).ravel())
     mat = bpy.data.materials.new('AnimalFur'); me.materials.append(mat)
     # ---------------- eyes (separate, origin at the eye centre so the app can rotate them)
