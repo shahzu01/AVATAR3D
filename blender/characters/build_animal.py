@@ -202,6 +202,25 @@ for name in NAMES:
     to = bpy.data.objects.new('AnimalTail', tm); bpy.context.scene.collection.objects.link(to); to.location = SACRUM
     ca = tm.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT'); ca.data.foreach_set('color', np.concatenate([tc, np.ones((len(tc), 1))], 1).astype(np.float32).ravel())
     tm.materials.append(mat)
+    # ---------------- claws on the fingertips (the app attaches each to its finger bone)
+    HB = json.load(open(f'/home/claude/kael/fox/out/{"hf" if G == "female" else "hm"}/Human_{G.title()}.json'))['types'][0]['bones']
+    clawcol = lin('#1c1714') if name not in ('panda', 'bear') else lin('#2a221d')
+    for S in ('left', 'right'):
+        for f in ('Thumb', 'Index', 'Middle', 'Ring', 'Little'):
+            bn = S + f + 'Distal'; h0, t0 = np.array(HB[bn][0]), np.array(HB[bn][1])
+            prox = np.array(HB[S + f + ('Proximal' if f == 'Thumb' else 'Proximal')][0])
+            tip = t0 + (prox - t0) * 0.22                       # fingertip after the Paws shape
+            d = _n(t0 - h0); up = np.array([0, 0, 1.0]); side = _n(np.cross(d, up)); up = np.cross(side, d)
+            L = 0.022 if f != 'Thumb' else 0.018
+            pts = [tip - d * 0.008 + up * 0.006, tip + d * 0.004 + up * 0.004, tip + d * L * 0.6 - up * 0.002, tip + d * L - up * 0.012]
+            cs = Scene(np.min(pts, 0) - 0.02, np.max(pts, 0) + 0.02, 0.0007)
+            cs.add(chain(pts, [0.0045, 0.0042, 0.0028, 0.0006]), 0.002)
+            cv, cf = cs.mesh(); cv, cf = decimate(cv, cf[:, ::-1], 300)
+            cm = bpy.data.meshes.new(f'Claw_{bn}'); cm.from_pydata((cv - h0).tolist(), [], cf.tolist()); cm.update()
+            for poly in cm.polygons: poly.use_smooth = True
+            co = bpy.data.objects.new(f'Claw_{bn}', cm); bpy.context.scene.collection.objects.link(co); co.location = h0
+            ca = cm.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT'); ca.data.foreach_set('color', np.tile(np.append(clawcol, 1), len(cv)).astype(np.float32))
+            cm.materials.append(mat)
     fn = f'{OUT}/{G}_{name}.glb'
     bpy.ops.export_scene.gltf(filepath=fn, export_format='GLB', export_morph=True, export_morph_normal=False, export_materials='PLACEHOLDER',
                               export_attributes=True, export_vertex_color='ACTIVE', export_animations=False)

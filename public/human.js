@@ -220,6 +220,10 @@ async function attachAnimal(vrm, r, basisBones) {
   const head = parts.AnimalHead, eyeL = parts.AnimalEyeL, eyeR = parts.AnimalEyeR, tail = parts.AnimalTail;
   for (const o of [head, eyeL, eyeR]) if (o) headGroup.add(o);
   attachToBone(vrm, 'head', headGroup, basisBones.head[0]);
+  for (const [nm, o] of Object.entries(parts)) {           // claws follow the finger bones
+    const m = /^Claw_(.+)$/.exec(nm); if (!m || !o.isMesh || !basisBones[m[1]]) continue;
+    const g = new THREE.Group(); g.add(o); attachToBone(vrm, m[1], g, basisBones[m[1]][0]);
+  }
   let tailGroup = null;
   if (tail) { tailGroup = new THREE.Group(); tailGroup.add(tail); attachToBone(vrm, 'hips', tailGroup, basisBones.hips[0]); }
   const eyeRest = [eyeL?.quaternion.clone(), eyeR?.quaternion.clone()];
