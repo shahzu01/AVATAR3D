@@ -19,6 +19,8 @@ P = {   # sn: snout length scale, sw: snout width, nose, ear: kind, es: ear size
     'bunny':   dict(sn=0.4, sw=1.2, nose=0.65, ear='bunny', es=1.0, tuft=0.5, cran=1.05, jaw=0.75),
 }
 
+CHEEK = {'fox': 0.78, 'wolf': 0.82, 'cat': 0.8, 'raccoon': 0.8, 'tiger': 0.95, 'bear': 0.95, 'panda': 1.0, 'bunny': 0.88}
+
 def sculpt(s, name):
     p = P[name]; sn, sw = p['sn'], p['sw']
     s.add(ellip((0, 0.008, 1.765), V(0.08, 0.076, 0.078) * p['cran']), 0.05)          # cranium
@@ -28,12 +30,21 @@ def sculpt(s, name):
     for sg in (1, -1):
         s.add(ellip((sg * 0.016 * sw, -0.06 - 0.08 * sn, 1.704 + 0.01 * (1 - sn)), (0.017 * sw, 0.03 + 0.008 * sn, 0.014)), 0.015)  # whisker pads
     s.add(ellip(tip + V(0, -0.008, -0.004), V(0.0145, 0.011, 0.011) * p['nose']), 0.006)                     # nose
+    nt = tip + V(0, -0.008, -0.004)
+    for sg in (1, -1): s.sub(ellip(nt + V(sg * 0.0065, -0.0095, -0.003) * p['nose'], V(0.0035, 0.004, 0.0025) * p['nose']), 0.002)   # nostrils
+    s.sub(ellip(V(0, -0.072, 1.758), V(0.012, 0.012, 0.01)), 0.012)                                           # stop between the eyes
     jt = V(0, -0.05 - 0.13 * sn, 1.694 - 0.01 * (1 - sn))
     s.add(rcone((0, -0.05, 1.675), jt, 0.03 * p['jaw'], 0.009 * sw), 0.018)                                   # jaw
+    s.add(ellip(jt + V(0, 0.018, -0.006), V(0.016 * sw, 0.014, 0.009)), 0.01)                                 # chin
+    s.sub(rcone(nt + V(0, -0.006, -0.008) * p['nose'], jt + V(0, -0.005, 0.012), 0.0016, 0.0016), 0.002)      # philtrum
     for sg in (1, -1):
-        s.sub(rcone((sg * 0.034 * sw, -0.09, 1.693), jt + V(0, -0.004, 0.0085), 0.0026, 0.002), 0.003)       # mouth line
-        s.add(ellip((sg * 0.058, -0.03, 1.712), (0.05, 0.05, 0.045)), 0.035)                                  # cheeks
-        s.add(ellip((sg * 0.075, 0.0, 1.69), (0.06, 0.055, 0.05)), 0.03)
+        corner = V(sg * 0.034 * sw, -0.088, 1.6975); mtip = jt + V(0, -0.004, 0.0085)
+        mpts = [corner + V(-sg * 0.004, -0.004, 0.004), corner, corner + (mtip - corner) * 0.4 + V(0, 0, -0.0015), mtip]
+        for a_, b_ in zip(mpts[:-1], mpts[1:]): s.sub(rcone(a_, b_, 0.0024, 0.0024), 0.0025)               # curved mouth line, corners turned up
+        s.add(ellip(corner + (mtip - corner) * 0.45 + V(0, -0.002, 0.004), V(0.012, 0.03 * max(sn, 0.6), 0.005) * V(sw, 1, 1)), 0.006)  # upper lip overhang
+        ck = CHEEK.get(name, 0.85)
+        s.add(ellip((sg * 0.055, -0.03, 1.713), V(0.05, 0.05, 0.045) * ck), 0.03)                            # cheeks
+        s.add(ellip((sg * 0.068, -0.002, 1.694), V(0.06, 0.055, 0.05) * ck), 0.025)
         if p['tuft']:
             for a, l, z, y in ((8, 0.05, 1.71, -0.01), (28, 0.058, 1.69, 0.0), (50, 0.052, 1.668, 0.012)):
                 ar = np.radians(a); dd = _n(V(sg * np.cos(ar), 0.3, -np.sin(ar)))
@@ -43,6 +54,10 @@ def sculpt(s, name):
         eye = V(sg * EYE[0], EYE[1], EYE[2])
         s.sub(ellip(eye + V(0, -0.006, 0), (0.025, 0.016, 0.015), rot((0, 1, 0), sg * 12)), 0.008)            # socket
         s.add(ellip(eye + V(sg * 0.002, -0.011, 0.019), (0.027, 0.011, 0.007), rot((0, 1, 0), sg * 15)), 0.016)  # brow
+        s.add(rcone(eye + V(sg * 0.012, -0.012, 0.02), eye + V(sg * 0.042, 0.01, 0.012), 0.006, 0.003), 0.012)    # brow ridge to the temple
+        fwd = _n(V(sg * 0.32, -1, 0.05)); ax1 = _n(np.cross(fwd, V(0, 0, 1))); ax2 = np.cross(ax1, fwd)
+        ring = [eye + fwd * 0.0115 + ax1 * np.cos(t) * 0.0215 + ax2 * np.sin(t) * 0.0145 for t in np.linspace(0, 2 * np.pi, 17)]
+        for a_, b_ in zip(ring[:-1], ring[1:]): s.add(rcone(a_, b_, 0.0032, 0.0032), 0.0035)                   # eyelid rim (orbital ring)
         s.add(ellip(eye + V(sg * 0.002, -0.01, -0.017), (0.024, 0.01, 0.006), rot((0, 1, 0), sg * 8)), 0.008)
     s.add(rcone((0, 0.0, 1.66), (0, 0.006, 1.57), 0.06, 0.062), 0.03)                                          # short neck stub (blends into the body's neck)
     s.add(ellip((0, 0.0, 1.585), (0.082, 0.074, 0.045)), 0.03)                                                 # neck ruff covers the join
