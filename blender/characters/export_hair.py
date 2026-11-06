@@ -22,7 +22,7 @@ for nm in LIST:
     ob = bpy.data.objects.new('Hair', me); bpy.context.scene.collection.objects.link(ob)
     mat = bpy.data.materials.new('Hair'); me.materials.append(mat)
     zlow = c[2] - 0.06
-    hang = V[:, 2] < zlow
+    hang = (V[:, 2] < zlow) & (V[:, 1] > c[1] - 0.02)          # only hair hanging behind the head swings
     if hang.sum() > 200 and V[:, 2].min() < c[2] - 0.12:
         # chains: NCH azimuth sectors around the head, NSEG segments from zlow down to the lowest hair
         zmin = V[:, 2].min()
@@ -47,7 +47,7 @@ for nm in LIST:
         bpy.ops.object.mode_set(mode='OBJECT')
         groups = {b.name: ob.vertex_groups.new(name=b.name) for b in arm_d.bones}
         for i, p in enumerate(V):
-            if p[2] >= zlow + 0.02 or not any(x is not None for x in centers):
+            if p[2] >= zlow + 0.02 or p[1] <= c[1] - 0.02 or not any(x is not None for x in centers):
                 groups['hair_root'].add([i], 1.0, 'REPLACE'); continue
             ks = [k for k, a in enumerate(centers) if a is not None]
             d = [abs(np.angle(np.exp(1j * (az[i] - centers[k])))) for k in ks]
@@ -56,6 +56,8 @@ for nm in LIST:
             s = int(t); w_root = np.clip((zlow + 0.02 - p[2]) / 0.04, 0, 1)
             groups[f'chain_{k}_{s}'].add([i], float(w_root), 'REPLACE')
             if w_root < 1: groups['hair_root'].add([i], float(1 - w_root), 'REPLACE')
+        for v in ob.data.vertices:                         # every vertex must be skinned (unskinned ones collapse to the origin in the app)
+            if sum(g.weight for g in v.groups) < 1e-4: groups['hair_root'].add([v.index], 1.0, 'REPLACE')
         mo = ob.modifiers.new('Armature', 'ARMATURE'); mo.object = arm; ob.parent = arm
     fn_out = f'{OUT}/{slug(nm)}.glb'
     bpy.ops.export_scene.gltf(filepath=fn_out, export_format='GLB', export_apply=False, export_skins=True,

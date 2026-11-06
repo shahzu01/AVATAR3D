@@ -70,13 +70,14 @@ class Engine(Hair):
                 if not freed:
                     ol = o + lift * np.sin(min(k / max(ml - 1, 1), 1) * np.pi * 0.85)
                     q2 = q2 + sn * (np.clip(h, ol, ol + 0.005) - h)
-                    if fall and q2[2] < c[2] - 0.11 and (q2 - c)[1] > -0.05: freed = True
+                    if (fall and q2[2] < c[2] - 0.11 and (q2 - c)[1] > -0.05) or q2[2] < c[2] - 0.17: freed = True   # below the jaw: hang, don't slide along the shoulders
                 else:
                     if h < o: q2 = q2 + sn * (o - h)
                 pts.append(q2)
                 if q2[2] < hz: break
                 r2 = q2 - c
                 if guard and r2[1] < -0.045 and abs(r2[0]) < 0.062 and c[2] - 0.16 < q2[2] < c[2] + 0.028: break   # never over the eyes/face
+                if guard and q2[2] < c[2] - 0.15 and r2[1] < 0.03 and abs(r2[0]) > 0.06: break                       # nothing spills over the shoulders
             if len(pts) < 4: continue
             pts = pts[::2] if len(pts) > 10 else pts
             self.lock(pts, rng.uniform(*w), th, bend=0.15, taper=taper)
@@ -181,7 +182,7 @@ def style(name, P, T, head):
             sgn = 1.0 if q[0] >= px else -1.0
             v = np.array([sgn * 0.5, 0.0, -1.0]) + radial(q, u, 0.25)
             if rel[2] < -0.09:                         # below the jaw: hang straight, drift slightly in toward the body
-                v = np.array([0.05 * np.sign(rel[0]), 0.3 + 0.2 * np.sign(rel[1]), -1.0])
+                v = np.array([np.clip((np.sign(rel[0]) * 0.08 - rel[0]) * 6, -0.6, 0.6), (0.35 if rel[1] > -0.02 else -0.25), -1.0])
             if sweep and fr > 0.55 and rel[2] > -0.01: v = np.array([sweep, -0.3, -0.7])
             elif not sweep and fr > 0.45: v = np.array([sgn * 1.0, 0.5, -0.6])
             return v
@@ -194,15 +195,15 @@ def style(name, P, T, head):
         E.flow(520, part_flow(-0.03), hem_by(chin + 0.02, chin + 0.01, chin + 0.03), taper=6.0, th=0.005,
                roots_keep=lambda u: u[2] > 0.2 and E.hairline(u))
     elif name == 'Long waves':
-        E.flow(560, part_flow(0.0), hem_by(shoulder - 0.06, shoulder + 0.03, shoulder - 0.11), waves=0.2, wavelen=0.08, jitter=0.01,
+        E.flow(560, part_flow(0.0), hem_by(shoulder - 0.06, c[2] - 0.165, shoulder - 0.11), waves=0.2, wavelen=0.08, jitter=0.01,
                w=(0.016, 0.024), maxlen=140, fall=False, off=0.007)
     elif name == 'Bangs & straight':
         def f(q, u):
             rel = q - c
             if -rel[1] / R[1] > 0.5 and rel[2] > -0.02: return np.array([0, -0.55, -0.85])
-            if rel[2] < -0.09: return np.array([0.05 * np.sign(rel[0]), 0.3 + 0.2 * np.sign(rel[1]), -1.0])
+            if rel[2] < -0.09: return np.array([np.clip((np.sign(rel[0]) * 0.08 - rel[0]) * 6, -0.6, 0.6), (0.35 if rel[1] > -0.02 else -0.25), -1.0])
             return np.array([np.sign(q[0]) * 0.3, 0.0, -1.0]) + radial(q, u, 0.2)
-        E.flow(560, f, hem_by(brow + 0.026, shoulder + 0.03, shoulder - 0.07), taper=8.0, th=0.0045, maxlen=140, fall=False, off=0.007,
+        E.flow(560, f, hem_by(brow + 0.026, c[2] - 0.165, shoulder - 0.07), taper=8.0, th=0.0045, maxlen=140, fall=False, off=0.007,
                roots_keep=lambda u: u[2] > 0.15 and E.hairline(u))
     elif name in ('High ponytail', 'Braided ponytail'):
         G = c + np.array([0, 0.07, 0.07]) if name == 'High ponytail' else c + np.array([0, 0.095, 0.0])
@@ -218,8 +219,13 @@ def style(name, P, T, head):
         G = c + np.array([0.075, 0.055, -0.065])
         E.gather(G, 380)
         E.tie(G, np.array([0.8, 0.4, -0.3]), r=0.016)
-        path = lambda t: G + np.array([0.035 + 0.02 * t, -0.09 * t, -0.3 * t])
-        E.braid(path, width=0.021, thick=0.03, turns=5)
+        from hair import spline
+        K_ = [G, G + np.array([0.02, -0.03, -0.07]), np.array([0.105, c[1] - 0.045, c[2] - 0.20]), np.array([0.095, c[1] - 0.085, c[2] - 0.32]), np.array([0.088, c[1] - 0.1, c[2] - 0.40])]
+        K_ = [E.hug(q, 0.035, 0.06) if i >= 2 else q for i, q in enumerate(K_)]
+        SP = spline(K_, 30)
+        def path(t):
+            u_ = t * (len(SP) - 1); i_ = min(int(u_), len(SP) - 2); f_ = u_ - i_; return SP[i_] * (1 - f_) + SP[i_ + 1] * f_
+        E.braid(path, width=0.02, thick=0.028, turns=9)
     elif name == 'Messy bun':
         G = c + np.array([0, 0.04, 0.105]); E.gather(G, 380)
         E.bun(G + np.array([0, 0.012, 0.022]), r=0.036, n=34)
