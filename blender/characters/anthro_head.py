@@ -45,6 +45,7 @@ def sculpt(s, name):
         s.add(ellip(eye + V(sg * 0.002, -0.011, 0.019), (0.027, 0.011, 0.007), rot((0, 1, 0), sg * 15)), 0.016)  # brow
         s.add(ellip(eye + V(sg * 0.002, -0.01, -0.017), (0.024, 0.01, 0.006), rot((0, 1, 0), sg * 8)), 0.008)
     s.add(rcone((0, 0.0, 1.66), (0, 0.006, 1.57), 0.06, 0.062), 0.03)                                          # short neck stub (blends into the body's neck)
+    s.add(ellip((0, 0.0, 1.585), (0.082, 0.074, 0.045)), 0.03)                                                 # neck ruff covers the join
     ears(s, p)
 
 def ears(s, p):

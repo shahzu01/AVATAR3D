@@ -185,6 +185,7 @@ export async function loadHuman(recipe) {
       if (k.startsWith('Body_')) o.morphTargetInfluences[i] = k === type.morph ? 1 : 0;
       if (k.startsWith('Species_')) o.morphTargetInfluences[i] = k === sp ? 1 : 0;
       if (k === 'HideHead' || k === 'Paws') o.morphTargetInfluences[i] = ANIMALS.includes(r.species) ? 1 : 0;
+      if (k === 'Digitigrade') o.morphTargetInfluences[i] = ['fox', 'wolf', 'cat', 'tiger', 'bunny'].includes(r.species) ? 1 : 0;
     }
   });
   applyHumanColours(vrm, r);
