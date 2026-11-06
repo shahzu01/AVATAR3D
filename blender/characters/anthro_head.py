@@ -44,11 +44,11 @@ def sculpt(s, name):
         s.add(ellip(corner + (mtip - corner) * 0.45 + V(0, -0.002, 0.004), V(0.012, 0.03 * max(sn, 0.6), 0.005) * V(sw, 1, 1)), 0.006)  # upper lip overhang
         ck = CHEEK.get(name, 0.85)
         s.add(ellip((sg * 0.055, -0.03, 1.713), V(0.05, 0.05, 0.045) * ck), 0.03)                            # cheeks
-        s.add(ellip((sg * 0.068, -0.002, 1.694), V(0.06, 0.055, 0.05) * ck), 0.025)
+        s.add(ellip((sg * 0.06, -0.002, 1.698), V(0.052, 0.055, 0.046) * ck), 0.025)
         if p['tuft']:
-            for a, l, z, y in ((8, 0.05, 1.71, -0.01), (28, 0.058, 1.69, 0.0), (50, 0.052, 1.668, 0.012)):
+            for a, l, z, y in ((15, 0.042, 1.712, -0.004), (35, 0.048, 1.695, 0.006)):
                 ar = np.radians(a); dd = _n(V(sg * np.cos(ar), 0.3, -np.sin(ar)))
-                p0 = V(sg * 0.085, y, z)
+                p0 = V(sg * 0.075, y, z)
                 dd = _n(dd + V(0, 0.45, 0))                                     # swept back, thinner, pointed
                 s.add(flat(rcone(p0, p0 + dd * l * p['tuft'] * 0.8, 0.022, 0.003), p0, (0, 0.4, 1), 0.55), 0.02)
         eye = V(sg * EYE[0], EYE[1], EYE[2])

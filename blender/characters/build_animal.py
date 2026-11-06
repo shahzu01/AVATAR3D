@@ -88,8 +88,21 @@ for name in NAMES:
     def paint(w, col): C[:] = C * (1 - w[:, None]) + col * w[:, None]
     muzzle = ss(1.735, 1.715, z) * ss(-0.04, -0.07, y) * ss(1.655, 1.68, z)
     if name in ('fox', 'wolf', 'cat', 'tiger', 'raccoon', 'bear'): paint(muzzle * (0.6 if name == 'bear' else 1), light)
-    paint(ss(1.72, 1.67, z) * ss(1.60, 1.64, z) * ss(0.04, 0.0, y) * ss(0.11, 0.05, ax), light)   # throat / chin (fades before the body neck)
+    paint(ss(1.72, 1.67, z) * ss(0.04, 0.0, y) * ss(0.11, 0.05, ax), light)   # throat, chin and the front of the neck ruff
     if name in ('fox', 'tiger', 'cat', 'wolf'): paint(ss(1.71, 1.69, z) * ss(0.06, 0.09, ax), light)  # cheek ruff
+    # snout bridge: base colour runs down the top of the snout to the nose, so the snout reads from the front
+    sz = 1.737 - 0.024 * sn * np.clip((-0.06 - y) / (0.14 * sn + 1e-6), 0, 1)       # snout centreline height along its length
+    bridge = ss(0.012 * p['sw'], 0.006 * p['sw'], ax) * ss(sz - 0.004, sz + 0.006, z) * ss(-0.05, -0.065, y)
+    if name in ('fox', 'wolf', 'tiger', 'raccoon', 'cat'): paint(bridge * 0.95, base)
+    # soft shading strips along the snout sides (darker fur), separating snout from cheeks
+    sidew = ss(0.014 * p['sw'], 0.022 * p['sw'], ax) * ss(0.034 * p['sw'], 0.026 * p['sw'], ax) * ss(sz + 0.012, sz, z) * ss(sz - 0.02, sz - 0.008, z) * ss(-0.06, -0.075, y)
+    paint(sidew * 0.35, C.mean(0) * 0 + np.array(dark) * 0.6 + np.array(base) * 0.4)
+    # eye-to-nose tear line (fox / wolf / tiger)
+    if name in ('fox', 'wolf', 'tiger', 'cat'):
+        for sg in (1, -1):
+            e0 = ah.V(sg * 0.036, -0.078, 1.748); n0 = ah.V(sg * 0.012 * p['sw'], -0.06 - 0.1 * sn, 1.722)
+            dvec = n0 - e0; tt = np.clip(((T - e0) @ dvec) / (dvec @ dvec), 0, 1); dist = np.linalg.norm(T - (e0 + np.outer(tt, dvec)), axis=1)
+            paint(ss(0.0035, 0.0015, dist) * (1 - tt) ** 0.5 * 0.55, dark)
     if name == 'fox': paint(ss(1.90, 1.95, z), dark)                                             # ear tips
     if name == 'panda':
         for sg in (1, -1): paint(np.clip(bump(T, ah.V(sg * 0.05, -0.08, 1.745), 0.042) * 2.5, 0, 1), dark)
@@ -101,7 +114,7 @@ for name in NAMES:
         st = (np.sin(z * 260 + ax * 90) > 0.65) * ss(1.77, 1.80, z) + (np.sin(z * 220 - ax * 150) > 0.7) * ss(0.07, 0.085, ax) * ss(1.70, 1.73, z)
         paint(np.clip(st, 0, 1), dark)
     tip = ah.V(0, -0.06 - 0.14 * sn, 1.737 - 0.024 * sn)
-    paint(bump(T, tip + ah.V(0, -0.008, -0.004), 0.016 * p['nose']) ** 0.3, nose)                 # nose
+    paint(np.clip(bump(T, tip + ah.V(0, -0.008, -0.004), 0.019 * p['nose']) * 3, 0, 1), nose)    # nose leather
     # mouth line (dark) and ear cavities (inner)
     jt = ah.V(0, -0.05 - 0.13 * sn, 1.694 - 0.01 * (1 - sn))
     yy = np.clip((y - (-0.09)) / (jt[1] - 0.004 - (-0.09)), 0, 1)
