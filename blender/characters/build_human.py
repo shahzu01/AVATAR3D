@@ -431,6 +431,23 @@ for S in ('left', 'right'):
     wt = Wb[:, GN.index(S + 'Toes')]; ft = Jt0[S + 'Toes'][0]
     Dp += ((ft - Xh) * np.array([0.25, 0.1, 0.0]) + Nt * 0.003) * wt[:, None]
 add_key(body, 'Paws', Xh + Dp)
+# Digitigrade: heel lifted onto the toes (fox, wolf, cat, tiger, bunny)
+Dd = np.zeros_like(Xh)
+for S in ('left', 'right'):
+    K = Jt0[S + 'LowerLeg'][0]; A = Jt0[S + 'Foot'][0]; B = Jt0[S + 'Toes'][0]
+    th = math.radians(58); ca, sa = math.cos(th), math.sin(th)
+    def rot(X):                                     # about the x axis through the ball of the foot, heel goes up and back
+        r = X - B; return B + np.stack([r[:, 0], r[:, 1] * ca + r[:, 2] * sa, -r[:, 1] * sa + r[:, 2] * ca], 1)
+    A2 = rot(A[None])[0] + np.array([0, 0.05, -0.01])           # hock set back so the shin slants
+    wfoot = Wb[:, GN.index(S + 'Foot')]
+    wleg = Wb[:, GN.index(S + 'LowerLeg')] + Wb[:, GN.index(S + 'UpperLeg')]
+    side = (Xh[:, 0] > 0) == (S == 'left')
+    t = np.clip((K[2] - Xh[:, 2]) / (K[2] - A[2]), 0, 1) ** 1.4 * side
+    footD = rot(Xh) - Xh + (A2 - rot(A[None])[0]) * np.clip(1 - np.abs(Xh[:, 1] - A[1]) / 0.2, 0, 1)[:, None] * 0
+    Dd += footD * wfoot[:, None] + (A2 - A)[None, :] * (t * np.clip(wleg, 0, 1))[:, None]
+    kb = np.clip(1 - (np.linalg.norm(Xh - K, axis=1) / 0.09) ** 2, 0, 1) ** 2 * side
+    Dd += np.array([0, -0.025, 0.0]) * kb[:, None]                  # knee forward
+add_key(body, 'Digitigrade', Xh + Dd)
 for k, d in EXPR.items(): add_key(body, k, rec0['Vt'] + d)
 garm_obs = []
 for gi, (G, gv0) in enumerate(zip(GARM, rec0['Gt'])):
