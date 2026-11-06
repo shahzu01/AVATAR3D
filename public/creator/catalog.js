@@ -67,7 +67,7 @@ export function withSpecies(r, species, force = false) {
 
 const P = (name, species, patch) => {
   const r = withSpecies(defaultRecipe(), species, true);
-  r.name = name;
+  r.name = name; r.proportions = 'real';   // ready-made characters: cartoon look, realistic body proportions
   for (const [k, v] of Object.entries(patch)) r[k] = typeof v === 'object' && !Array.isArray(v) && v !== null ? { ...r[k], ...v } : v;
   return r;
 };
@@ -93,6 +93,7 @@ export function randomRecipe(seed = Math.random() * 1e9, lock = {}) {
   let s = seed >>> 0; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   const species = lock.species || pick(Object.keys(SPECIES), rnd);
   const r = withSpecies(defaultRecipe(), species, true);
+  r.proportions = 'real';
   r.name = `${SPECIES[species].label} ${pick(['Star', 'Nova', 'Pixel', 'Echo', 'Blitz', 'Mochi', 'Zephyr', 'Juno', 'Kit', 'Rook'], rnd)}`;
   const h = rnd() * 360, comp = (h + 150 + rnd() * 60) % 360;
   if (SPECIES[species].style === 'human') r.colors.skin = r.colors.fur2 = pick(SWATCHES.skin.slice(0, 8), rnd);

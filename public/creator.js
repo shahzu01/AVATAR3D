@@ -138,7 +138,7 @@ function grid(path, options, kind, { big = false, angle = 0.45, recipeFor } = {}
 function withValue(path, v) { const r = clone(recipe); const ks = path.split('.'), last = ks.pop(); ks.reduce((o, k) => (o[k] ??= {}), r)[last] = v; return r; }
 function thumbBasis(r, kind) {   // only what affects a thumbnail goes into its cache key
   return { kind, sp: r.species, c: r.colors, pat: r.pattern, hair: r.hair, top: kind === 'torso' ? r.top : null, bot: kind === 'legs' ? r.bottom : null, shoes: kind === 'feet' ? r.shoes : null,
-    acc: r.accessories, ears: r.ears, tail: kind === 'back' ? r.tail : null, head: r.body.head, face: kind === 'bust' ? r.face : null, prop: r.proportions === 'v2' ? 'v2' : undefined,
+    acc: r.accessories, ears: r.ears, tail: kind === 'back' ? r.tail : null, head: r.body.head, face: kind === 'bust' ? r.face : null, prop: r.proportions === 'v2' || r.proportions === 'real' ? r.proportions : undefined,
     pres: r.presentation || undefined, bt: r.bodyType || undefined, bod: kind === 'full' ? r.body : undefined };
 }
 const thumbJobs = [];
@@ -211,7 +211,7 @@ function renderTab() {
     }
   } else if (tab === 'body') {
     if (st === 'size') h += section('Size') + slider('body.height', 'Height') + slider('body.head', 'Head size') + slider('body.legLength', 'Leg length')
-      + section('Body style') + grid('proportions', [{ id: 'classic', label: 'Classic' }, { id: 'v2', label: 'Compact (preview)' }], 'full', { angle: 0.5 });
+      + section('Body style') + grid('proportions', [{ id: 'real', label: 'Realistic proportions' }, { id: 'classic', label: 'Classic' }, { id: 'v2', label: 'Compact' }], 'full', { angle: 0.5 });
     if (st === 'shape') h += section('Shape') + slider('body.build', 'Build') + slider('body.shoulders', 'Shoulders') + slider('body.chest', 'Chest') + slider('body.waist', 'Waist') + slider('body.hips', 'Hips') + slider('body.arms', 'Arm thickness') + slider('body.legs', 'Leg thickness');
     if (st === 'style') h += section('Look') + slider('outline', 'Toon outline') + `<p class="hint">A thicker outline gives a bolder cartoon look on stream.</p>`;
   } else if (tab === 'face') {
@@ -382,7 +382,7 @@ const BODY_TYPE_HINT = { compact: 'Shorter and rounder', balanced: 'The standard
 function recipeFromFlow({ presentation, species, bodyType }) {
   const base = PRESETS.find((p) => p.species === species);
   const r = base ? clone(base) : withSpecies(defaultRecipe(), species, true);
-  r.name = 'New character'; r.accessories = []; r.proportions = 'v2';
+  r.name = 'New character'; r.accessories = []; r.proportions = 'real';
   r.presentation = presentation || null; r.bodyType = bodyType || 'balanced';
   r.face = { ...r.face, lashes: presentation === 'female' };
   if (SPECIES[species]?.style === 'human') r.hair = presentation === 'female' ? { style: 'long', color: '#4a2f22', color2: '#6b4226' } : { style: 'short', color: '#2b2220', color2: '#3b2a22' };
