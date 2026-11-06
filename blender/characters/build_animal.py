@@ -106,7 +106,7 @@ for name in NAMES:
     jt = ah.V(0, -0.05 - 0.13 * sn, 1.694 - 0.01 * (1 - sn))
     yy = np.clip((y - (-0.09)) / (jt[1] - 0.004 - (-0.09)), 0, 1)
     zline = 1.693 + (jt[2] + 0.0085 - 1.693) * yy
-    mouthband = ss(0.0075, 0.002, np.abs(z - zline)) * ss(-0.08, -0.095, y) * ss(0.045 * p['sw'], 0.03 * p['sw'], ax)
+    mouthband = ss(0.0035, 0.0008, np.abs(z - zline)) * ss(-0.08, -0.095, y) * ss(0.045 * p['sw'], 0.03 * p['sw'], ax)
     paint(mouthband, lin('#3a1418'))
     if p['ear'] in ('fox', 'cat', 'raccoon', 'round', 'bunny'):
         earz = 1.85 if p['ear'] != 'bunny' else 1.88
@@ -120,9 +120,9 @@ for name in NAMES:
     def key(nm, D): keys[nm] = D * k
     # jaw: rotate the lower jaw about a hinge behind the cheeks
     lower = ss(0.006, -0.006, z - zline) * ss(-0.035, -0.06, y) * ss(0.075 * p['sw'], 0.05 * p['sw'], ax)
-    hinge = ah.V(0, -0.02, 1.705); a = math.radians(-14)
+    hinge = ah.V(0, -0.02, 1.705); a = math.radians(-20)
     rel = T - hinge; Rx = np.array([[1, 0, 0], [0, math.cos(a), math.sin(a)], [0, -math.sin(a), math.cos(a)]])
-    band = ss(0.007, 0.0, np.abs(z - zline)) * ss(-0.06, -0.075, y) * ss(0.05 * p['sw'], 0.035 * p['sw'], ax)
+    band = ss(0.004, 0.0, np.abs(z - zline)) * ss(-0.06, -0.075, y) * ss(0.05 * p['sw'], 0.035 * p['sw'], ax)
     inward = np.stack([-x * 0.5, np.full_like(x, 0.008), np.zeros_like(x)], 1)          # lips roll in so the mouth opens onto the inside
     key('jawOpen', (rel @ Rx.T - rel) * lower[:, None] + inward * band[:, None])
     # ---------------- mouth interior: dark cavity, tongue and teeth (template coords); lower parts ride on the jaw
@@ -184,6 +184,10 @@ for name in NAMES:
     LV = np.array(LV)
     from scipy.spatial import cKDTree
     LC = C[cKDTree(T).query(LV)[1]]                    # lids take the fur colour around the eye
+    # cut the mouth open: drop the thin strip of faces along the mouth line so the lips can part
+    slit = ss(0.0032, 0.0018, np.abs(z - zline)) * (y < -0.075) * (ax < 0.042 * p['sw'])
+    keepf = ~(slit[hf] > 0.5).all(1)
+    hf = hf[keepf]
     allT = np.concatenate([T, LV, MV]); nH = len(T); nL = len(LV)
     F = np.concatenate([hf, np.array(LF) + nH, np.array(MF) + nH + nL]); Cc = np.concatenate([C, LC, np.array(MC)])
     Vw = (allT - tM) * k + Mw
