@@ -79,7 +79,7 @@ for name in NAMES:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     k = R[0] / 0.08 * 1.08
     hv, hf, ec, k, fwd = ah.build(name, eyes, k=k, vox=0.0016)
-    hv, hf = decimate(hv, hf[:, ::-1], 24000)
+    hv, hf = decimate(hv, hf[:, ::-1], 40000)
     tM = ah.V(0, ah.EYE[1], ah.EYE[2]); Mw = (eyes[0] + eyes[1]) / 2
     T = (hv - Mw) / k + tM                     # template coordinates (fox model frame)
     x, y, z = T.T; ax = np.abs(x); p = ah.P[name]; sn = p['sn']
@@ -119,8 +119,8 @@ for name in NAMES:
     jt = ah.V(0, -0.05 - 0.13 * sn, 1.694 - 0.01 * (1 - sn))
     yy = np.clip((y - (-0.09)) / (jt[1] - 0.004 - (-0.09)), 0, 1)
     zline = 1.693 + (jt[2] + 0.0085 - 1.693) * yy
-    mouthband = ss(0.0035, 0.0008, np.abs(z - zline)) * ss(-0.08, -0.095, y) * ss(0.045 * p['sw'], 0.03 * p['sw'], ax)
-    paint(mouthband, lin('#3a1418'))
+    mouthband = ss(0.0062, 0.003, np.abs(z - zline)) * ss(-0.08, -0.095, y) * ss(0.045 * p['sw'], 0.03 * p['sw'], ax)
+    paint(mouthband, lin('#1d1517') if name in ('fox', 'wolf', 'raccoon', 'bear', 'panda') else lin('#4a2a2e'))   # dark lips (canines have black lips)
     if p['ear'] in ('fox', 'cat', 'raccoon', 'round', 'bunny'):
         earz = 1.85 if p['ear'] != 'bunny' else 1.88
         Nn = np.zeros_like(hv); tri = hf
@@ -172,16 +172,41 @@ for name in NAMES:
         yy_ = np.clip((v_[:, 1] - (-0.09)) / (jt[1] - 0.004 - (-0.09)), 0, 1); zl_ = 1.693 + (jt[2] + 0.0085 - 1.693) * yy_
         return list(ss(0.003, -0.003, v_[:, 2] - zl_))
     addpart(cav, '#3a1216', lowfn)
-    tg = Scene(np.minimum(mback, mfront) - 0.04, np.maximum(mback, mfront) + 0.04, 0.0012)
-    tg.add(flat(rcone(mback + ah.V(0, -0.005, -0.006), mfront + ah.V(0, 0.008, -0.004), 0.011 * p['sw'], 0.004), (mback + mfront) / 2, (0, 0, 1), 0.45), 0.003)
-    addpart(tg, '#c95a68', 1.0)
-    if name not in ('bunny',):
+    # tongue: rides on the jaw, sits high enough to show when the mouth opens, centre groove, rounded tip
+    tg = Scene(np.minimum(mback, mfront) - 0.04, np.maximum(mback, mfront) + 0.04, 0.0009)
+    t0 = mback + ah.V(0, -0.002, -0.002); t1 = mfront + ah.V(0, 0.012, -0.0005)
+    tg.add(flat(rcone(t0, t1, 0.012 * p['sw'], 0.0065 * p['sw']), (t0 + t1) / 2, (0, 0, 1), 0.42), 0.004)
+    tg.sub(flat(rcone(t0 + ah.V(0, -0.004, 0.0045), t1 + ah.V(0, 0.004, 0.003), 0.0016, 0.0012), (t0 + t1) / 2, (0, 0, 1), 1.0), 0.0015)
+    addpart(tg, '#d0606f', 1.0)
+    # gums + a full row of teeth along the mouth arc (incisors at the front, canines, then cheek teeth)
+    def arc(sg, t):                                             # t=0 at the mouth corner, 1 at the front
+        c0 = ah.V(sg * 0.028 * p['sw'], -0.084, 1.697); c1 = jt + ah.V(sg * 0.0005, 0.004, 0.0085)
+        mid = c0 + (c1 - c0) * 0.55 + ah.V(sg * 0.006 * p['sw'], 0, -0.001)
+        P_ = (1 - t) ** 2 * c0 + 2 * (1 - t) * t * mid + t * t * c1
+        return P_ * ah.V(0.72, 1, 1) + ah.V(0, 0.0055, 0)          # tucked inside the lips
+    n_teeth = 7 if name not in ('bunny',) else 2
+    for up in (True, False):
+        gum = Scene(np.minimum(mback, mfront) - 0.04, np.maximum(mback, mfront) + 0.04, 0.0009)
         for sg in (1, -1):
-            for frac, up in ((0.75, True), (0.72, False)):
-                pt = mback + (mfront - mback) * frac + ah.V(sg * 0.007 * p['sw'], 0, 0.004 if up else -0.004)
-                th_ = Scene(pt - 0.02, pt + 0.02, 0.0006)
-                th_.add(rcone(pt, pt + ah.V(0, -0.001, -0.007 if up else 0.006), 0.0028, 0.0006), 0.001)
-                addpart(th_, '#f4f1ea', 0.0 if up else 1.0)
+            pts = [arc(sg, t) + ah.V(0, 0.0012, 0.0028 if up else -0.0028) for t in np.linspace(0.05, 1, 10)]
+            gum.add(chain(pts, [0.0016] * len(pts)), 0.0012)
+        addpart(gum, '#a8424f', 0.0 if up else 1.0)
+        for sg in (1, -1):
+            for i, t in enumerate(np.linspace(0.18, 0.98, n_teeth)):
+                if name == 'bunny':                              # two flat incisors
+                    if not up: continue
+                    pt = arc(sg, 1.0) + ah.V(-sg * 0.0025 * (i + 0.6), 0.0, 0.0022)
+                    th_ = Scene(pt - 0.02, pt + 0.02, 0.0005)
+                    th_.add(flat(rcone(pt, pt + ah.V(0, -0.0005, -0.0085), 0.0028, 0.0024), pt, (0, 1, 0), 0.4), 0.0008)
+                    addpart(th_, '#f6f3ec', 0.0); continue
+                canine = abs(t - 0.82) < 0.07
+                L = 0.0072 if canine else (0.0042 if t > 0.85 else 0.0034)
+                r = 0.0021 if canine else 0.0016
+                pt = arc(sg, t) + ah.V(0, 0.0015, 0.002 if up else -0.002)
+                dirz = -1 if up else 1
+                th_ = Scene(pt - 0.02, pt + 0.02, 0.0005)
+                th_.add(rcone(pt, pt + ah.V(0, -0.0006, dirz * L), r, 0.00035 if canine else 0.0007), 0.0006)
+                addpart(th_, '#f6f3ec', 0.0 if up else 1.0)
     MV = np.array(MV); Mlow = np.array(Mlow)
     relm = MV - hinge
     mouth_jaw = (relm @ Rx.T - relm) * Mlow[:, None]
@@ -219,8 +244,9 @@ for name in NAMES:
     from scipy.spatial import cKDTree
     LC = C[cKDTree(T).query(LV)[1]]                    # lids take the fur colour around the eye
     # cut the mouth open: drop the thin strip of faces along the mouth line so the lips can part
-    slit = ss(0.0032, 0.0018, np.abs(z - zline)) * (y < -0.075) * (ax < 0.042 * p['sw'])
-    keepf = ~(slit[hf] > 0.5).all(1)
+    slit = ss(0.0032, 0.0016, np.abs(z - zline)) * (y < -0.075) * (ax < 0.042 * p['sw'])
+    lowside = (z - zline) < 0
+    keepf = ~(((slit[hf] > 0.5).sum(1) >= 2) | ((slit[hf] > 0.2).any(1) & (lowside[hf].any(1) & ~lowside[hf].all(1))))   # cut every face that bridges the lips
     hf = hf[keepf]
     allT = np.concatenate([T, LV, MV]); nH = len(T); nL = len(LV)
     F = np.concatenate([hf, np.array(LF) + nH, np.array(MF) + nH + nL]); Cc = np.concatenate([C, LC, np.array(MC)])
