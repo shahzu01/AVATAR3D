@@ -137,7 +137,11 @@ export function buildClothes(ctx) {
       // follow the garment's own (flared) surface at that height, just outside it
       const at = (y) => { const k = torso.findIndex((r) => r.y >= y); const r1 = torso[Math.max(1, k)], r0 = torso[Math.max(0, k - 1)], t = (y - r0.y) / ((r1.y - r0.y) || 1);
         return { c: r0.c.clone().lerp(r1.c, t), r: [lerp(r0.r[0], r1.r[0], t) + o * 0.45, lerp(r0.r[1], r1.r[1], t) + o * 0.45], n: 2.15, w: body.torsoWeights(y), off: r0.off }; };   // same sculpted shape as the garment
-      tube(b, [at(yb - 0.013 * sc), at(yb), at(yb + 0.013 * sc)], { seg: 44, capStart: false, capEnd: false, color: C2 });
+      if (body.real) {   // realistic bodies curve more at the waist: use the garment's own rings so the sash hugs it
+        const k = torso.reduce((bi, r, i) => (Math.abs(r.y - yb) < Math.abs(torso[bi].y - yb) ? i : bi), 1), kk = Math.min(torso.length - 2, Math.max(1, k));
+        const mid = torso[kk], part = (q, t) => ({ ...mid, c: mid.c.clone().lerp(q.c, t), r: [lerp(mid.r[0], q.r[0], t) + o * 0.45, lerp(mid.r[1], q.r[1], t) + o * 0.45] });
+        tube(b, [part(torso[kk - 1], 0.4), part(mid, 0), part(torso[kk + 1], 0.4)], { seg: 44, capStart: false, capEnd: false, color: C2 });
+      } else tube(b, [at(yb - 0.013 * sc), at(yb), at(yb + 0.013 * sc)], { seg: 44, capStart: false, capEnd: false, color: C2 });
     }
     if (sleeve > 0) for (const side of ['left', 'right']) {
       const rings = body.armRings(side, -0.05, sleeve, { offset: topO * (s === 'jacket' || s === 'blazer' ? 1.1 : 0.85), steps: 16, flare: (s === 'robe' ? 0.06 : s === 'tshirt' || s === 'jersey' ? 0.008 : 0) * sc });

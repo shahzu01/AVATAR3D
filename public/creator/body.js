@@ -15,7 +15,7 @@ export class Body {
     const v2 = this.v2 = recipe.proportions === 'v2' || recipe.proportions === 'real';
     const real = this.real = recipe.proportions === 'real';
     const P0 = real   // realistic proportions (about 7 heads tall), cartoon look kept
-      ? { layout: 1.13, head: 0.72, legShare: 0.065, shoulders: 1.12, hips: 1.0, depth: 1.0, arm: 0.95, thigh: 1.02, calf: 0.97, ankle: 0.9, neck: 1.15, hand: 0.92, foot: 1.0, footW: 0.95 }
+      ? { layout: 1.12, head: 0.88, legShare: 0.07, shoulders: 1.1, hips: 0.97, waist: 1.0, depth: 1.0, arm: 0.94, thigh: 1.03, calf: 1.0, ankle: 0.74, neck: 1.18, hand: 1.0, foot: 0.98, footW: 0.92 }
       : v2
       ? { layout: 0.875, head: 1.05, legShare: 0.037, shoulders: 1.22, hips: 0.95, depth: 1.1, arm: 1.2, thigh: 1.12, calf: 1.15, ankle: 1.1, neck: 1.1, hand: 1.35, foot: 1.12, footW: 1.15 }
       : { layout: 1, head: 1, legShare: 0, shoulders: 1, hips: 1, depth: 1, arm: 1, thigh: 1, calf: 1, ankle: 1, neck: 1, hand: 1, foot: 1, footW: 1 };
@@ -30,6 +30,8 @@ export class Body {
       broad: { shoulders: 1.15, waist: 1.18, hips: 1.12, chestW: 1.12, depth: 1.15, arm: 1.18, thigh: 1.18, calf: 1.15, ankle: 1.08, neck: 1.15, hand: 1.1, foot: 1.08, footW: 1.1, kb: 0.6 },
     }[recipe.bodyType] || {};
     const P = this.P = { waist: 1, chestW: 1, ...P0 };
+    if (real && pres === 'male') P.waist *= 1.08;
+    if (real && pres === 'female') { P.waist *= 0.9; P.hips *= 1.1; P.thigh *= 1.05; }   // hourglass: narrower waist, fuller hips and thighs   // men keep a straighter waist (the V comes from the shoulders)
     for (const src of [G, BT]) for (const [key, val] of Object.entries(src)) { if (key === 'kb') continue; P[key] = key === 'legShare' ? (P[key] || 0) + val : (P[key] ?? 1) * val; }
     const Hraw = clamp(b.height ?? 1.55, 0.9, 2.0);
     const sc = this.sc = Hraw / 1.55;                 // thickness scale follows the height slider
@@ -41,7 +43,7 @@ export class Body {
     this.head = { rx: r * species.head[0], ry: r * species.head[1], rz: r * species.head[2] };
     const headCY = H - this.head.ry * 1.0;
     this.headC = V(0, headCY, 0.0);
-    const neckLen = (0.03 + 0.012 * species.neck) * sc * (real ? 1.4 : 1);
+    const neckLen = (0.03 + 0.012 * species.neck) * sc * (real ? 1.05 : 1);
     this.yHead = headCY - this.head.ry * 0.78;
     this.yNeck = this.yHead - neckLen;
     this.ySh = this.yNeck - 0.012 * sc;
@@ -214,6 +216,10 @@ export class Body {
       const t = lerp(t0, t1, i / steps), x = start + s * t * total;
       const d = Math.abs(x - ua.x) / (this.upperArmLen + this.lowerArmLen);
       let rad = d < 0.53 ? lerp(r0 * 1.02, r1, smooth(0, 0.53, d)) : lerp(r1, r2, smooth(0.53, 1, d));
+      if (this.real) {   // natural arm: soft biceps, slim elbow, forearm swelling just below the elbow, slender wrist
+        if (d < 0.53) { const u = d / 0.53; rad = lerp(r0 * 1.02, r1 * 0.9, Math.pow(u, 1.4)) * (1 + 0.05 * Math.exp(-(((u - 0.45) / 0.22) ** 2))); }
+        else { const u = (d - 0.53) / 0.47; rad = lerp(r1 * 0.92, r2 * 0.86, Math.pow(Math.min(1, u), 1.15)) * (1 + 0.13 * Math.exp(-(((u - 0.22) / 0.2) ** 2))); }
+      }
       if (this.kit) rad *= 1 + 0.22 * (1 - smooth(0.0, 0.12, t));   // rounder shoulder root, so the arm grows out of the torso instead of plugging into it
       const e = smooth(0.42, 0.62, d), h = smooth(0.92, 1.02, d);
       const shoulderW = 1 - smooth(-0.04, 0.1, (x - ua.x) * s);
@@ -231,7 +237,11 @@ export class Body {
     for (let i = 0; i <= steps; i++) {
       const t = lerp(t0, t1, i / steps), y = lerp(top, bot, t);
       const kn = smooth(this.yKnee + 0.06 * this.sc, this.yKnee - 0.04 * this.sc, y);
-      const rad = y > this.yKnee ? lerp(r1, r0, smooth(this.yKnee, this.yUpLeg, y)) : lerp(r2, r1, smooth(this.yAnkle, this.yKnee, y));
+      let rad = y > this.yKnee ? lerp(r1, r0, smooth(this.yKnee, this.yUpLeg, y)) : lerp(r2, r1, smooth(this.yAnkle, this.yKnee, y));
+      if (this.real) {   // natural leg: full thigh tapering to a slimmer knee, rounded calf, slender ankle
+        if (y > this.yKnee) { const u = clamp((y - this.yKnee) / (this.yUpLeg - this.yKnee), 0, 1); rad = lerp(r1 * 0.86, r0, Math.pow(u, 0.75)); }
+        else { const u = clamp((this.yKnee - y) / (this.yKnee - this.yAnkle), 0, 1); rad = lerp(r1 * 0.9, r2, Math.pow(u, 1.25)) * (1 + 0.16 * Math.exp(-(((u - 0.28) / 0.17) ** 2))); }
+      }
       const hipW = smooth(this.yUpLeg - 0.02 * this.sc, this.yHip + 0.01 * this.sc, y) * 0.55;
       const xx = s * lerp(this.hipX * 0.88, this.hipX * 1.02, smooth(this.yAnkle, this.yUpLeg, y));
       const fl = flare * smooth(t1 - 0.3, t1, t);

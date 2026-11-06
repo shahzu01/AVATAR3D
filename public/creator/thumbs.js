@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { FaceDrawer } from './face.js';
 import { SPECIES } from './catalog.js';
 import { buildCharacter } from './build.js';
+import { applyRelaxed } from '/pose.js';
 
 // ------------------------------------------------------------------ drawn face-part thumbnails
 const FACE_REGION = {   // [centre-y as fraction of ry, size as fraction of rx]
@@ -58,7 +59,7 @@ function renderer() {
   return R;
 }
 const memo = new Map();
-const STORE = 'kaelthumb7:';   // bump when character geometry changes so cached tiles are re-rendered
+const STORE = 'kaelthumb8:';   // bump when character geometry changes so cached tiles are re-rendered
 const lsGet = (k) => { try { return localStorage.getItem(STORE + k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(STORE + k, v); } catch { /* full or blocked: memory cache still works */ } };
 export function cachedThumb(key) { return memo.get(key) || lsGet(key) || null; }
@@ -70,7 +71,7 @@ function shoot(recipe, framing, angle) {
   scene.add(v.scene);
   const B = (n) => v.humanoid.getNormalizedBoneNode(n);
   const aa = (ax, a) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0), a);
-  B('leftUpperArm').quaternion.copy(aa('z', -1.2)); B('rightUpperArm').quaternion.copy(aa('z', 1.2));
+  applyRelaxed(B);
   for (let i = 0; i < 20; i++) v.update(1 / 30);
   v.scene.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(v.scene), h = box.max.y - box.min.y;

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { relaxedQ } from '/pose.js';
 
 const params = new URLSearchParams(location.search);
 const PREVIEW = params.has('preview');
@@ -223,9 +224,9 @@ function idleTargets(t) {
   const sway = settings.idleMotion !== false ? Math.sin(t * 0.45) * 0.02 : 0;
   return {
     spine: eul(breathe, sway * 0.5, sway * 0.3), chest: eul(breathe * 1.5, 0, 0),
-    leftUpperArm: aa('z', -1.22).multiply(aa('x', 0.12)), rightUpperArm: aa('z', 1.22).multiply(aa('x', 0.12)),
-    leftLowerArm: aa('y', 0.25), rightLowerArm: aa('y', -0.25),
-    leftHand: qI.clone(), rightHand: qI.clone(),
+    leftUpperArm: relaxedQ('leftUpperArm'), rightUpperArm: relaxedQ('rightUpperArm'),     // shared relaxed pose (pose.js)
+    leftLowerArm: relaxedQ('leftLowerArm'), rightLowerArm: relaxedQ('rightLowerArm'),
+    leftHand: relaxedQ('leftHand'), rightHand: relaxedQ('rightHand'),
     head: eul(Math.sin(t * 0.7) * 0.015, Math.sin(t * 0.33) * 0.03, 0), neck: qI.clone(),
   };
 }

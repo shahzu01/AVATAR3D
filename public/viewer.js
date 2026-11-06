@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { RELAXED, relaxedQ } from '/pose.js';
 
 const LIGHTS = {
   studio: { key: ['#ffffff', 1.7], rim: ['#a35cff', 0.9], amb: 0.9 },
@@ -213,9 +214,9 @@ export class AvatarViewer {
     const m = this.motion, el = t - (this.motionStart || 0);
     if (m !== 'tpose') {
       const br = Math.sin(t * 1.6);
-      o.leftUpperArm = aa('z', -1.22 + br * 0.02); o.rightUpperArm = aa('z', 1.22 - br * 0.02);
-      o.leftLowerArm = aa('z', -0.12); o.rightLowerArm = aa('z', 0.12);
-      o.spine = aa('x', br * 0.012); o.head = aa('y', Math.sin(t * 0.45) * 0.05);
+      for (const n of Object.keys(RELAXED)) o[n] = relaxedQ(n);          // relaxed stance: soft arms, curled fingers, weight on one leg
+      o.leftUpperArm = aa('z', br * 0.02).multiply(o.leftUpperArm); o.rightUpperArm = aa('z', -br * 0.02).multiply(o.rightUpperArm);
+      o.spine = aa('x', br * 0.012).multiply(o.spine); o.head = aa('y', Math.sin(t * 0.45) * 0.05).multiply(o.head);
     }
     if (m === 'wave') {
       o.rightUpperArm = aa('y', 0.35).multiply(aa('z', -0.5)); o.rightLowerArm = aa('z', -1.3 + Math.sin(t * 9) * 0.32); o.rightHand = aa('z', Math.sin(t * 9 + 0.6) * 0.25);
