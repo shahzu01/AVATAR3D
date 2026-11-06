@@ -128,6 +128,27 @@ for name in NAMES:
         for q in range(3): np.add.at(Nn, tri[:, q], fn_)
         Nn /= np.maximum(np.linalg.norm(Nn, axis=1, keepdims=True), 1e-12)
         paint(ss(earz, earz + 0.025, z) * ss(0.2, 0.6, -Nn[:, 1]) * ss(0.04, 0.06, ax) * 0.85, inner)
+    # ---------------- baked shading: cavities darker, the snout lighter toward its tip (reads depth from the front)
+    import scipy.sparse as sps
+    nv = len(T); tri = hf
+    rows = np.concatenate([tri[:, 0], tri[:, 1], tri[:, 2], tri[:, 1], tri[:, 2], tri[:, 0]])
+    cols = np.concatenate([tri[:, 1], tri[:, 2], tri[:, 0], tri[:, 0], tri[:, 1], tri[:, 2]])
+    A = sps.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(nv, nv)); A.data[:] = 1
+    A = sps.diags(1 / np.maximum(np.asarray(A.sum(1)).ravel(), 1)) @ A
+    NN = np.zeros_like(T); fn2 = np.cross(T[tri[:, 1]] - T[tri[:, 0]], T[tri[:, 2]] - T[tri[:, 0]])
+    for q in range(3): np.add.at(NN, tri[:, q], fn2)
+    NN /= np.maximum(np.linalg.norm(NN, axis=1, keepdims=True), 1e-12)
+    Ts = T.copy()
+    for _ in range(12): Ts = A @ Ts
+    cav = np.einsum('ij,ij->i', Ts - T, NN)                   # > 0 where the surface dips below its surroundings
+    cav = np.clip(cav / 0.0025, 0, 1)
+    snout = ss(-0.06, -0.06 - 0.14 * sn, y) * ss(0.03 * p['sw'], 0.0, ax)   # 0 at the snout base, 1 at the tip
+    side = ss(0.2, 0.75, np.abs(NN[:, 0])) * ss(-0.05, -0.07, y) * ss(1.75, 1.73, z) * ss(1.66, 1.69, z)   # snout flanks facing sideways
+    # contact shadow where the snout meets the face (a ring around the snout base)
+    rr_ = np.hypot(x / max(p['sw'], 0.5), (z - 1.722) * 1.2)
+    ring = ss(0.05, 0.03, rr_) * ss(0.018, 0.03, rr_) * ss(-0.02, -0.045, y) * ss(-0.09, -0.065, y)
+    shade = 1 - 0.45 * cav - 0.32 * side * (1 - snout) - 0.28 * ring + 0.14 * snout * ss(0.0, 0.6, NN[:, 2])
+    C[:] = np.clip(C * shade[:, None], 0, 1)
     # ---------------- shape keys (template space, converted to world by * k)
     keys = {}
     def key(nm, D): keys[nm] = D * k
