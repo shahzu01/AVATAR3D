@@ -12,8 +12,11 @@ export class Body {
     this.recipe = recipe; this.sp = species;
     // proportions 'v2' (proof of concept, opt-in per character): more compact and fuller - shorter torso,
     // slightly shorter legs, wider shoulders, fuller limbs, clearer hands and feet. 'classic' is unchanged.
-    const v2 = this.v2 = recipe.proportions === 'v2';
-    const P0 = v2
+    const v2 = this.v2 = recipe.proportions === 'v2' || recipe.proportions === 'real';
+    const real = this.real = recipe.proportions === 'real';
+    const P0 = real   // realistic proportions (about 7 heads tall), cartoon look kept
+      ? { layout: 1.13, head: 0.72, legShare: 0.065, shoulders: 1.12, hips: 1.0, depth: 1.0, arm: 0.95, thigh: 1.02, calf: 0.97, ankle: 0.9, neck: 1.15, hand: 0.92, foot: 1.0, footW: 0.95 }
+      : v2
       ? { layout: 0.875, head: 1.05, legShare: 0.037, shoulders: 1.22, hips: 0.95, depth: 1.1, arm: 1.2, thigh: 1.12, calf: 1.15, ankle: 1.1, neck: 1.1, hand: 1.35, foot: 1.12, footW: 1.15 }
       : { layout: 1, head: 1, legShare: 0, shoulders: 1, hips: 1, depth: 1, arm: 1, thigh: 1, calf: 1, ankle: 1, neck: 1, hand: 1, foot: 1, footW: 1 };
     // Male / Female starting anatomy (works for every species; none = the original shape) and body type presets.
@@ -38,7 +41,7 @@ export class Body {
     this.head = { rx: r * species.head[0], ry: r * species.head[1], rz: r * species.head[2] };
     const headCY = H - this.head.ry * 1.0;
     this.headC = V(0, headCY, 0.0);
-    const neckLen = (0.03 + 0.012 * species.neck) * sc;
+    const neckLen = (0.03 + 0.012 * species.neck) * sc * (real ? 1.4 : 1);
     this.yHead = headCY - this.head.ry * 0.78;
     this.yNeck = this.yHead - neckLen;
     this.ySh = this.yNeck - 0.012 * sc;

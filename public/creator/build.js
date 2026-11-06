@@ -22,7 +22,7 @@ export function normalizeRecipe(r) {
   for (const k of ['body', 'face', 'ears', 'tail', 'hair', 'top', 'bottom', 'shoes']) out[k] = { ...d[k], ...(r?.[k] || {}) };
   if (!SPECIES[out.species]) out.species = 'human';
   out.colors = { ...SPECIES[out.species].colors, ...(r?.colors || {}) };
-  out.proportions = r?.proportions === 'v2' ? 'v2' : 'classic';
+  out.proportions = r?.proportions === 'v2' || r?.proportions === 'real' ? r.proportions : 'classic';
   out.presentation = r?.presentation === 'male' || r?.presentation === 'female' ? r.presentation : null;
   out.bodyType = ['compact', 'balanced', 'athletic', 'broad', 'custom'].includes(r?.bodyType) ? r.bodyType : null;
   out.accessories = Array.isArray(r?.accessories) ? r.accessories.filter((a) => a && typeof a.id === 'string').slice(0, 8) : [];
