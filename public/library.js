@@ -65,7 +65,7 @@ async function refresh() {
     <div class="card ${a.id === selectedId ? 'sel' : ''}" data-id="${a.id}" title="${esc(a.name)} (double-click for details)">
       ${a.id === lib.activeId ? '<span class="live">Active</span>' : ''}
       <div class="thumb">${a.thumbUrl ? `<img src="${a.thumbUrl}" alt="">` : '🧍'}</div>
-      <div class="body"><div class="name">${esc(a.name)}</div><div class="sub">${SOURCE[a.sourceType] || a.sourceType}</div></div>
+      <div class="body"><div class="name">${esc(a.name)}</div><div class="sub">${a.characterType ? esc(a.characterType) + ' character' : SOURCE[a.sourceType] || a.sourceType}</div></div>
     </div>`).join('');
   for (const c of $('libGrid').querySelectorAll('[data-id]')) { c.onclick = () => select(c.dataset.id); c.ondblclick = () => { location.hash = `a=${c.dataset.id}`; }; }
   makeMissingThumbnails();
@@ -322,7 +322,7 @@ async function openDetail(id) {
 function renderDetailHeader() {
   const a = cur, active = a.id === lib.activeId;
   $('dName').textContent = a.name;
-  $('dBadges').innerHTML = `${active ? '<span class="badge active">Active</span>' : ''}<span class="badge">${SOURCE[a.sourceType] || a.sourceType}${a.format.vrmVersion ? ' ' + a.format.vrmVersion : ''}</span><span class="badge ${a.suitability.level}">${LEVEL[a.suitability.level]}</span>`;
+  $('dBadges').innerHTML = `${active ? '<span class="badge active">Active</span>' : ''}<span class="badge">${a.characterType ? esc(a.characterType) + ' character' : (SOURCE[a.sourceType] || a.sourceType) + (a.format.vrmVersion ? ' ' + a.format.vrmVersion : '')}</span><span class="badge ${a.suitability.level}">${LEVEL[a.suitability.level]}</span>`;
   $('dActivate').disabled = active || !a.suitability.tracking;
   $('dActivate').textContent = active ? 'Active avatar' : 'Set as active avatar';
   $('dActivate').title = a.suitability.tracking ? '' : 'This model cannot be driven by tracking (no complete VRM humanoid rig).';
