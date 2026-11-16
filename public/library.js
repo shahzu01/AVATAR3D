@@ -2,6 +2,13 @@
 // manage files and per-avatar stream presentation.
 import { AvatarViewer, LIGHT_PRESETS } from '/viewer.js';
 import { ICON, topbar, wireRanges, toast } from '/ui.js';
+import { ensureBaked, isBaking } from '/autobake.js';
+/** A Part Mixer character on stream should be the optimized (baked) file: make it now if it is missing or out of date. */
+function optimizeIfNeeded(a, say = toast) {
+  if (!a?.bake || a.bake.state === 'fresh' || isBaking(a.id)) return;
+  say(`Optimizing ${a.name} for the stream… (it is already live; the lighter version takes over when this finishes)`);
+  ensureBaked(a.id).then((r) => { say(`${a.name} is optimized for the stream${r.bakeNotes ? `: ${r.bakeNotes.slice(0, 2).join(' · ')}` : ''}.`); refresh?.(); }).catch((e) => say(`Could not optimize ${a.name}: ${e.message}`));
+}
 topbar('library');
 document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = ICON[el.dataset.icon] || ''; });
 const stageViewer = (id) => { const v = new AvatarViewer($(id)); v.setGrid(false); v.setBackground('transparent'); $(id).classList.remove('checker'); return v; };
@@ -100,6 +107,7 @@ function renderHomeInfo(a) {
       <div class="fact"><small>Face tracking</small><span>${a.sourceType === 'created' || c.expressions.perfectSync ? 'Perfect Sync' : c.expressions.blink ? 'Basic' : 'None'}</span></div>
       <div class="fact"><small>Fingers</small><span>${c.humanoid.fingers ? `${c.humanoid.fingers} bones` : 'No'}</span></div>
       <div class="fact"><small>Sway</small><span>${c.springBones ? `${c.springBones} group(s)` : 'None'}</span></div>
+      ${a.bake ? `<div class="fact"><small>Stream file</small><span>${a.bake.state === 'fresh' ? `Optimized · ${(a.bake.size / 1048576).toFixed(1)} MB` : isBaking(a.id) ? 'Optimizing…' : 'Not optimized yet'}</span></div>` : ''}
     </div>
     <div class="btns">
       <button class="primary" id="homeActivate" ${active || !a.suitability.tracking ? 'disabled' : ''}>${active ? 'Already on stream' : a.suitability.tracking ? 'Put on stream' : 'Cannot be used live'}</button>
@@ -109,7 +117,7 @@ function renderHomeInfo(a) {
     <p class="tip">Tip: double-click an avatar to open its details. Drag the stage to turn it, scroll to zoom.</p>`;
   $('homeDetails').onclick = () => { location.hash = `a=${a.id}`; };
   const act = $('homeActivate');
-  if (act && !act.disabled) act.onclick = async () => { try { await api(`/api/library/${a.id}/activate`, { method: 'POST' }); toast(`${a.name} is now on stream`); await refresh(); } catch (e) { toast(e.message); } };
+  if (act && !act.disabled) act.onclick = async () => { try { await api(`/api/library/${a.id}/activate`, { method: 'POST' }); toast(`${a.name} is now on stream`); await refresh(); optimizeIfNeeded(a); } catch (e) { toast(e.message); } };
 }
 // Avatars without a picture (for example ones dropped into the avatars folder) get one, one at a time in the background.
 let thumbBusy = false;
@@ -339,7 +347,7 @@ $('dTabs').onclick = (e) => {
   for (const k of ['caps', 'present', 'file']) $(`tab-${k}`).classList.toggle('hidden', k !== t);
 };
 $('dActivate').onclick = async () => {
-  try { await api(`/api/library/${cur.id}/activate`, { method: 'POST' }); lib.activeId = cur.id; renderDetailHeader(); renderPresentTab(); dStatus(`${cur.name} is now your active avatar. OBS and the Studio switch to it automatically.`, 'ok'); }
+  try { await api(`/api/library/${cur.id}/activate`, { method: 'POST' }); lib.activeId = cur.id; renderDetailHeader(); renderPresentTab(); dStatus(`${cur.name} is now your active avatar. OBS and the Studio switch to it automatically.`, 'ok'); optimizeIfNeeded(cur, (t) => dStatus(t, 'ok')); }
   catch (e) { dStatus(e.message, 'error'); }
 };
 $('dRename').onclick = async () => {

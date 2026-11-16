@@ -65,8 +65,8 @@
       <div class="floating glass busy" id="busy">stitching…</div>
       <div class="floating glass dock-save">
         <div class="r"><input type="text" id="name" maxlength="60" placeholder="Character name"></div>
-        <div class="r"><button class="primary" id="save" style="flex:1">Save to library</button></div>
-        <div class="r"><button id="bake" style="flex:1" title="Merge everything into one optimized VRM file: lighter to stream, and it works in other VTuber apps">Bake to VRM</button><label title="Make the baked file your stream avatar"><input type="checkbox" id="bakeLive" checked> Go live</label></div>
+        <div class="r"><button class="primary" id="save" style="flex:1" title="Saves the character and optimizes it for the stream">Save to library</button><label title="Put this character on stream when it is saved"><input type="checkbox" id="bakeLive"> Go live</label></div>
+        <div class="r"><button id="bake" style="flex:1" title="One optimized .vrm file to keep, or to use in other VTuber apps (VSeeFace, Warudo, VRChat…)">Export .vrm file</button></div>
         <div class="r"><a id="bakeDl" class="btnlink hidden" style="flex:1;justify-content:center" download>Download .vrm</a></div>
         <div class="status" id="status"></div>
       </div>

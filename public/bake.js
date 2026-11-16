@@ -13,6 +13,11 @@ import { loadModular } from '/modular.js';
 
 const PRESETS = new Set(['happy', 'angry', 'sad', 'relaxed', 'surprised', 'aa', 'ih', 'ou', 'ee', 'oh', 'blink', 'blinkLeft', 'blinkRight', 'lookUp', 'lookDown', 'lookLeft', 'lookRight', 'neutral']);
 const NO_OUTLINE = /eyes|lash|brow|mouth|iris|glint|shadow|outline/i;
+// the bake is long, plain number crunching: hand the page back every ~25 ms so it stays responsive (and a Studio tab keeps tracking)
+let lastBreath = 0;
+// (a message, not a timer: Chrome slows timers in background tabs to once a second, later once a minute)
+const yieldNow = () => new Promise((r) => { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); });
+const breathe = async () => { const t = performance.now(); if (t - lastBreath > 25) { await yieldNow(); lastBreath = performance.now(); } };
 const HIDDEN_UNDER_CLOTH = 0.012;          // metres a body vertex must sit inside a garment's edge before its skin is dropped
 
 /** Build the character from its recipe and return a VRM 1.0 file (ArrayBuffer) plus before/after numbers. */
@@ -100,13 +105,14 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
   let trimmed = 0;
   const M = new THREE.Matrix4(), T = new THREE.Matrix4(), N3 = new THREE.Matrix3(), v = new THREE.Vector3(), n = new THREE.Vector3();
   for (const mesh of meshes) {
+    await breathe();
     if (!lids.includes(mesh)) { let vis = true; for (let p = mesh; p; p = p.parent) if (!p.visible) vis = false; if (!vis) continue; }
     const g = mesh.geometry, P = g.attributes.position, nv = P.count; if (!nv) continue;
     const pos = new Float32Array(nv * 3), nrm = new Float32Array(nv * 3), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), lin = new Array(nv);
     if (mesh.isSkinnedMesh) {
       const sk = mesh.skeleton, bi = g.attributes.skinIndex, bw = g.attributes.skinWeight, BM = sk.bones.map((b, i) => new THREE.Matrix4().multiplyMatrices(b.matrixWorld, sk.boneInverses[i]));
       const pre = mesh.bindMatrix, post = new THREE.Matrix4().multiplyMatrices(mesh.matrixWorld, mesh.bindMatrixInverse);
-      for (let i = 0; i < nv; i++) { M.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); let tot = 0; const ws = [];
+      for (let i = 0; i < nv; i++) { if ((i & 255) === 0) await breathe(); M.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); let tot = 0; const ws = [];
         for (let k = 0; k < 4; k++) { const w = bw.getComponent(i, k); if (w <= 0) continue; const b = bi.getComponent(i, k); const e = BM[b].elements, me = M.elements; for (let q = 0; q < 16; q++) me[q] += e[q] * w; tot += w; const nbI = ixOf(sk.bones[b]); if (nbI !== undefined) ws.push([nbI, w]); }
         if (tot > 0) M.multiplyScalar(1 / tot); else M.identity();
         T.multiplyMatrices(post, M).multiply(pre); lin[i] = new THREE.Matrix3().setFromMatrix4(T);
@@ -119,7 +125,7 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
       let p = mesh.parent; while (p && !p.isBone) p = p.parent; const bIx = p ? ixOf(p) : ixOf(hips), L3 = new THREE.Matrix3().setFromMatrix4(mesh.matrixWorld);
       N3.getNormalMatrix(mesh.matrixWorld);
       const hs = hairSprings.find((h) => { let q = mesh; while (q && q !== h.root) q = q.parent; return !!q; });
-      for (let i = 0; i < nv; i++) { v.fromBufferAttribute(P, i).applyMatrix4(mesh.matrixWorld); pos.set([v.x, v.y, v.z], i * 3); lin[i] = L3;
+      for (let i = 0; i < nv; i++) { if ((i & 1023) === 0) await breathe(); v.fromBufferAttribute(P, i).applyMatrix4(mesh.matrixWorld); pos.set([v.x, v.y, v.z], i * 3); lin[i] = L3;
         if (g.attributes.normal) { n.fromBufferAttribute(g.attributes.normal, i).applyMatrix3(N3).normalize(); nrm.set([n.x, n.y, n.z], i * 3); }
         if (hs) { const y = hs.root.worldToLocal(v.clone()).y, w = Math.pow(Math.min(1, Math.max(0, (hs.top - y) / hs.len)), 1.6);
           si[i * 4] = boneIx.get(hs.bone); sw[i * 4] = w; si[i * 4 + 1] = bIx; sw[i * 4 + 1] = 1 - w; }
@@ -129,7 +135,7 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
     // morph deltas, per expression, in world space
     const morph = new Map();
     if (g.morphAttributes.position?.length) for (const [e, ex] of exprs.entries()) for (const b of ex.binds) { if (!b.primitives.includes(mesh)) continue;
-      const A = g.morphAttributes.position[b.index]; if (!A) continue; const d = morph.get(e) || new Float32Array(nv * 3), rel = g.morphTargetsRelative;
+      const A = g.morphAttributes.position[b.index]; if (!A) continue; await breathe(); const d = morph.get(e) || new Float32Array(nv * 3), rel = g.morphTargetsRelative;
       for (let i = 0; i < nv; i++) { v.fromBufferAttribute(A, i); if (!rel) v.sub(new THREE.Vector3().fromBufferAttribute(P, i)); v.multiplyScalar(b.weight ?? 1).applyMatrix3(lin[i]); d[i * 3] += v.x; d[i * 3 + 1] += v.y; d[i * 3 + 2] += v.z; }
       morph.set(e, d); }
     for (const [e, d] of extra.get(mesh) || []) { const m0 = morph.get(e); if (m0) for (let i = 0; i < d.length; i++) m0[i] += d[i]; else morph.set(e, d); }
@@ -143,7 +149,7 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
     for (const gr of grp) { const mat = mats[gr.materialIndex] || mats[0]; const spec = classify(mat, mesh, !!col);
       const key = spec.key; if (!groups.has(key)) groups.set(key, { spec, tris: [] }); const G = groups.get(key);
       const base = baseColor(mat), op = mat.transparent ? (mat.opacity ?? 1) : 1;
-      for (let t = gr.start; t < gr.start + gr.count; t += 3) { const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+      for (let t = gr.start; t < gr.start + gr.count; t += 3) { if ((t & 3071) === 0) await breathe(); const a = idx[t], b = idx[t + 1], c = idx[t + 2];
         if (mesh === bodyMesh && cover && toMaster && cover[toMaster[a]] > HIDDEN_UNDER_CLOTH && cover[toMaster[b]] > HIDDEN_UNDER_CLOTH && cover[toMaster[c]] > HIDDEN_UNDER_CLOTH) { trimmed++; continue; }
         const corners = [a, b, c];
         let uvs;
@@ -162,7 +168,7 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
   const out = { Face: new Builder(exprCount), Body: new Builder(0) };
   const matObjs = new Map();
   for (const [key, G] of groups) { const mat = makeMaterial(G.spec, palTex); matObjs.set(key, mat);
-    for (let t = 0; t < G.tris.length; t += 6) { const [part, a, b, c, uvs, mv] = G.tris.slice(t, t + 6); (mv ? out.Face : out.Body).tri(key, part, [a, b, c], uvs, G.spec.palette); } }
+    for (let t = 0; t < G.tris.length; t += 6) { if (t % 6144 === 0) await breathe(); const [part, a, b, c, uvs, mv] = G.tris.slice(t, t + 6); (mv ? out.Face : out.Body).tri(key, part, [a, b, c], uvs, G.spec.palette); } }
   const exported = new THREE.Scene(); exported.name = 'Kael baked'; exported.add(root);
   exported.userData = { kaelPaintedEyes: !!fa, kaelBaked: 1 };
   const skeleton = new THREE.Skeleton(boneList, boneList.map((b) => new THREE.Matrix4().copy(b.matrixWorld).invert()));

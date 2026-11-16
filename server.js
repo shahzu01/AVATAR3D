@@ -55,7 +55,9 @@ ensureActive();
 function activeInfo() {
   const r = library.get(settings.activeAvatarId);
   if (!r) return null;
-  return { id: r.id, name: r.name, kind: r.sourceType === 'created' ? 'created' : 'vrm', url: library.publicRecord(r).fileUrl, transform: r.presentation.transform, tracking: r.presentation.tracking };
+  const bk = library.bakeState(r);      // a Part Mixer character with an up-to-date baked VRM goes on stream as that VRM
+  if (bk?.state === 'fresh') return { id: r.id, name: r.name, kind: 'vrm', baked: true, url: `/api/library/${r.id}/baked?v=${bk.hash}`, transform: r.presentation.transform, tracking: r.presentation.tracking };
+  return { id: r.id, name: r.name, kind: r.sourceType === 'created' ? 'created' : 'vrm', needsBake: bk ? bk.state : null, url: library.publicRecord(r).fileUrl, transform: r.presentation.transform, tracking: r.presentation.tracking };
 }
 const publicSettings = () => ({ ...settings, active: activeInfo() });
 function activate(id) {
@@ -68,6 +70,13 @@ function activate(id) {
   if (r.presentation.look) Object.assign(settings, r.presentation.look); else library.setPresentation(r.id, { look: pickLook(settings) });
   saveSettings(); broadcast({ type: 'settings', settings: publicSettings() });
   return r;
+}
+function readBinary(req, max) {
+  return new Promise((resolve, reject) => {
+    const parts = []; let n = 0;
+    req.on('data', (d) => { n += d.length; if (n > max) { reject(new UserError('File is too large.', 413)); req.destroy(); } else parts.push(d); });
+    req.on('end', () => resolve(Buffer.concat(parts))); req.on('error', () => reject(new UserError('Upload interrupted.')));
+  });
 }
 function readJson(req, max = 4e6) {
   return new Promise((resolve, reject) => {
@@ -125,6 +134,13 @@ async function libraryApi(req, res, url) {
         const body = await readJson(req, 4e6);
         library.updateRecipe(id, body.recipe, { thumbnail: body.thumbnail });
         if (id === settings.activeAvatarId) broadcast({ type: 'settings', settings: publicSettings() });
+        return json({ avatar: pub(library.get(id)) });
+      }
+      if (sub === '/baked' && M === 'GET') { const bk = library.bakeState(rec); return bk?.state === 'fresh' ? sendFile(res, library.bakedPath(rec), 'application/octet-stream') : json({ error: 'No up-to-date baked file.' }, 404); }
+      if (sub === '/baked' && M === 'PUT') {
+        const buf = await readBinary(req, library.limits.maxFileMB * 1e6);
+        library.saveBake(id, buf, url.searchParams.get('hash'));
+        if (id === settings.activeAvatarId) broadcast({ type: 'settings', settings: publicSettings() });      // the stream switches to the baked file
         return json({ avatar: pub(library.get(id)) });
       }
       if (sub === '/thumb' && M === 'GET') return rec.thumbnail ? sendFile(res, library.thumbPath(rec), 'image/png') : json({ error: 'No thumbnail.' }, 404);

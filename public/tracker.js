@@ -36,8 +36,21 @@ const bind = (id, key, conv = (v) => v, evt = 'input') => $(id).addEventListener
   const el = e.target; const v = el.type === 'checkbox' ? el.checked : conv(el.value);
   if (key.includes('.')) { const [a, b] = key.split('.'); saveSettings({ [a]: { ...settings[a], [b]: v } }); } else saveSettings({ [key]: v });
 });
+// The active Part Mixer character is drawn far faster from its optimized (baked) file. The Studio makes that file when it
+// is missing or out of date, but only while the camera is off: baking keeps this page busy and would make tracking stutter.
+let bakeNoted = null;
+async function checkBake(s) {
+  const a = s.active; if (!a?.needsBake) return;
+  const key = `${a.id}:${a.needsBake}`;
+  if (running) { if (bakeNoted !== key) { bakeNoted = key; log(`${a.name} is not optimized yet, so OBS builds it live (slower). It will be optimized when you next open the Studio before starting the camera, or right away from the Part Mixer or the Library.`); } return; }
+  const { ensureBaked, isBaking } = await import('/autobake.js'); if (isBaking(a.id)) return;
+  log(`optimizing ${a.name} for the stream…`);
+  try { const r = await ensureBaked(a.id, { onStep: (st) => { $('perf').textContent = `Optimizing ${a.name}: ${st}…`; } }); log(`${a.name} optimized${r.bakeNotes ? `: ${r.bakeNotes.slice(0, 3).join(' · ')}` : ''}`); }
+  catch (e) { log(`could not optimize ${a.name}: ${e.message}`); }
+  if (!running) $('perf').textContent = 'Tracking stopped.';
+}
 function loadSettings(s) {
-  settings = s;
+  settings = s; checkBake(s);
   const set = (id, v) => { const el = $(id); if (!el || document.activeElement === el) return; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; };
   set('cam', s.camera); set('zoom', s.cameraOffset?.zoom ?? 1); set('offY', s.cameraOffset?.y ?? 0); set('offX', s.cameraOffset?.x ?? 0);
   set('bg', s.background); set('bgColor', s.backgroundColor); set('lightColor', s.lightColor); set('lightIntensity', s.lightIntensity);

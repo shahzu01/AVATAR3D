@@ -5,6 +5,8 @@ import { loadKit, defaultModular, PART_ROWS, OUTFITS, defaultOutfit, hairChoices
 
 const $ = (id) => document.getElementById(id);
 const q = new URLSearchParams(location.search); const editId = q.get('id');
+import { ensureBaked } from '/autobake.js';
+let savedId = editId, dirty = false;      // the library character this page is editing, and whether it has unsaved changes
 topbar('mixer');
 const viewer = new AvatarViewer($('viewer')); viewer.setGrid(false); window.viewer = viewer;
 const kit = await loadKit();
@@ -57,7 +59,9 @@ function render() {
   $('outfit').innerHTML = order.map((g) => `<optgroup label="${GN[g]}">${Object.entries(OUTFITS).filter(([, o]) => o.group === g).map(([k, o]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${o.label}</option>`).join('')}</optgroup>`).join('') + `<option value="none" ${cur === 'none' ? 'selected' : ''}>None</option>`;
   const worn = accessoriesOf(kit, recipe); $('acc').innerHTML = Object.entries(ACCESSORIES).map(([k, n]) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" data-acc="${k}" ${worn.includes(k) ? 'checked' : ''}>${n}</label>`).join('');
 }
+let refreshes = 0;
 async function refresh() {
+  if (refreshes++) dirty = true;
   const my = ++seq; $('busy').classList.add('on');
   try {
     await viewer.loadCreated(JSON.parse(JSON.stringify(recipe)), { keepCamera: !first });
@@ -99,26 +103,28 @@ $('save').addEventListener('click', async () => {
   recipe.name = $('name').value.trim() || 'Mixed character'; setStatus('Saving…');
   try {
     let thumbnail = null; try { thumbnail = viewer.thumbnail(); } catch { /* preview only */ }
-    const url = editId ? `/api/library/${editId}/recipe` : '/api/library/create';
-    const r = await fetch(url, { method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipe, name: recipe.name, thumbnail }) });
+    const url = savedId ? `/api/library/${savedId}/recipe` : '/api/library/create';
+    const r = await fetch(url, { method: savedId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipe, name: recipe.name, thumbnail }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Could not save');
-    setStatus('Saved to your library.', 'ok'); toast?.('Saved to your library');
+    if (!savedId) { savedId = j.avatar.id; const u = new URL(location.href); u.searchParams.set('id', savedId); history.replaceState(null, '', u); }      // later saves update this character instead of adding copies
+    dirty = false;
+    if ($('bakeLive').checked) await fetch(`/api/library/${savedId}/activate`, { method: 'POST' });
+    toast?.('Saved to your library');
+    // optimize it for the stream right away (the stream builds it live until this finishes)
+    setStatus('Saved. Optimizing it for the stream…', 'ok');
+    const id = savedId, rec = await ensureBaked(id, { onStep: (s) => { if (savedId === id && !dirty) setStatus(`Saved. Optimizing for the stream: ${s}…`, 'ok'); } });
+    if (savedId === id && !dirty) setStatus(`Saved and optimized for the stream${rec.bakeNotes ? `: ${rec.bakeNotes.slice(0, 2).join(' · ')}` : ''}.${$('bakeLive').checked ? ' It is on stream now.' : ''}`, 'ok');
   } catch (err) { setStatus(err.message, 'err'); }
 });
-$('bake').addEventListener('click', async () => {
+$('bake').addEventListener('click', async () => {        // a .vrm to keep or use in other VTuber apps
   const name = $('name').value.trim() || recipe.name || 'Mixed character', btn = $('bake'); btn.disabled = true; $('bakeDl').classList.add('hidden');
   try {
-    const { bakeVRM } = await import('/bake.js');
-    const res = await bakeVRM(JSON.parse(JSON.stringify(recipe)), { name, onStep: (s) => setStatus(`Baking: ${s}…`) });
-    const blob = new Blob([res.file], { type: 'application/octet-stream' }), file = name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'character';
-    const dl = $('bakeDl'); if (dl.href) URL.revokeObjectURL(dl.href); dl.href = URL.createObjectURL(blob); dl.download = `${file}.vrm`; dl.classList.remove('hidden');
-    setStatus('Baking: adding to your library…');
-    const up = await fetch(`/api/library/import?filename=${encodeURIComponent(file + '.vrm')}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob }).then((r) => r.json());
-    if (!up.tmpId) throw new Error(up.error || 'The library did not accept the baked file.');
-    let thumbnail = null; try { thumbnail = viewer.thumbnail(); } catch { /* preview only */ }
-    const ok = await fetch(`/api/library/import/${up.tmpId}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: `${name} (baked)`, thumbnail, makeActive: $('bakeLive').checked }) }).then((r) => r.json());
-    if (ok.error) throw new Error(ok.error);
-    setStatus(`Baked ${(res.size / 1048576).toFixed(1)} MB: ${res.notes.join(' · ')}.${$('bakeLive').checked ? ' It is now your stream avatar.' : ' Saved to your library.'}`, 'ok'); toast?.('Baked VRM saved to your library');
+    let blob, note = '';
+    if (savedId && !dirty) { const rec = await ensureBaked(savedId, { onStep: (s) => setStatus(`Baking: ${s}…`) }); blob = await (await fetch(`/api/library/${savedId}/baked`)).blob(); note = rec.bakeNotes ? ` ${rec.bakeNotes.join(' · ')}.` : ''; }
+    else { const { bakeVRM } = await import('/bake.js'); const res = await bakeVRM(JSON.parse(JSON.stringify(recipe)), { name, onStep: (s) => setStatus(`Baking: ${s}…`) }); blob = new Blob([res.file]); note = ` ${res.notes.join(' · ')}.`; }
+    const file = name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'character', dl = $('bakeDl');
+    if (dl.href) URL.revokeObjectURL(dl.href); dl.href = URL.createObjectURL(blob); dl.download = `${file}.vrm`; dl.classList.remove('hidden');
+    setStatus(`Your .vrm is ready (${(blob.size / 1048576).toFixed(1)} MB).${note}`, 'ok');
   } catch (err) { console.error(err); setStatus(`Bake failed: ${err.message}`, 'err'); }
   btn.disabled = false;
 });
