@@ -17,6 +17,17 @@ npm run setup
 
 `npm install` fetches three.js, three-vrm, MediaPipe and ws. `npm run setup` downloads Google's three free MediaPipe tracking models into `models/`.
 
+## Updating
+
+Your KaelStudio folder is linked to the GitHub project, so getting the latest version is one step. Quit Kael Studio, then in Terminal:
+
+```
+cd ~/Downloads/KaelStudio
+npm run update
+```
+
+It downloads the new version (your library, settings and avatars are not touched) and installs anything new. If it says your local changes would be overwritten, nothing has changed yet: tell Claude, or set those files aside first. Start Kael Studio again afterwards.
+
 ## Every stream
 
 Double-click **Kael Studio** on your Desktop. (Or in Terminal: `cd ~/Downloads/KaelStudio && npm start`.)
