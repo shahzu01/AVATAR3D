@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part Mixer · Kael Studio</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+  .work { display: grid; grid-template-columns: 400px 1fr; min-height: 0; }
+  #editor { min-width: 0; overflow-y: auto; border-right: 1px solid var(--line); background: linear-gradient(180deg, #11131c, #0e1017); padding: 16px 18px 24px; }
+  #editor h2 { margin: 0 0 2px; } #editor .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  #editor h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 18px 0 8px; }
+  .prow { display: grid; grid-template-columns: 62px 1fr 96px; gap: 8px; align-items: center; margin-bottom: 7px; }
+  .prow .k { font-size: 13px; font-weight: 600; }
+  .prow select, .line select, .line input[type=text] { width: 100%; }
+  .line { display: grid; grid-template-columns: 62px 1fr; gap: 8px; align-items: center; margin-bottom: 7px; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .quick button { font-size: 12px; padding: 5px 10px; }
+  #notes { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 8px; }
+  #notes b { color: var(--text, #e8e9f2); font-weight: 600; }
+  .stage { min-width: 0; position: relative; }
+  #viewer { position: absolute; inset: 0; z-index: 1; }
+  #viewer.checker { background: repeating-conic-gradient(#1d1f2b 0 25%, #171923 0 50%) 0 0/24px 24px; }
+  .views { top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; }
+  .busy { top: 66px; left: 50%; transform: translateX(-50%); font-size: 11.5px; color: var(--muted); padding: 4px 12px; opacity: 0; transition: opacity .2s; }
+  .busy.on { opacity: 1; }
+  .dock-save { right: 14px; bottom: 14px; padding: 12px; width: 330px; display: flex; flex-direction: column; gap: 8px; }
+  .dock-save .r { display: flex; gap: 8px; align-items: center; }
+  .dock-save input[type=text] { flex: 1; }
+  .status { font-size: 12px; color: var(--muted); min-height: 16px; } .status.err { color: #ff8b8b; } .status.ok { color: #7fe0a8; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/", "@pixiv/three-vrm": "/vendor/three-vrm/three-vrm.module.js" } }
+</script>
+</head>
+<body>
+<div class="app">
+  <header id="topbar"></header>
+  <div class="work">
+    <aside id="editor">
+      <h2>Part Mixer</h2>
+      <div class="sub">Build one character from parts of different bodies. Each part can keep its own size or be matched to what it attaches to.</div>
+      <h3>Start from</h3><div class="quick" id="starts"></div>
+      <h3>Parts</h3><div id="parts"></div>
+      <h3>Look</h3>
+      <div class="line"><span class="k">Hair</span><select id="hair"></select></div>
+      <div class="line"><span class="k">Hair colour</span><input type="color" id="hairColor"></div>
+      <div class="line"><span class="k">Skin</span><input type="color" id="skin"></div>
+      <div class="line"><span class="k">Face shape</span><select id="faceShape"></select></div>
+      <div class="line"><span class="k">Eye shape</span><select id="eyeShape"></select></div>
+      <div class="line"><span class="k">Eyes</span><input type="color" id="eyeColor"></div>
+      <div class="line"><span class="k">Outfit</span><select id="outfit"></select></div>
+      <div class="line"><span class="k">Ink outline</span><label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" id="outline"> Anime-style edge lines</label></div>
+      <div class="line"><span class="k">Extras</span><div id="acc" style="display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px"></div></div>
+      <div class="line"><span class="k">Clothing</span><input type="color" id="clothing"></div>
+      <div class="line"><span class="k">Accent</span><input type="color" id="accent"></div>
+      <h3>Seams</h3><div id="notes"></div>
+    </aside>
+    <main class="stage">
+      <div id="viewer"></div>
+      <div class="floating glass seg views">
+        <button data-view="front-full" class="on">Full</button><button data-view="front">Upper</button><button data-view="face">Face</button>
+        <span class="div"></span><button data-view="threequarter">¾</button><button data-view="side">Side</button><button data-view="back">Back</button>
+      </div>
+      <div class="floating glass busy" id="busy">stitching…</div>
+      <div class="floating glass dock-save">
+        <div class="r"><input type="text" id="name" maxlength="60" placeholder="Character name"></div>
+        <div class="r"><button class="primary" id="save" style="flex:1">Save to library</button></div>
+        <div class="status" id="status"></div>
+      </div>
+    </main>
+  </div>
+</div>
+<script type="module" src="/mixer.js"></script>
+</body>
+</html>

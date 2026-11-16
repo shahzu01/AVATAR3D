@@ -53,6 +53,7 @@ export function topbar(page, { tools = '' } = {}) {
       <a href="/tracker.html" class="${page === 'studio' ? 'on' : ''}">${ICON.studio}<span>Studio</span></a>
       <a href="/library.html" class="${page === 'library' ? 'on' : ''}">${ICON.library}<span>Library</span></a>
       <a href="/creator.html" class="${page === 'creator' ? 'on' : ''}">${ICON.creator}<span>Creator</span></a>
+      <a href="/mixer.html" class="${page === 'mixer' ? 'on' : ''}">${ICON.creator}<span>Part Mixer</span></a>
     </nav>
     <div class="spacer"></div>
     <div class="tools">${tools}</div>

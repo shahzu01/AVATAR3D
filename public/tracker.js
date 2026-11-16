@@ -41,7 +41,7 @@ function loadSettings(s) {
   const set = (id, v) => { const el = $(id); if (!el || document.activeElement === el) return; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; };
   set('cam', s.camera); set('zoom', s.cameraOffset?.zoom ?? 1); set('offY', s.cameraOffset?.y ?? 0); set('offX', s.cameraOffset?.x ?? 0);
   set('bg', s.background); set('bgColor', s.backgroundColor); set('lightColor', s.lightColor); set('lightIntensity', s.lightIntensity);
-  set('rimColor', s.rimColor); set('rimIntensity', s.rimIntensity); set('idleMotion', s.idleMotion); set('twitch', s.twitchChannel);
+  set('rimColor', s.rimColor); set('rimIntensity', s.rimIntensity); set('lightingPreset', s.lightingPreset || 'classic'); set('lightingAO', s.lightingAO !== false); set('idleMotion', s.idleMotion); set('twitch', s.twitchChannel);
   set('chatCommands', s.chatCommands); set('mirror', s.mirror);
   const ph = s.phone || {};
   set('phoneApp', ph.app || 'vmc'); set('phoneIp', ph.ip || ''); set('phoneMirror', ph.mirror); set('phoneFlipYaw', ph.flipYaw); set('phoneFlipPitch', ph.flipPitch);
@@ -56,7 +56,9 @@ async function refreshAvatars() {
 }
 bind('cam', 'camera', String, 'change'); bind('zoom', 'cameraOffset.zoom', Number); bind('offY', 'cameraOffset.y', Number); bind('offX', 'cameraOffset.x', Number);
 bind('bg', 'background', String, 'change'); bind('bgColor', 'backgroundColor'); bind('lightColor', 'lightColor'); bind('lightIntensity', 'lightIntensity', Number);
-bind('rimColor', 'rimColor'); bind('rimIntensity', 'rimIntensity', Number); bind('idleMotion', 'idleMotion', Boolean, 'change');
+bind('rimColor', 'rimColor'); bind('rimIntensity', 'rimIntensity', Number); bind('lightingAO', 'lightingAO', Boolean, 'change');
+// choosing a preset also resets the key/rim colours and strengths to that preset's own, so the sliders start from its look
+$('lightingPreset')?.addEventListener('change', async (e) => { const { lightDefaults } = await import('/light-presets.js'); const d = lightDefaults(e.target.value); for (const [k, v] of Object.entries(d)) { const el = $(k); if (el && el !== e.target) el.value = v; } saveSettings(d); }); bind('idleMotion', 'idleMotion', Boolean, 'change');
 bind('chatCommands', 'chatCommands', Boolean, 'change'); bind('mirror', 'mirror', Boolean, 'change');
 $('avatarSel').addEventListener('change', async (e) => {
   if (!e.target.value) return;

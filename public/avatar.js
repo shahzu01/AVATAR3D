@@ -1,6 +1,7 @@
 // Kael Studio avatar renderer (OBS Browser Source / preview).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { StudioLighting } from '/lighting.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
 const params = new URLSearchParams(location.search);
@@ -19,10 +20,8 @@ renderer.setClearColor(0x000000, 0);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(28, innerWidth / innerHeight, 0.05, 50);
-const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(-1.2, 2.2, 2.5); scene.add(key);
-const rim = new THREE.DirectionalLight(0xa35cff, 0.8); rim.position.set(1.5, 1.8, -2.5); scene.add(rim);
-const amb = new THREE.HemisphereLight(0xffffff, 0x444455, 0.9); scene.add(amb);
-addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); frameCamera(); });
+const lighting = new StudioLighting(renderer, scene, camera);      // shared cinematic light rig (public/lighting.js)
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); lighting.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); frameCamera(); });
 
 // ------------------------------------------------------------------ state
 const rig = new THREE.Group(); scene.add(rig);     // per-avatar position / rotation / scale
@@ -84,7 +83,8 @@ async function loadAvatar(url, name = url, kind = 'vrm') {
     if (kind === 'created') {                 // character made in the Kael Studio creator: built from its recipe
       const [recipe, { buildCharacter }] = await Promise.all([fetch(url).then((r) => { if (!r.ok) throw new Error('character file missing'); return r.json(); }), import('/creator/build.js')]);
       if (loadedName !== url) return;
-      v = recipe.kind === 'human' ? await (await import('/human.js')).loadHuman(recipe) : buildCharacter(recipe);
+      v = recipe.kind === 'modular' ? await (await import('/modular.js')).loadModular(recipe)       // Part Mixer character
+        : recipe.kind === 'human' ? await (await import('/human.js')).loadHuman(recipe) : buildCharacter(recipe);
       if (loadedName !== url) return;
       isVRM0 = false;
     } else {
@@ -102,7 +102,7 @@ async function loadAvatar(url, name = url, kind = 'vrm') {
     vrm = v; rig.add(vrm.scene);
     if (vrm.lookAt) vrm.lookAt.autoUpdate = false;
     buildExprMap();
-    measure(); say('');
+    measure(); say(''); lighting.attach(vrm);
     window.__avatarReady = { name, expressions: exprMap.size, perfectSync: hasExpr('eyeBlinkLeft') && hasExpr('jawOpen') };
   } catch (e) { say(`Could not load ${name}: ${e.message}`); console.error(e); loadedName = null; }
 }
@@ -140,9 +140,7 @@ function applySettings(s) {
   settings = s;
   const bg = { transparent: null, green: '#00ff00', blue: '#0000ff', color: s.backgroundColor }[s.background];
   if (bg && !PREVIEW) { renderer.setClearColor(new THREE.Color(bg), 1); } else renderer.setClearColor(0x000000, PREVIEW ? 0 : 0);
-  key.color.set(s.lightColor || '#ffffff'); key.intensity = 1.6 * (s.lightIntensity ?? 1);
-  amb.intensity = 0.9 * (s.lightIntensity ?? 1);
-  rim.color.set(s.rimColor || '#a35cff'); rim.intensity = 1.2 * (s.rimIntensity ?? 0.6);
+  lighting.apply({ ...s, transparent: !(bg && !PREVIEW) });
   tune = { blink: true, gaze: 1, mouth: 1, expressions: 1, ...(s.active?.tracking || {}) };
   applyTransform(s.active?.transform);
   if (s.active) loadAvatar(s.active.url, s.active.name, s.active.kind).then(() => applyTransform(s.active?.transform));
@@ -350,7 +348,7 @@ function loop() {
   update(dt, t);
   updateItems(dt);
   vrm?.update(dt); vrm?.__hairSprings?.(dt); vrm?.__animalSync?.(dt);
-  renderer.render(scene, camera);
+  lighting.render();
   requestAnimationFrame(loop);
 }
 loop();

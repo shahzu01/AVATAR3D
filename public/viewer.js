@@ -4,15 +4,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { floorShadow, placeShadow, polishImported } from '/look.js';
+import { StudioLighting, LIGHT_PRESETS as STUDIO_PRESETS } from '/lighting.js';
 
-const LIGHTS = {
-  studio: { key: ['#ffffff', 1.7], rim: ['#a35cff', 0.9], amb: 0.9 },
-  soft: { key: ['#fff6ec', 1.1], rim: ['#ffffff', 0.4], amb: 1.3 },
-  warm: { key: ['#ffd2a1', 1.6], rim: ['#ff7a45', 0.9], amb: 0.8 },
-  cool: { key: ['#cfe3ff', 1.5], rim: ['#3aa0ff', 1.0], amb: 0.85 },
-  neon: { key: ['#ffffff', 1.1], rim: ['#ff2bd6', 1.6], amb: 0.6 },
-};
-export const LIGHT_PRESETS = Object.keys(LIGHTS);
+export const LIGHT_PRESETS = Object.keys(STUDIO_PRESETS);
 
 export class AvatarViewer {
   constructor(el) {
@@ -25,10 +20,8 @@ export class AvatarViewer {
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.02, 100);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.12; this.controls.minDistance = 0.2; this.controls.maxDistance = 15;
-    this.key = new THREE.DirectionalLight(); this.key.position.set(-1.2, 2.2, 2.5);
-    this.rim = new THREE.DirectionalLight(); this.rim.position.set(1.5, 1.8, -2.5);
-    this.amb = new THREE.HemisphereLight(0xffffff, 0x444455, 1);
-    this.scene.add(this.key, this.rim, this.amb);
+    this.rig = new StudioLighting(this.renderer, this.scene, this.camera);      // shared cinematic light rig (public/lighting.js)
+    this.shadow = floorShadow(); this.shadow.visible = false; this.scene.add(this.shadow);
     this.grid = new THREE.GridHelper(4, 16, 0x555566, 0x2c2e38); this.grid.material.transparent = true; this.grid.material.opacity = 0.5;
     this.scene.add(this.grid);
     this.setLighting('studio'); this.setBackground('dark');
@@ -40,25 +33,33 @@ export class AvatarViewer {
   }
   resize() {
     const w = this.el.clientWidth || 1, h = this.el.clientHeight || 1;
-    this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = '100%'; this.renderer.domElement.style.height = '100%';
+    this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = '100%'; this.renderer.domElement.style.height = '100%'; this.rig?.setSize(w, h);
     this.camera.aspect = w / h;
     if (this.shiftPx) this.camera.setViewOffset(w, h, this.shiftPx, 0, w, h); else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
   }
   /** Shift the picture left (positive px) so the character stays centred in the space not covered by side panels. */
   setShift(px) { this.shiftPx = px || 0; this.resize(); }
-  setLighting(name) {
-    const L = LIGHTS[name] || LIGHTS.studio; this.lighting = name;
-    this.key.color.set(L.key[0]); this.key.intensity = L.key[1];
-    this.rim.color.set(L.rim[0]); this.rim.intensity = L.rim[1]; this.amb.intensity = L.amb;
+  /** name: a preset from lighting.js (cute, gaming, dramatic, showcase, classic). Older names map to the nearest one. */
+  setLighting(name, extra = {}) {
+    const map = { studio: 'cute', soft: 'cute', warm: 'showcase', cool: 'gaming', neon: 'gaming' }; this.lighting = STUDIO_PRESETS[name] ? name : (map[name] || 'cute');
+    this.lightExtra = extra; this.rig.setPreset(this.lighting, { ...extra, transparent: this.background === 'transparent' });
   }
   setBackground(name) {
     this.background = name;
     const c = { dark: '#15161c', light: '#e9e9ef', green: '#00b140', transparent: null }[name];
     this.renderer.setClearColor(c ? new THREE.Color(c) : 0x000000, c ? 1 : 0);
     this.el.classList.toggle('checker', !c);
+    if (this.rig && this.lighting) this.rig.setPreset(this.lighting, { ...(this.lightExtra || {}), transparent: !c });
+    if (this.shadow) this.shadow.visible = !!c && !!this.model && name !== 'green';
   }
   setGrid(on) { this.grid.visible = on; }
+  groundShadow() {
+    if (!this.model) { this.shadow.visible = false; return; }
+    placeShadow(this.shadow, this.box || new THREE.Box3().setFromObject(this.model));
+    this.rig.attach(this.vrm || this.model, this.box);
+    this.shadow.visible = this.background !== 'transparent' && this.background !== 'green';
+  }
 
   unload() {
     if (!this.model) return;
@@ -73,7 +74,7 @@ export class AvatarViewer {
   /** Show a character made in the creator (a recipe object, or a URL to one). */
   async loadCreated(recipeOrUrl, { keepCamera = false } = {}) {
     const recipe = typeof recipeOrUrl === 'string' ? await fetch(recipeOrUrl).then((r) => { if (!r.ok) throw new Error('character file missing'); return r.json(); }) : recipeOrUrl;
-    const v = recipe.kind === 'human' ? await (await import('/human.js')).loadHuman(recipe) : (await import('/creator/build.js')).buildCharacter(recipe);
+    const v = recipe.kind === 'human' ? await (await import('/human.js')).loadHuman(recipe) : recipe.kind === 'modular' ? await (await import('/modular.js')).loadModular(recipe) : (await import('/creator/build.js')).buildCharacter(recipe);
     const cam = keepCamera && this.model ? { p: this.camera.position.clone(), t: this.controls.target.clone() } : null;
     this.unload();
     this.vrm = v; this.gltf = null; this.isVRM0 = false; this.model = v.scene;
@@ -81,6 +82,7 @@ export class AvatarViewer {
     for (const n of Object.keys(v.humanoid.humanBones)) this.rest[n] = v.humanoid.getNormalizedBoneNode(n).quaternion.clone();
     this.scene.add(this.model); this.model.updateMatrixWorld(true);
     const checks = this.inspect([]);
+    this.groundShadow();
     if (cam) { this.camera.position.copy(cam.p); this.controls.target.copy(cam.t); this.controls.update(); } else this.frame('front');
     if (this.expr) this.setExpression(this.expr);
     return checks;
@@ -115,7 +117,9 @@ export class AvatarViewer {
     this.model.traverse((o) => { o.frustumCulled = false; });
     this.scene.add(this.model);
     this.model.updateMatrixWorld(true);
+    polishImported(this.model);
     const checks = this.inspect(failedImages);
+    this.groundShadow();
     this.frame('front');
     return checks;
   }
@@ -217,6 +221,15 @@ export class AvatarViewer {
       o.leftLowerArm = aa('z', -0.12); o.rightLowerArm = aa('z', 0.12);
       o.spine = aa('x', br * 0.012); o.head = aa('y', Math.sin(t * 0.45) * 0.05);
     }
+    if (m !== 'tpose' && vrm.userData?.modular) {   // kit hands rest flat, fingers fanned, thumb below the palm: turn the forearms so thumbs face forward and bring the fingers together
+      const kh = vrm.userData.kitHand || {};
+      if (kh === 'master') {                      // rebuilt hands: thumb already sits on the front edge; just let the fingers relax
+        for (const [s, k] of [['left', -1], ['right', 1]]) for (const [f, c] of [['Index', 0.8], ['Middle', 1], ['Ring', 1.15], ['Little', 1.3]]) { o[s + f + 'Proximal'] = aa('z', k * 0.26 * c); o[s + f + 'Intermediate'] = aa('z', k * 0.36 * c); o[s + f + 'Distal'] = aa('z', k * 0.22 * c); }
+      } else {
+        o.leftLowerArm = aa('z', -0.12).multiply(aa('x', -0.5)); o.rightLowerArm = aa('z', 0.12).multiply(aa('x', -0.5));
+        for (const [n, a] of Object.entries(kh)) o[n] = aa('y', a);
+      }
+    }
     if (m === 'wave') {
       o.rightUpperArm = aa('y', 0.35).multiply(aa('z', -0.5)); o.rightLowerArm = aa('z', -1.3 + Math.sin(t * 9) * 0.32); o.rightHand = aa('z', Math.sin(t * 9 + 0.6) * 0.25);
     } else if (m === 'nod') {
@@ -249,7 +262,7 @@ export class AvatarViewer {
     }
     this.mixer?.update(dt);
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.rig.render();
   }
 
   /** Square PNG thumbnail (data URL), bust shot from the front-three-quarter. */
@@ -264,7 +277,7 @@ export class AvatarViewer {
     this.frame('threequarter');
     if (this.vrm) { const off = this.camera.position.clone().sub(this.controls.target).multiplyScalar(0.8); this.camera.position.copy(this.controls.target).add(off); }
     this.camera.lookAt(this.controls.target);
-    this.renderer.render(this.scene, this.camera);
+    this.rig.render();
     const url = this.renderer.domElement.toDataURL('image/png');
     this.renderer.setSize(w, h, false); this.camera.aspect = prev.aspect; this.resize();
     this.camera.position.copy(prev.pos); this.controls.target.copy(prev.target); this.grid.visible = prev.grid; this.setBackground(prev.bg);

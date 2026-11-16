@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   camera: 'bust',                     // head | bust | half | full
   cameraOffset: { x: 0, y: 0, zoom: 1 },
   lightColor: '#ffffff', lightIntensity: 1.0, rimColor: '#a35cff', rimIntensity: 0.6,
+  lightingPreset: 'cute', lightingAO: true,      // cute | gaming | dramatic | showcase | classic (public/lighting.js)
   mirror: false,                      // false = puppet (your left = avatar's left); true = mirror
   idleMotion: true,
   twitchChannel: '',
