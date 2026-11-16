@@ -12,8 +12,9 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Library, UserError, pickLook, LOOK_KEYS } from './lib/library.js';
 import { PhoneFace } from './lib/phone.js';
-import { TriggerEngine, sanitizeRules, DEFAULT_RULES, WHEN, ITEMS, EXPRESSIONS, GESTURES, PRESETS, ACTS } from './lib/triggers.js';
+import { TriggerEngine, sanitizeRules, DEFAULT_RULES, WHEN, ITEMS, EXPRESSIONS, GESTURES, PRESETS, ACTS, POSE_NAMES } from './lib/triggers.js';
 import { TwitchEvents } from './lib/twitch-events.js';
+import { PropStore, sanitizeProps, sanitizeScene, FILE_RE as PROP_FILE_RE, MAX_PROP_MB } from './lib/props-store.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3939);
@@ -34,6 +35,8 @@ const DEFAULT_SETTINGS = {
   lightingPreset: 'cute', lightingAO: true,      // cute | gaming | dramatic | showcase | classic (public/lighting.js)
   mirror: false,                      // false = puppet (your left = avatar's left); true = mirror
   idleMotion: true,
+  idlePose: 'relaxed', poseLock: false, cameraMotion: 'still',      // still | drift | orbit
+       // pose library (public/avatar.js POSES)
   twitchChannel: '',
   chatCommands: true,
   commandCooldownMs: 1500,
@@ -44,6 +47,8 @@ try { settings = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(SETTINGS_F
 function saveSettings() { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); }
 
 // ------------------------------------------------------------------ avatar library
+const propStore = new PropStore(DATA);
+settings.props = sanitizeProps(settings.props, propStore); settings.scene = sanitizeScene(settings.scene, propStore);
 const library = new Library(DATA, { legacyDir: AVATAR_DIR, limits: settings.importLimits });
 const canGoLive = (r) => r && (r.sourceType === 'created' || (r.format.type === 'VRM' && r.suitability?.tracking));
 function ensureActive() {
@@ -175,6 +180,20 @@ async function libraryApi(req, res, url) {
   }
 }
 
+async function propsApi(req, res, url) {
+  const p = url.pathname, M = req.method, json = (o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+  try {
+    if (p === '/api/props' && M === 'GET') return json({ files: propStore.list, maxMB: MAX_PROP_MB });
+    if (p === '/api/props/upload' && M === 'POST') { const buf = await readBinary(req, MAX_PROP_MB * 1e6 + 1); try { return json({ file: propStore.add(buf, url.searchParams.get('name')) }); } catch (e) { return json({ error: e.message }, 422); } }
+    const m = p.match(/^\/api\/props\/([a-f0-9]{16})$/);
+    if (m && M === 'DELETE') {
+      const e = propStore.remove(m[1]); if (!e) return json({ error: 'Not found.' }, 404);
+      settings.props = settings.props.filter((q) => q.src !== `file:${e.file}`); if (settings.scene.file === e.file) settings.scene = sanitizeScene({ kind: 'none' }, propStore);
+      saveSettings(); broadcast({ type: 'settings', settings: publicSettings() }); return json({ removed: e.id });
+    }
+    return json({ error: 'Not found.' }, 404);
+  } catch (e) { return json({ error: e instanceof UserError ? e.message : 'Invalid request.' }, e.code || 400); }
+}
 async function eventsApi(req, res, p) {
   const M = req.method, json = (o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
   try {
@@ -279,6 +298,12 @@ const server = http.createServer((req, res) => {
   if ((m = p.match(/^\/api\/throw\/([\w-]+)$/))) { const msg = { type: 'throw', item: m[1], count: Number(url.searchParams.get('n') || 1), source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
   if ((m = p.match(/^\/api\/gesture\/([\w-]+)$/))) { const msg = { type: 'gesture', name: m[1], source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
   if (p.startsWith('/api/triggers') || p.startsWith('/api/twitch/')) { eventsApi(req, res, p); return; }
+  if (p.startsWith('/api/props')) { propsApi(req, res, url); return; }
+  if (p.startsWith('/userprops/')) {          // your uploaded props and scenes
+    const f = p.slice(11), fp = PROP_FILE_RE.test(f) && propStore.has(f) ? propStore.filePath(f) : null;
+    if (!fp) { res.writeHead(404); res.end(); return; }
+    return sendFile(res, fp, { glb: 'model/gltf-binary', png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[f.split('.').pop()]);
+  }
   if (p === '/api/status') return ok(status());
   if (p === '/api/phone') return ok(phone.status());
   if (p === '/api/phone/calibrate' && req.method === 'POST') return ok({ calibrated: phone.calibrate(), status: phone.status() });
@@ -291,6 +316,11 @@ const server = http.createServer((req, res) => {
       try {
         const patch = JSON.parse(body);
         delete patch.active; delete patch.triggers;      // rules go through /api/triggers, which checks them
+        if ('props' in patch) patch.props = sanitizeProps(patch.props, propStore);
+        if ('scene' in patch) patch.scene = sanitizeScene(patch.scene, propStore);
+        if ('idlePose' in patch) patch.idlePose = POSE_NAMES.includes(patch.idlePose) ? patch.idlePose : 'relaxed';
+        if ('poseLock' in patch) patch.poseLock = !!patch.poseLock;
+        if ('cameraMotion' in patch) patch.cameraMotion = ['still', 'drift', 'orbit'].includes(patch.cameraMotion) ? patch.cameraMotion : 'still';
         const nextActive = patch.activeAvatarId; delete patch.activeAvatarId;
         if (patch.phone) patch.phone = { ...DEFAULT_SETTINGS.phone, ...settings.phone, ...patch.phone };
         settings = { ...settings, ...patch }; saveSettings();

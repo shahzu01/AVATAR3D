@@ -58,7 +58,7 @@ In the Studio's **Interact** panel, **Twitch events** connects your channel's ch
 
 No password or secret is ever typed into Kael Studio. The sign-in is kept in `twitch-auth.json` in the KaelStudio folder (never on GitHub) and renews itself; **Sign out** removes it. Bits and subs only work for Affiliate and Partner channels: the panel shows which events Twitch allowed.
 
-**Rules** say what happens: *when* a redeem (by name), bits (at least N), a sub, resub, gifted subs, a follow, a raid or a chat command happens, *do* any mix of thrown items (optionally one per N bits, gifts or raiders), an expression, a gesture or a lighting preset, with an optional wait before the rule can fire again. Starter rules are included (follow, bits, sub, gift subs, raid, a "Bonk" redeem). **▶ Test** on any rule pretends it just happened, so you can try it without going live; the Activity log shows every event and what it did. Chat commands you add as rules work with the read-only chat connection too.
+**Rules** say what happens: *when* a redeem (by name), bits (at least N), a sub, resub, gifted subs, a follow, a raid or a chat command happens, *do* any mix of thrown items (optionally one per N bits, gifts or raiders), an expression, a gesture, a lighting preset, a prop shown for a few seconds, a pose (for example sit down for 10 seconds) or a camera shot (a close-up that glides in and back out), with an optional wait before the rule can fire again. Starter rules are included (follow, bits, sub, gift subs, raid, a "Bonk" redeem). **▶ Test** on any rule pretends it just happened, so you can try it without going live; the Activity log shows every event and what it did. Chat commands you add as rules work with the read-only chat connection too.
 
 ### Stream Deck
 
@@ -79,6 +79,17 @@ An iPhone with Face ID tracks your face much better than a webcam. Use the **iPh
 | **VTube Studio** (iPhone app) | Turn on the setting that lets PC apps receive tracking, then type the phone's IP address into the panel. |
 
 Phone and Mac must be on the same Wi-Fi. If macOS asks about incoming connections for **node**, click **Allow**. Look straight ahead and press **Calibrate iPhone**. If turning or nodding goes the wrong way, use **Mirror**, **Flip left/right** or **Flip up/down**. While the iPhone is connected, the webcam skips the face to save power (you can turn that off).
+
+## Look: scene, props, pose and camera
+
+The Studio's **Look** panel dresses the stream:
+
+- **Scene behind you:** a built-in stage, cosy room or night sky, or your own `.glb` room or a picture, instead of a flat colour. Sliders move, scale and turn it.
+- **Props:** a microphone, mug, lightstick, plushie, "Thank you!" sign or crown, or your own `.glb` models and pictures. Each one attaches to the right or left hand, the head, chest, hips or the floor, and follows it; sliders fine-tune where it sits. Rules can show a prop for a few seconds (for example a sign on a follow). Uploads are checked: only single-file `.glb` models (textures inside the file) and PNG, JPEG or WebP pictures, up to 60 MB, and they stay in the `props` folder on your Mac.
+- **Pose:** Relaxed, Hands on hips, Arms crossed, Thinking, Shy, Leaning, or Sitting (a stool appears under the character). When the camera sees your arms, they follow you as usual; tick **Keep the pose** to hold it anyway.
+- **Camera:** framing changes glide instead of cutting. **Camera motion** adds a gentle drift or a slow sway around the character to keep the shot alive.
+
+**Voice lip sync** (Track panel) moves the mouth from your microphone whenever your face is not visible, including with the camera switched off. It shapes the mouth for "a", "i", "o" and similar sounds, and ignores steady background noise like a fan.
 
 ## Tracking tips and options
 

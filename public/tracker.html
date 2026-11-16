@@ -70,7 +70,7 @@
   @media (max-width: 1050px) { .work { --panelW: 320px; } .obsbar { display: none; } }
 </style>
 <script type="importmap">
-{ "imports": { "three": "/vendor/three/build/three.module.js" } }
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
 </script>
 </head>
 <body>
@@ -164,6 +164,7 @@
         <div class="section-t">Camera<span class="line"></span></div>
         <div class="fields">
           <div class="field"><span>Framing</span><select id="cam"><option value="head">Head</option><option value="bust">Bust</option><option value="half">Half body</option><option value="full">Full body</option></select></div>
+          <div class="field"><span>Camera motion</span><select id="camMotion"><option value="still">Still</option><option value="drift">Gentle drift</option><option value="orbit">Slow sway around</option></select></div>
           <div class="field"><span>Zoom</span><input type="range" id="zoom" min="0.6" max="1.8" step="0.02"></div>
           <div class="field"><span>Up / down</span><input type="range" id="offY" min="-0.4" max="0.4" step="0.01"></div>
           <div class="field"><span>Left / right</span><input type="range" id="offX" min="-0.6" max="0.6" step="0.01"></div>
@@ -180,6 +181,16 @@
           <div class="field"><span>Rim light</span><div class="colors"><input type="color" id="rimColor"><input type="range" id="rimIntensity" min="0" max="2" step="0.05" title="Rim strength"></div></div>
         </div>
         <div class="checks one" style="margin-top:10px"><label><input type="checkbox" id="idleMotion"> Idle breathing</label></div>
+        <div class="section-t">Pose<span class="line"></span></div>
+        <div class="fields"><div class="field"><span>Idle pose</span><select id="idlePose"></select></div></div>
+        <div class="checks one" style="margin-top:6px"><label><input type="checkbox" id="poseLock"> Keep the pose even when the camera sees my arms</label></div>
+        <div class="section-t">Scene behind you<span class="line"></span></div>
+        <div id="sceneBox"></div>
+        <div class="section-t">Props<span class="line"></span></div>
+        <div id="propsBox"></div>
+        <div class="btns" style="margin-top:8px"><select id="propPick" style="flex:1"></select><button id="propAdd">＋ Add</button></div>
+        <div class="btns" style="margin-top:6px"><button class="ghost" id="propUploadBtn">Upload a .glb model or picture…</button><input type="file" id="propFile" accept=".glb,.png,.jpg,.jpeg,.webp" hidden></div>
+        <p class="tip" id="propTip">Props follow the hand, head or body they are attached to. Your own .glb models and pictures can be used as props or as the scene.</p>
       </section>
 
       <!-- ======================= interactions ======================= -->
@@ -256,5 +267,6 @@
 </script>
 <script type="module" src="/tracker.js"></script>
 <script type="module" src="/rules.js"></script>
+<script type="module" src="/props-ui.js"></script>
 </body>
 </html>

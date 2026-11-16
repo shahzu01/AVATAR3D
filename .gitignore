@@ -5,3 +5,4 @@ library/
 settings.json
 .DS_Store
 twitch-auth.json
+/props/

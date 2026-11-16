@@ -63,6 +63,10 @@ test('rules: matching, bits scaling, cooldowns, sanitizing', () => {
   assert.equal(eng.handle({ when: 'follow' }).length, 1); assert.equal(eng.handle({ when: 'follow' }).length, 0, 'cooling down'); t += 3100; assert.equal(eng.handle({ when: 'follow' }).length, 1, 'cooldown over');
   const clean = sanitizeRules([{ when: 'nope', match: '!Hug<script>', min: -5, cooldown: 1e9, do: [{ act: 'throw', item: 'anvil', count: 999 }, { act: 'hack' }] }]);
   assert.deepEqual(clean[0], { id: clean[0].id, on: true, when: 'redeem', match: 'Hugscript', min: 0, cooldown: 3600, do: [{ act: 'throw', item: 'heart', count: 30 }] });
+  const acts = sanitizeRules([{ when: 'follow', do: [{ act: 'pose', name: 'sit', seconds: 9999 }, { act: 'pose', name: 'moonwalk' }, { act: 'camera', framing: 'head', seconds: 4 }, { act: 'camera', framing: 'drone' }, { act: 'prop', id: 'mic', seconds: 3 }, { act: 'prop', id: '../x' }] }])[0].do;
+  assert.deepEqual(acts, [{ act: 'pose', name: 'sit', seconds: 600 }, { act: 'pose', name: 'hips', seconds: 8 }, { act: 'camera', framing: 'head', seconds: 4 }, { act: 'camera', framing: 'head', seconds: 5 }, { act: 'prop', id: 'mic', seconds: 3 }, { act: 'prop', id: '', seconds: 8 }]);
+  sent.length = 0; new TriggerEngine({ getRules: () => [{ id: 'r', on: true, when: 'follow', match: '', min: 0, cooldown: 0, do: acts.slice(0, 5) }], send: (m) => sent.push(m), now: () => 0 }).handle({ when: 'follow' });
+  assert.deepEqual(sent.map((m) => m.type), ['pose', 'pose', 'camera', 'camera', 'prop'], 'pose, camera and prop actions reach the stream page');
 });
 
 test('rules API: save, test, reset; settings cannot smuggle rules in', async () => {

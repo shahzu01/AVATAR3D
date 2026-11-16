@@ -1,10 +1,13 @@
 // Studio · Interact: Twitch sign-in for channel events, and the rule editor ("when this happens, do that").
+import { POSE_LIST } from '/props.js';
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const log = (t) => { const el = $('log'); if (!el) return; el.innerHTML = `${new Date().toLocaleTimeString()}  ${esc(t)}<br>` + el.innerHTML.slice(0, 6000); };
 const api = async (url, opts = {}) => { const r = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j; };
 
-let meta = null, rules = [], tv = null;
+let meta = null, rules = [], tv = null, propList = [];
+const PROP_NAMES = { 'builtin:mic': 'Microphone', 'builtin:mug': 'Coffee mug', 'builtin:lightstick': 'Lightstick', 'builtin:plush': 'Plushie', 'builtin:sign': '"Thank you!" sign', 'builtin:crown': 'Crown' };
+const propLabel = (p) => p.name || PROP_NAMES[p.src] || p.id;
 const WHEN_ICON = { redeem: '🎁', bits: '💎', sub: '⭐', resub: '🔁', gift: '🎉', follow: '💜', raid: '🚀', command: '💬' };
 const TOPIC_NAME = { 'channel.channel_points_custom_reward_redemption.add': 'Redeems', 'channel.cheer': 'Bits', 'channel.subscribe': 'Subs', 'channel.subscription.gift': 'Gift subs', 'channel.subscription.message': 'Resubs', 'channel.follow': 'Follows', 'channel.raid': 'Raids' };
 
@@ -40,6 +43,9 @@ function actionRow(a, ri, ai) {
   if (a.act === 'throw') rest = `<select data-a="item" data-r="${ri}" data-i="${ai}">${opts(meta.items, a.item)}</select> ×<input type="number" min="1" max="30" value="${a.count}" data-a="count" data-r="${ri}" data-i="${ai}">`
     + (['bits', 'gift', 'raid'].includes(rules[ri].when) ? ` <label class="muted" style="font-size:11.5px"><input type="checkbox" data-a="perOn" data-r="${ri}" data-i="${ai}" ${a.per ? 'checked' : ''}> per</label>${a.per ? `<input type="number" min="1" value="${a.per}" data-a="per" data-r="${ri}" data-i="${ai}"><span class="muted" style="font-size:11.5px">${rules[ri].when === 'bits' ? 'bits' : rules[ri].when === 'gift' ? 'gifts' : 'raiders'}</span>` : ''}` : '');
   else if (a.act === 'expression') rest = `<select data-a="name" data-r="${ri}" data-i="${ai}">${opts(meta.expressions, a.name)}</select> for <input type="number" min="0.5" max="20" step="0.5" value="${a.seconds}" data-a="seconds" data-r="${ri}" data-i="${ai}"> s`;
+  else if (a.act === 'camera') rest = `<select data-a="framing" data-r="${ri}" data-i="${ai}">${Object.entries({ head: 'Close-up (head)', bust: 'Bust', half: 'Half body', full: 'Full body' }).map(([k, l]) => `<option value="${k}" ${k === a.framing ? 'selected' : ''}>${l}</option>`).join('')}</select> for <input type="number" min="1" max="120" value="${a.seconds}" data-a="seconds" data-r="${ri}" data-i="${ai}"> s`;
+  else if (a.act === 'pose') rest = `<select data-a="name" data-r="${ri}" data-i="${ai}">${POSE_LIST.map(([k, l]) => `<option value="${k}" ${k === a.name ? 'selected' : ''}>${l}</option>`).join('')}</select> for <input type="number" min="1" max="600" value="${a.seconds}" data-a="seconds" data-r="${ri}" data-i="${ai}"> s`;
+  else if (a.act === 'prop') rest = propList.length ? `<select data-a="id" data-r="${ri}" data-i="${ai}">${propList.map((p) => `<option value="${esc(p.id)}" ${p.id === a.id ? 'selected' : ''}>${esc(propLabel(p))}</option>`).join('')}</select> for <input type="number" min="1" max="600" value="${a.seconds}" data-a="seconds" data-r="${ri}" data-i="${ai}"> s` : '<span class="muted" style="font-size:12px">Add a prop in Look first</span>';
   else if (a.act === 'gesture') rest = `<select data-a="name" data-r="${ri}" data-i="${ai}">${opts(meta.gestures, a.name)}</select>`;
   else rest = `<select data-a="preset" data-r="${ri}" data-i="${ai}">${opts(meta.presets, a.preset)}</select>`;
   return `<div class="act">${kind}${rest}<span style="flex:1"></span><button class="ghost x" data-del-act="${ai}" data-r="${ri}" title="Remove this action">✕</button></div>`;
@@ -59,7 +65,7 @@ function renderRules() {
 let saveT = null;
 // saves quietly in the background; the reply is not copied back, so an edit made while a save is on its way is never lost
 function save() { clearTimeout(saveT); saveT = setTimeout(async () => { try { await api('/api/triggers', { method: 'PUT', body: JSON.stringify({ rules }) }); } catch (e) { log(`rules not saved: ${e.message}`); } }, 350); }
-const DEF_ACT = { throw: { act: 'throw', item: 'heart', count: 3 }, expression: { act: 'expression', name: 'Joy', seconds: 2.5 }, gesture: { act: 'gesture', name: 'wave' }, light: { act: 'light', preset: 'cute' } };
+const DEF_ACT = { throw: { act: 'throw', item: 'heart', count: 3 }, expression: { act: 'expression', name: 'Joy', seconds: 2.5 }, gesture: { act: 'gesture', name: 'wave' }, light: { act: 'light', preset: 'cute' }, pose: { act: 'pose', name: 'hips', seconds: 8 }, camera: { act: 'camera', framing: 'head', seconds: 5 }, get prop() { return { act: 'prop', id: propList[0]?.id || '', seconds: 8 }; } };
 document.addEventListener('change', (e) => {
   const t = e.target, ri = +t.dataset.r; if (Number.isNaN(ri) || !rules[ri]) return;
   const r = rules[ri];
@@ -92,7 +98,9 @@ function confirmReset() { const now = Date.now(); if (now - resetArmed < 3000) r
 const ws = new WebSocket(`ws://${location.host}/ws?role=control`);
 ws.onmessage = (e) => { const m = JSON.parse(e.data);
   if (m.type === 'twitchEvents') setTv(m.status);
+  else if (m.type === 'settings') { const had = JSON.stringify(propList.map((p) => [p.id, p.name, p.src])); propList = m.settings.props || []; if (had !== JSON.stringify(propList.map((p) => [p.id, p.name, p.src])) && rules.some((r) => r.do.some((a) => a.act === 'prop'))) renderRules(); }
   else if (m.type === 'streamEvent') { const ev = m.event; log(`${WHEN_ICON[ev.when] || ''} ${ev.source === 'test' ? 'test ' : ''}${ev.when}${ev.name ? ` "${ev.name}"` : ''}${ev.amount ? ` ×${ev.amount}` : ''} from ${ev.user || 'someone'} → ${m.fired.length ? m.fired.map((f) => f.did.join(', ')).join(' | ') : 'no rule matched'}`); }
 };
+propList = (await api('/api/settings')).props || [];
 meta = await api('/api/triggers'); rules = meta.rules; renderRules();
 setTv(await api('/api/twitch/status'));

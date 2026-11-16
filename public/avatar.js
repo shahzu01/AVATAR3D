@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { StudioLighting } from '/lighting.js';
+import { PropStage } from '/props.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
 const params = new URLSearchParams(location.search);
@@ -21,10 +22,14 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(28, innerWidth / innerHeight, 0.05, 50);
 const lighting = new StudioLighting(renderer, scene, camera);      // shared cinematic light rig (public/lighting.js)
-addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); lighting.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); frameCamera(); });
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); lighting.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); frameCamera(true); });
 
 // ------------------------------------------------------------------ state
 const rig = new THREE.Group(); scene.add(rig);     // per-avatar position / rotation / scale
+const stage = new PropStage(scene, rig);            // props the character holds or wears, and the scene behind it (public/props.js)
+const seat = { k: 0, rest: null, thigh: 0.42, obj: (() => { const g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: '#8a5a3a', roughness: 0.6 }), top = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 32), new THREE.MeshStandardMaterial({ color: '#d9b26a', roughness: 0.5 }));
+  g.add(top); for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.78, leg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 1, 10), wood); leg.position.set(Math.sin(a) * 0.14, -0.5, Math.cos(a) * 0.14); g.add(leg); }
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); g.visible = false; rig.add(g); return g; })() };      // the stool for the Sitting pose
 let tune = { blink: true, gaze: 1, mouth: 1, expressions: 1 };
 let headTop = 1.75;
 let vrm = null, settings = {}, exprMap = new Map(), headRest = new THREE.Vector3(0, 1.45, 0), modelHeight = 1.7, loadedName = null;
@@ -98,12 +103,14 @@ async function loadAvatar(url, name = url, kind = 'vrm') {
       VRMUtils.rotateVRM0(v);
     }
     v.scene.traverse((o) => { o.frustumCulled = false; });
-    if (vrm) { rig.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
+    if (vrm) { stage.detachAll(); rig.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
     vrm = v; rig.add(vrm.scene);
     if (vrm.lookAt) vrm.lookAt.autoUpdate = false;
-    buildExprMap();
+    buildExprMap(); stage.apply(settings, vrm);      // props move onto the new character
     measure(); say(''); lighting.attach(vrm);
-    window.__avatarReady = { name, expressions: exprMap.size, perfectSync: hasExpr('eyeBlinkLeft') && hasExpr('jawOpen') };
+    { const h = B('hips'), ul = B('leftUpperLeg'), ll = B('leftLowerLeg'); if (h && ul && ll) { vrm.scene.updateMatrixWorld(true); seat.rest = h.position.clone(); seat.thigh = ul.getWorldPosition(new THREE.Vector3()).distanceTo(ll.getWorldPosition(new THREE.Vector3())) / Math.max(0.01, rig.scale.x);
+      const hw = h.getWorldPosition(new THREE.Vector3()); rig.worldToLocal(hw); const top = hw.y - seat.thigh * 0.94 - 0.07; seat.obj.position.set(0, top - 0.025, hw.z - 0.06); seat.obj.children.slice(1).forEach((l) => { l.scale.y = top; l.position.y = -top / 2; }); } }
+    window.__vrm = vrm; window.__camera = camera; window.__avatarReady = { name, expressions: exprMap.size, perfectSync: hasExpr('eyeBlinkLeft') && hasExpr('jawOpen') };
   } catch (e) { say(`Could not load ${name}: ${e.message}`); console.error(e); loadedName = null; }
 }
 function measure() {                 // camera framing is based on the avatar at its natural size and position
@@ -115,7 +122,7 @@ function measure() {                 // camera framing is based on the avatar at
   const box = new THREE.Box3().setFromObject(vrm.scene); modelHeight = box.max.y - Math.min(0, box.min.y);
   headTop = Math.min(box.max.y, headRest.y + 0.9);
   rig.position.copy(keep[0]); rig.rotation.copy(keep[1]); rig.scale.copy(keep[2]); rig.updateMatrixWorld(true);
-  frameCamera();
+  frameCamera(true);
 }
 function applyTransform(tr = {}) {
   const sc = tr.scale || 1;              // scale around the head so the face stays in the chosen framing
@@ -126,21 +133,42 @@ function applyTransform(tr = {}) {
 }
 
 // ------------------------------------------------------------------ camera / look
-function frameCamera() {
+function frameCamera(snap = false) {
   const o = settings.cameraOffset || { x: 0, y: 0, zoom: 1 };
   const hs = Math.max(0.2, headTop - headRest.y);          // head size above the head bone (big for chibi / mascot heads)
   const presets = { head: [(headTop + headRest.y) / 2 - 0.02, Math.max(0.85, (hs + 0.12) * 2.3)], bust: [(headTop + headRest.y - 0.36) / 2, Math.max(1.55, (hs + 0.38) * 2.55)],
     half: [(headTop + headRest.y - 0.85) / 2, Math.max(2.5, (hs + 0.9) * 2.4)], full: [modelHeight * 0.52, Math.max(4.6, modelHeight * 2.9)] };
-  const [ty, dist] = presets[settings.camera] || presets.bust;
-  const d = dist / (o.zoom || 1);
-  camera.position.set(o.x || 0, ty + (o.y || 0), d);
-  camera.lookAt(o.x || 0, ty + (o.y || 0), 0);
+  const [ty, dist] = presets[shotFraming()] || presets.bust;
+  cam.goal = { x: o.x || 0, y: ty + (o.y || 0), d: dist / (o.zoom || 1) };
+  if (snap || !cam.cur) { cam.cur = { ...cam.goal }; placeCamera(clock.elapsedTime); }
+}
+// Cinematic camera: framing changes glide instead of cutting, an optional slow drift or sway keeps the shot alive,
+// and rules can cut to a close-up for a few seconds.
+const cam = { goal: null, cur: null, shot: null };
+function shotFraming() { if (cam.shot && clock.elapsedTime < cam.shot.until) return cam.shot.framing; return settings.camera; }
+function placeCamera(t) {
+  const c = cam.cur, mode = settings.cameraMotion || 'still';
+  let a = 0, dx = 0, dy = 0;
+  if (mode === 'drift') { a = Math.sin(t * 0.09) * 0.07; dx = Math.sin(t * 0.13) * 0.025 * c.d; dy = Math.sin(t * 0.17 + 1) * 0.012 * c.d; }
+  else if (mode === 'orbit') { a = Math.sin(t * 0.11) * 0.38; dy = Math.sin(t * 0.07) * 0.02 * c.d; }
+  camera.position.set(c.x + dx + Math.sin(a) * c.d, c.y + dy, Math.cos(a) * c.d);
+  camera.lookAt(c.x + dx * 0.5, c.y + dy * 0.5, 0);
+  stage.frame(camera);
+}
+function updateCamera(dt, t) {
+  if (!cam.cur) return;
+  if (cam.shot && t >= cam.shot.until) { cam.shot = null; frameCamera(); }      // the close-up is over: glide back
+  const k = 1 - Math.exp(-dt * 2.6);
+  for (const key of ['x', 'y', 'd']) cam.cur[key] += (cam.goal[key] - cam.cur[key]) * k;
+  placeCamera(t);
 }
 function applySettings(s) {
   settings = s;
   const bg = { transparent: null, green: '#00ff00', blue: '#0000ff', color: s.backgroundColor }[s.background];
   if (bg && !PREVIEW) { renderer.setClearColor(new THREE.Color(bg), 1); } else renderer.setClearColor(0x000000, PREVIEW ? 0 : 0);
   lighting.apply({ ...s, transparent: !(bg && !PREVIEW) });
+  if (vrm) frameCamera();      // framing and zoom changes show at once, not only after the next avatar load
+  stage.apply(s, vrm).then(() => stage.frame(camera));
   tune = { blink: true, gaze: 1, mouth: 1, expressions: 1, ...(s.active?.tracking || {}) };
   applyTransform(s.active?.transform);
   if (s.active) loadAvatar(s.active.url, s.active.name, s.active.kind).then(() => applyTransform(s.active?.transform));
@@ -215,6 +243,31 @@ function fingerBoneName(side, finger, j) {
   }
   return `${s}${finger}${SEG_V0.other[j]}`;
 }
+// ------------------------------------------------------------------ pose library
+// A pose says which way each arm and leg segment points in the character's own frame (x = its left, y = up, z = front);
+// it is turned into bone rotations here, so it fits any humanoid. Tracking still drives the arms where the camera sees
+// them, unless the pose is locked (Studio > Look) or a rule asked for it.
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z).normalize();
+const fromDir = (rest, d) => new THREE.Quaternion().setFromUnitVectors(rest, d);
+function limb(side, upper, lower, restY = false, twist = 0) {        // world directions -> local rotations for one arm or leg
+  const m = side === 'right' && !restY ? -1 : 1, rest = restY ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(m, 0, 0);
+  const mir = (v) => (side === 'right' ? new THREE.Vector3(-v.x, v.y, v.z) : v.clone());
+  const qU = fromDir(rest, mir(upper)), qLw = fromDir(rest, mir(lower));
+  return [qU, qU.clone().invert().multiply(qLw), aa('x', twist * m)];
+}
+const arms = (o, side, upper, lower, twist = 0) => { const [u, l, h] = limb(side, upper, lower, false, twist); o[`${side}UpperArm`] = u; o[`${side}LowerArm`] = l; o[`${side}Hand`] = h; };
+const legs = (o, side, upper, lower) => { const [u, l] = limb(side, upper, lower, true); o[`${side}UpperLeg`] = u; o[`${side}LowerLeg`] = l; };
+export const POSES = {
+  relaxed: { label: 'Relaxed (standing)', make: () => ({}) },
+  hips: { label: 'Hands on hips', make: (o) => { for (const s of ['left', 'right']) arms(o, s, V3(0.7, -0.62, -0.3), V3(-0.6, -0.78, 0.12), 0.6); } },
+  crossed: { label: 'Arms crossed', make: (o) => { arms(o, 'left', V3(0.3, -0.88, 0.36), V3(-0.93, 0.12, 0.36)); arms(o, 'right', V3(0.28, -0.9, 0.33), V3(-0.95, 0.18, 0.26)); } },
+  thinking: { label: 'Thinking (hand on chin)', make: (o) => { arms(o, 'right', V3(0.18, -0.86, 0.47), V3(-0.3, 0.86, 0.4), -0.4); arms(o, 'left', V3(0.16, -0.95, 0.27), V3(-0.9, 0.05, 0.42)); o.head = eul(0.06, 0, 0.08); } },
+  shy: { label: 'Shy (hands together)', make: (o) => { for (const s of ['left', 'right']) arms(o, s, V3(0.14, -0.96, 0.24), V3(-0.5, -0.72, 0.48), 0.5); o.head = eul(0.12, 0, -0.07); } },
+  lean: { label: 'Leaning on one leg', make: (o) => { arms(o, 'left', V3(0.7, -0.62, -0.3), V3(-0.6, -0.78, 0.12), 0.6); o.hipsTilt = 0.07; legs(o, 'right', V3(-0.05, -0.97, 0.22), V3(0.03, -0.95, -0.3)); legs(o, 'left', V3(0.06, -1, 0), V3(0.06, -1, 0)); } },
+  sit: { label: 'Sitting', make: (o) => { for (const s of ['left', 'right']) { legs(o, s, V3(0.12, -0.08, 1), V3(0.05, -1, 0.06)); arms(o, s, V3(0.2, -0.9, 0.38), V3(0.02, -0.42, 0.91), 0.3); } o.sit = 1; } },
+};
+let poseOverride = null;        // { name, until } from a rule
+
 // idle pose: arms relaxed down, small breathing
 function idleTargets(t) {
   const breathe = settings.idleMotion !== false ? Math.sin(t * 1.6) * 0.012 : 0;
@@ -229,6 +282,16 @@ function idleTargets(t) {
     leftHand: qI.clone(), rightHand: qI.clone(),
     head: eul(Math.sin(t * 0.7) * 0.015, Math.sin(t * 0.33) * 0.03, 0), neck: qI.clone(),
   };
+}
+function currentPose() { if (poseOverride && clock.elapsedTime < poseOverride.until) return poseOverride.name; poseOverride = null; return settings.idlePose || 'relaxed'; }
+function poseTargets(t) {
+  const o = idleTargets(t), name = currentPose(), p = {}; (POSES[name] || POSES.relaxed).make(p);
+  const head = p.head; delete p.head; Object.assign(o, p);
+  if (head) o.head = head.multiply(o.head);
+  if (p.hipsTilt) o.hips = eul(0, 0, p.hipsTilt).multiply(o.hips);
+  if (p.sit) o.hips = qI.clone().slerp(o.hips, 0.3);      // seated: the hips barely sway
+  o.armsLocked = !!(poseOverride || settings.poseLock) && name !== 'relaxed';
+  return o;
 }
 // gestures (procedural, override arms/head while active)
 function gestureTargets(g, t) {
@@ -258,7 +321,7 @@ function update(dt, t) {
   // tracking weights fade out smoothly when tracking is lost (0.4 s grace, 0.6 s fade)
   const fw = (c) => (c ? Math.max(0, Math.min(1, 1 - (age - 0.4) / 0.6)) : 0);
   const faceW = vmcFresh ? 1 : fw(f?.face);
-  const idle = idleTargets(t);
+  const idle = poseTargets(t);
   const face = vmcFresh ? track.vmc : f?.face;
   // --- head / neck / spine
   const headQ = face?.head ? Q(face.head) : qI;
@@ -271,9 +334,13 @@ function update(dt, t) {
   smoothB('spine', spineT, 10, dt);
   smoothB('chest', idle.chest, 10, dt);
   smoothB('hips', idle.hips, 6, dt);
+  for (const s of ['left', 'right']) for (const seg of ['UpperLeg', 'LowerLeg']) smoothB(`${s}${seg}`, idle[`${s}${seg}`] || qI, 6, dt);
+  { const h = B('hips'), sit = idle.sit ? 1 : 0; seat.k += (sit - seat.k) * Math.min(1, dt * 4);      // sitting: the body comes down by a thigh's length onto a stool
+    if (h && seat.rest) h.position.y = seat.rest.y - seat.k * seat.thigh * 0.94;
+    seat.obj.visible = seat.k > 0.05; seat.obj.scale.setScalar(Math.max(0.001, seat.k)); }
   // --- arms (pose tracking where visible, otherwise relaxed)
   for (const s of ['left', 'right']) {
-    const w = poseW * (pose?.conf?.[s] ? 1 : 0);
+    const w = idle.armsLocked ? 0 : poseW * (pose?.conf?.[s] ? 1 : 0);
     for (const seg of ['UpperArm', 'LowerArm', 'Hand']) {
       const tracked = pose?.[`${s}${seg}`];
       const target = tracked ? idle[`${s}${seg}`].clone().slerp(Q(tracked), w) : idle[`${s}${seg}`];
@@ -317,7 +384,13 @@ function update(dt, t) {
       else for (const [k, v] of Object.entries(arkitFallback(bs))) if (exprMap.has(k.toLowerCase())) add(exprMap.get(k.toLowerCase()), v * faceW);
     }
     // voice fallback (mic level -> mouth) when the face is not tracked
-    if (f?.voice && faceW < 0.5) add(exprMap.get('jawopen') || exprMap.get('aa') || 'aa', Math.min(1, f.voice) * (1 - faceW));
+    if (f?.voice && faceW < 0.5 && age < 0.5) {
+      const lvl = Math.min(1, f.voice) * (1 - faceW), vw = f.vowels;
+      if (vw && ['aa', 'ih', 'ou', 'ee', 'oh'].some((k) => exprMap.has(k))) {      // vowel shapes from the voice (VRM aa/ih/ou/ee/oh)
+        for (const k of ['aa', 'ih', 'ou', 'ee', 'oh']) if (vw[k] && exprMap.has(k)) add(exprMap.get(k), Math.min(1, lvl * vw[k] * 1.6));
+        if (exprMap.has('jawopen')) add(exprMap.get('jawopen'), lvl * 0.35);
+      } else add(exprMap.get('jawopen') || exprMap.get('aa') || 'aa', lvl);
+    }
     // auto-blink when the face is not tracked
     if (faceW < 0.5) {
       if (autoBlink.phase < 0 && t > autoBlink.next) autoBlink.phase = 0;
@@ -350,7 +423,7 @@ function update(dt, t) {
 function loop() {
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
   update(dt, t);
-  updateItems(dt);
+  updateItems(dt); stage.update(); updateCamera(dt, t);
   vrm?.update(dt); vrm?.__hairSprings?.(dt); vrm?.__animalSync?.(dt);
   lighting.render();
   requestAnimationFrame(loop);
@@ -363,6 +436,9 @@ function handle(msg) {
   else if (msg.type === 'settings') applySettings(msg.settings);
   else if (msg.type === 'trigger') trigger(msg.name, msg.intensity ?? 1, msg.duration ?? 2.5);
   else if (msg.type === 'throw') throwItem(msg.item, msg.count || 1);
+  else if (msg.type === 'prop') stage.show(msg.id, msg.seconds || 5);
+  else if (msg.type === 'camera' && ['head', 'bust', 'half', 'full'].includes(msg.framing)) { cam.shot = { framing: msg.framing, until: clock.elapsedTime + (msg.seconds || 5) }; frameCamera(); }
+  else if (msg.type === 'pose' && POSES[msg.name]) poseOverride = { name: msg.name, until: clock.elapsedTime + (msg.seconds || 6) };
   else if (msg.type === 'gesture') gestures.push({ name: msg.name, start: clock.elapsedTime, dur: { wave: 2.6, nod: 1.2, dance: 4.5 }[msg.name] || 2 });
 }
 window.__handle = handle;     // for testing

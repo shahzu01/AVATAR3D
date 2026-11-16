@@ -78,3 +78,31 @@ test('baked stream file: fingerprint and file checks', async () => {
   assert.equal((await put(j.avatar.bake.hash, Buffer.from('not a vrm at all'))).status, 422, 'non-VRM refused');
   assert.equal((await fetch(`${BASE}/api/library/${id}/baked`)).status, 404, 'nothing stored');
 });
+
+test('props and scenes: upload checks, sanitizing, and deleting removes every use', async () => {
+  const glb = (json) => { const j = Buffer.from(JSON.stringify(json).padEnd(Math.ceil(JSON.stringify(json).length / 4) * 4, ' ')); const h = Buffer.alloc(20); h.writeUInt32LE(0x46546c67, 0); h.writeUInt32LE(2, 4); h.writeUInt32LE(20 + j.length, 8); h.writeUInt32LE(j.length, 12); h.writeUInt32LE(0x4e4f534a, 16); return Buffer.concat([h, j]); };
+  const up = (buf, name = 'x') => api(`/api/props/upload?name=${encodeURIComponent(name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf });
+  assert.equal((await up(Buffer.from('MZ not a model at all'))).status, 422, 'random bytes are refused');
+  assert.equal((await up(glb({ asset: { version: '2.0' }, buffers: [{ uri: 'file:///etc/passwd', byteLength: 4 }] }))).status, 422, 'a model pointing at outside files is refused');
+  const ok = await up(glb({ asset: { version: '2.0' } }), 'Desk <b>lamp</b>');
+  assert.equal(ok.status, 200); const f = ok.j.file; assert.match(f.file, /^[a-f0-9]{16}\.glb$/); assert.equal(f.name, 'Desk blamp/b', 'names are cleaned');
+  assert.equal((await fetch(`${BASE}/userprops/${f.file}`)).status, 200); assert.equal((await fetch(`${BASE}/userprops/..%2Fsettings.json`)).status, 404);
+  await api('/api/settings', { method: 'POST', body: JSON.stringify({ props: [{ id: 'a', src: `file:${f.file}`, attach: 'nose', scale: 999 }, { id: 'b', src: 'builtin:mic' }, { src: 'builtin:bomb' }, { src: 'file:../x.glb' }], scene: { kind: 'model', file: f.file, scale: -3 } }) });
+  let s = (await api('/api/settings')).j;
+  assert.deepEqual(s.props.map((p) => [p.id, p.attach, p.scale]), [['a', 'rightHand', 20], ['b', 'rightHand', 1]], 'unknown props dropped, values clamped');
+  assert.equal(s.scene.kind, 'model'); assert.equal(s.scene.scale, 0.1);
+  assert.equal((await api(`/api/props/${f.id}`, { method: 'DELETE' })).status, 200);
+  s = (await api('/api/settings')).j;
+  assert.deepEqual(s.props.map((p) => p.id), ['b'], 'deleting the file removes the prop'); assert.equal(s.scene.kind, 'none', 'and the scene that used it');
+});
+
+test('pose and camera settings are checked', async () => {
+  await api('/api/settings', { method: 'POST', body: JSON.stringify({ idlePose: 'sit', poseLock: 'yes', cameraMotion: 'drift' }) });
+  let s = (await api('/api/settings')).j; assert.deepEqual([s.idlePose, s.poseLock, s.cameraMotion], ['sit', true, 'drift']);
+  await api('/api/settings', { method: 'POST', body: JSON.stringify({ idlePose: 'backflip', cameraMotion: 'shake' }) });
+  s = (await api('/api/settings')).j; assert.deepEqual([s.idlePose, s.cameraMotion], ['relaxed', 'still']);
+  const poses = read('public/avatar.js').match(/^export const POSES = \{([\s\S]*?)\n\};/m)[1].match(/^  (\w+):/gm).map((x) => x.trim().slice(0, -1));
+  const listed = [...read('public/props.js').match(/POSE_LIST = \[(.*)\];/)[1].matchAll(/\['(\w+)'/g)].map((m) => m[1]);
+  const { POSE_NAMES } = await import('../lib/triggers.js');
+  assert.deepEqual(listed, poses, 'Studio list matches the stream page'); assert.deepEqual(POSE_NAMES, poses, 'rules list matches the stream page');
+});
