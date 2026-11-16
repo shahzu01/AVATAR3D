@@ -90,7 +90,7 @@ export class StudioLighting {
   }
   /** Small bright reflections of the key light on each eye. Only for characters that have eye bones. */
   _catchlights(m) {
-    const h = m.vrm?.humanoid; if (!h || this.opts.catchlights === false || m.vrm.userData?.modular?.headModel || m.vrm.userData?.paintedEyes) return;      // a complete head brings its own painted eyes
+    const h = m.vrm?.humanoid; if (!h || this.opts.catchlights === false || m.vrm.userData?.modular?.headModel || m.vrm.userData?.paintedEyes || m.vrm.scene?.userData?.kaelPaintedEyes) return;      // a complete head brings its own painted eyes
     const L = h.getRawBoneNode('leftEye'), R = h.getRawBoneNode('rightEye'); if (!L || !R || L.userData.kaelGlint) return;
     m.root.updateMatrixWorld(true); const a = L.getWorldPosition(new THREE.Vector3()), b = R.getWorldPosition(new THREE.Vector3()), ipd = a.distanceTo(b); if (ipd < 0.02 || ipd > 0.2) return;
     const r = (m.vrm.userData?.eyeRadius) || ipd * 0.2, mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false, toneMapped: false }); m.glints = [];

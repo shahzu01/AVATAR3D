@@ -104,6 +104,23 @@ $('save').addEventListener('click', async () => {
     setStatus('Saved to your library.', 'ok'); toast?.('Saved to your library');
   } catch (err) { setStatus(err.message, 'err'); }
 });
+$('bake').addEventListener('click', async () => {
+  const name = $('name').value.trim() || recipe.name || 'Mixed character', btn = $('bake'); btn.disabled = true; $('bakeDl').classList.add('hidden');
+  try {
+    const { bakeVRM } = await import('/bake.js');
+    const res = await bakeVRM(JSON.parse(JSON.stringify(recipe)), { name, onStep: (s) => setStatus(`Baking: ${s}…`) });
+    const blob = new Blob([res.file], { type: 'application/octet-stream' }), file = name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'character';
+    const dl = $('bakeDl'); if (dl.href) URL.revokeObjectURL(dl.href); dl.href = URL.createObjectURL(blob); dl.download = `${file}.vrm`; dl.classList.remove('hidden');
+    setStatus('Baking: adding to your library…');
+    const up = await fetch(`/api/library/import?filename=${encodeURIComponent(file + '.vrm')}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob }).then((r) => r.json());
+    if (!up.tmpId) throw new Error(up.error || 'The library did not accept the baked file.');
+    let thumbnail = null; try { thumbnail = viewer.thumbnail(); } catch { /* preview only */ }
+    const ok = await fetch(`/api/library/import/${up.tmpId}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: `${name} (baked)`, thumbnail, makeActive: $('bakeLive').checked }) }).then((r) => r.json());
+    if (ok.error) throw new Error(ok.error);
+    setStatus(`Baked ${(res.size / 1048576).toFixed(1)} MB: ${res.notes.join(' · ')}.${$('bakeLive').checked ? ' It is now your stream avatar.' : ' Saved to your library.'}`, 'ok'); toast?.('Baked VRM saved to your library');
+  } catch (err) { console.error(err); setStatus(`Bake failed: ${err.message}`, 'err'); }
+  btn.disabled = false;
+});
 if (editId) {
   try { const rec = await fetch(`/api/library/${editId}/file`).then((r) => r.json()); if (rec.kind === 'modular') recipe = { ...defaultModular(), ...rec }; } catch { /* start fresh */ }
 }

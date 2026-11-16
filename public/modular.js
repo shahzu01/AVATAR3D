@@ -175,6 +175,7 @@ export async function loadModular(input) {
   const gltf = await loader.parseAsync(buf, ''); const vrm = gltf.userData.vrm;
   let body = null; vrm.scene.traverse((o) => { if (o.isSkinnedMesh && !body) body = o; });
   if (!body) throw new Error('The modular base body could not be read.');
+  const bake = vrm.__bake = { body, toMaster: null, faceArt, animeBlink: null, hair: [] };      // what the VRM baker (public/bake.js) needs to know
   const geo = body.geometry, pos = geo.attributes.position, F = kit.bodies.female.P;
   // glTF vertex -> master vertex id, matched by rest position (the base file is the female master, no UV seams)
   const key = (x, y, z) => `${Math.round(x * 2e4)},${Math.round(y * 2e4)},${Math.round(z * 2e4)}`; const lut = new Map();
@@ -189,6 +190,7 @@ export async function loadModular(input) {
     toMaster[i] = m; fromMaster[m] = i;
   }
   if (miss) console.warn(`modular: ${miss} base vertices did not match the kit`);
+  bake.toMaster = toMaster;
   const N = masterNormals(kit, P), nrm = geo.attributes.normal || new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3);
   for (let i = 0; i < pos.count; i++) { const m = toMaster[i]; pos.setXYZ(i, P[m * 3], P[m * 3 + 2], -P[m * 3 + 1]); nrm.setXYZ(i, N[m * 3], N[m * 3 + 2], -N[m * 3 + 1]); }
   geo.setAttribute('normal', nrm); pos.needsUpdate = true; nrm.needsUpdate = true; geo.computeBoundingBox(); geo.computeBoundingSphere(); body.frustumCulled = false; body.name = 'Body';
@@ -246,7 +248,7 @@ export async function loadModular(input) {
         for (const o of old) o.parent.remove(o); head.add(faceArt.group); notes.push('Face: anime styling (painted eyes, lash line, blush)');
         const skinMat = [].concat(body.material)[0]; for (const l of faceArt.lids) l.material = skinMat;
         const prev = vrm.__hairSprings; vrm.__hairSprings = (dt) => { prev?.(dt); const em = vrm.expressionManager; if (!em) return; const bb = em.getValue('blink') || 0; faceArt.blink(Math.max(bb, em.getValue('blinkLeft') || 0), Math.max(bb, em.getValue('blinkRight') || 0)); }; }
-      else animeBlink(vrm, head); }
+      else bake.animeBlink = animeBlink(vrm, head); }
     attachToHead(vrm, head, basis, exScale);
   } catch (e) { console.warn('modular head extras', e); }
   // heads without their own hair set (the human heads) wear the matching anime set, sized back down to a human skull
@@ -264,7 +266,7 @@ export async function loadModular(input) {
     }
     const root = await loadStatic(KIT_BASE + hair.file); root.name = 'Hair';
     root.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.material = toon({ color: recipe.hairColor }); } });
-    attachToHead(vrm, root, hairFit.basis, hairFit.scale); addHairSway(vrm, root);
+    attachToHead(vrm, root, hairFit.basis, hairFit.scale); const sw = addHairSway(vrm, root); if (sw) bake.hair.push(sw);
   } catch (e) { console.warn('modular hair', e); }
   // how far each finger fans away from the middle finger in the rest pose (about the vertical axis), so the viewer can close the hand
   const kitHand = {}, dir = (s, f) => { const a = bones[`${s}${f}Proximal`], b = bones[`${s}${f}Intermediate`]; return a && b ? Math.atan2(-(b[0][1] - a[0][1]), b[0][0] - a[0][0]) : null; };   // angle in glTF x-z

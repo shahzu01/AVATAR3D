@@ -71,6 +71,7 @@ export function addHairSway(vrm, root) {
     tmp.x += Math.sin(t * 1.3) * 0.0025; tmp.z += Math.sin(t * 0.9 + 1.0) * 0.0018;                                                // a little air
     vel.addScaledVector(tmp.sub(sway), 60 * dt).multiplyScalar(Math.max(0, 1 - 7 * dt)); sway.addScaledVector(vel, dt * 9);
   };
+  return { root, top: uni.uTop.value, len: uni.uLen.value };
 }
 
 /** Anime heads carry their eyes and lashes as separate pieces: on a blink the upper lash line comes down with the lid and the eyeball hides. */
@@ -81,6 +82,7 @@ export function animeBlink(vrm, head) {
   vrm.__hairSprings = (dt) => { prev?.(dt); const em = vrm.expressionManager; if (!em) return;
     const b = Math.max(em.getValue('blink') || 0, ((em.getValue('blinkLeft') || 0) + (em.getValue('blinkRight') || 0)) / 2);
     lashes.forEach((l, i) => { l.position.y = base[i] - h * 0.42 * b; }); for (const e of eyes) e.visible = b < 0.8; };
+  return { eyes, lashes, h };
 }
 
 /** Ink outlines: every piece gets a slightly larger, inside-out copy in a dark tint of its own colour, the classic anime edge. */
@@ -183,7 +185,7 @@ export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeCol
   const blink = (left, right) => sides.forEach((d, i) => { const v = Math.min(1, Math.max(0, d.s > 0 ? left : right)); if (Math.abs(v - was[i]) < 0.004) return; was[i] = v;
     const k = 1 - 1.5 * v; d.lash.scale.y = k; d.lash.position.y = zp * (1 - k); d.lash.position.z = 0.0018 * v; d.low.visible = v < 0.85; d.lid.visible = v > 0.02;
     if (d.lid.visible) { const cut = v > 0.9 ? -1e9 : zp + k * (topZ - zp), base = d.lid.userData.base, p = d.lid.geometry.attributes.position; for (let j = 0; j < p.count; j++) p.setY(j, Math.max(base[j * 3 + 1], cut)); p.needsUpdate = true; } });
-  return { group: g, browShift: Math.max(0, ez + Math.min(b, TOP) + Math.max(0, es.tilt) * a + 0.006 - (eyeRef[2] + 0.022)), lids: sides.map((d) => d.lid), blink };
+  return { group: g, browShift: Math.max(0, ez + Math.min(b, TOP) + Math.max(0, es.tilt) * a + 0.006 - (eyeRef[2] + 0.022)), lids: sides.map((d) => d.lid), blink, sides, topZ, zp };
 }
 const texCache = new Map();
 function eyeTexture(colour = '#4f7396', style = 'classic') {

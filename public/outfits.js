@@ -145,6 +145,7 @@ export function buildOutfit(ctx) {
     const I = ctx.fullIndex, idx = [];
     for (let t = 0; t < I.length; t += 3) if (cov[toMaster[I[t]]] > 0 || cov[toMaster[I[t + 1]]] > 0 || cov[toMaster[I[t + 2]]] > 0) idx.push(I[t], I[t + 1], I[t + 2]);
     if (!idx.length) continue;
+    { const cm = ctx.vrm.__coverMax ||= new Float32Array(kit.vertexCount).fill(-1); for (let m = 0; m < kit.vertexCount; m++) if (cov[m] > cm[m]) cm[m] = cov[m]; }      // how deep under cloth each body vertex is (the VRM baker drops skin that cannot be seen)
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(gp, 3)); g.setAttribute('normal', body.geometry.attributes.normal);
     const ownNormals = !!l.smooth;
     g.setAttribute('color', new THREE.BufferAttribute(col, 4)); g.setAttribute('skinIndex', body.geometry.attributes.skinIndex); g.setAttribute('skinWeight', body.geometry.attributes.skinWeight); g.setIndex(idx);
