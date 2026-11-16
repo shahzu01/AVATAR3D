@@ -8,7 +8,7 @@ import { patchSkeleton } from '/human.js';
 import { toonGradient } from '/creator/geom.js';
 import { buildOutfit, OUTFITS, defaultOutfit, outfitGroup } from '/outfits.js';
 import { buildAccessories, ACCESSORIES } from '/accessories.js';
-import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes } from '/face.js';
+import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes, humanMakeup } from '/face.js';
 export { FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf };
 export { OUTFITS, defaultOutfit, outfitGroup, ACCESSORIES };
 /** The accessories a recipe wears: its own list if it has one, otherwise the ones its outfit comes with. */
@@ -277,6 +277,10 @@ export async function loadModular(input) {
   let faceNames = [];
   if (!model) faceNames = addFace({ face: await loadFaceKit(KIT_BASE), vrm, body, toMaster, P, scale: headScale * (HEAD_SCALE[ex.from || hk] || 1) * (ex.scale || 1), anime: kit.bodies[hk].style === 'anime', eyeZ: bones.leftEye ? bones.leftEye[0][2] : null });
   if (faceNames.length) notes.push(`Face: ${faceNames.length} expressions (blink, mouth shapes, moods)`);
+  if (!model && kit.bodies[hk].style !== 'anime' && recipe.makeup !== false) try {          // human heads: drawn brows, lash line, lips (and blush)
+    const mk = humanMakeup({ vrm, body, face: await loadFaceKit(KIT_BASE), toMaster, male: kit.bodies[hk].base === 'male', hairColor: recipe.hairColor, skin: recipe.skin });
+    if (mk.length) notes.push('Face: drawn brows, lash line and lip colour');
+  } catch (e) { console.warn('modular human makeup', e); }
   if (recipe.outline !== false) addOutlines(vrm, { skin: recipe.skin });
   vrm.userData = { ...vrm.userData, modular: recipe, modularNotes: notes, modularHeight: height, kitHand: hands ? 'master' : kitHand, paintedEyes: !!faceArt };
   return vrm;

@@ -131,6 +131,7 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
           si[i * 4] = boneIx.get(hs.bone); sw[i * 4] = w; si[i * 4 + 1] = bIx; sw[i * 4 + 1] = 1 - w; }
         else { si[i * 4] = bIx; sw[i * 4] = 1; } }
     }
+    if (mesh.userData.bakeLift) for (let i = 0; i < nv * 3; i++) pos[i] += nrm[i] * mesh.userData.bakeLift;      // paint-on-skin layers: a hair's breadth off the skin (no depth offset in other apps)
     if (!g.attributes.normal) { const tmp = new THREE.BufferGeometry(); tmp.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (g.index) tmp.setIndex(g.index); tmp.computeVertexNormals(); nrm.set(tmp.attributes.normal.array); }
     // morph deltas, per expression, in world space
     const morph = new Map();
@@ -232,7 +233,7 @@ function classify(m, mesh, hasColor) {
   const tex = texOf(m), unlit = m.isMeshBasicMaterial, blend = !!m.transparent, outline = !unlit && !blend && !NO_OUTLINE.test(mesh.name) && !NO_OUTLINE.test(mesh.userData.matName || '') && !mesh.userData.noOutline;
   if (tex) { const mt = m.isMToonMaterial || m.type === 'ShaderMaterial' && m.shadeColorFactor;
     return { key: `tex:${tex.uuid}:${unlit ? 'u' : 't'}:${blend ? 'b' : 'o'}`, palette: false, tex, unlit, blend, alphaTest: m.alphaTest || 0, outline: false, mtoon: mt ? m : null }; }
-  const alphaRamp = !!(m.alphaTest && hasColor && m.vertexColors && mesh.geometry.attributes.color?.itemSize === 4);
+  const alphaRamp = !!((m.alphaTest || m.transparent) && hasColor && m.vertexColors && mesh.geometry.attributes.color?.itemSize === 4);      // cut-out hems, and soft painted fades (blush)
   // all opaque toon pieces share one material (cut-out hems ride in the palette's alpha); see-through ones get their own
   return { key: `pal:${unlit ? 'u' : 't'}:${blend ? 'b' : 'o'}:${outline ? 'line' : 'plain'}`, palette: true, unlit, blend, alphaTest: blend ? 0 : 0.5, outline, alphaRamp };
 }

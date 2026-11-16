@@ -31,18 +31,7 @@ export function addFace({ face, vrm, body, toMaster, P, scale, anime, eyeZ = nul
   // brows are separate pieces on the kit heads: give each brow vertex the movement of the skin just under it, so brow
   // raises, frowns and every expression that moves the forehead carry the brows along
   const brows = []; vrm.scene.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh && /brow/i.test(o.userData.matName || o.name)) { let p = o, inHead = false; while (p) { if (p.name === 'HeadModel') inHead = true; p = p.parent; } if (!inHead) brows.push(o); } });
-  if (brows.length) { vrm.scene.updateMatrixWorld(true); const bp = geo.attributes.position, head = vrm.humanoid.getRawBoneNode('head'), hy = head ? head.getWorldPosition(new THREE.Vector3()).y : 0;
-    const near = []; for (let i = 0; i < n; i++) if (bp.getY(i) > hy - 0.02) near.push(i);
-    for (const b of brows) { const g = b.geometry, p = g.attributes.position, m = b.matrixWorld, inv = new THREE.Matrix3().setFromMatrix4(m).invert(), v = new THREE.Vector3();
-      const pick = []; for (let j = 0; j < p.count; j++) { v.fromBufferAttribute(p, j).applyMatrix4(m); const best = [[1e9, 0], [1e9, 0], [1e9, 0]];
-        for (const i of near) { const d = (bp.getX(i) - v.x) ** 2 + (bp.getY(i) - v.y) ** 2 + (bp.getZ(i) - v.z) ** 2; if (d < best[2][0]) { best[2] = [d, i]; best.sort((a, c) => a[0] - c[0]); } }
-        const w = best.map(([d]) => 1 / (Math.sqrt(d) + 1e-4)), s = w[0] + w[1] + w[2]; pick.push(best.map(([, i], k) => [i, w[k] / s])); }
-      g.morphAttributes.position = targets.map((t) => { const a = new Float32Array(p.count * 3);
-        for (let j = 0; j < p.count; j++) { v.set(0, 0, 0); for (const [i, w] of pick[j]) v.x += t.getX(i) * w, v.y += t.getY(i) * w, v.z += t.getZ(i) * w; v.applyMatrix3(inv); a[j * 3] = v.x; a[j * 3 + 1] = v.y; a[j * 3 + 2] = v.z; }
-        return new THREE.BufferAttribute(a, 3); });
-      g.morphTargetsRelative = true; b.morphTargetDictionary = { ...body.morphTargetDictionary }; b.morphTargetInfluences = names.map(() => 0);
-      for (const mm of [].concat(b.material)) mm.needsUpdate = true;
-      names.forEach((nm, i) => mgr.getExpression(nm)?.addBind(new VRMExpressionMorphTargetBind({ primitives: [b], index: i, weight: 1 }))); } }
+  followSkin(vrm, body, brows);
   // something dark behind the lips, so an open mouth is not a hole through the head
   const aa = face.expressions.aa, c = [0, 0, 0]; let w = 0;
   for (let k = 0; k < aa.idsA.length; k++) { const d = Math.hypot(aa.dA[k * 3], aa.dA[k * 3 + 1], aa.dA[k * 3 + 2]); if (d > 0.012) { const m = aa.idsA[k]; c[0] += P[m * 3] * d; c[1] += P[m * 3 + 1] * d; c[2] += P[m * 3 + 2] * d; w += d; } }
@@ -51,6 +40,28 @@ export function addFace({ face, vrm, body, toMaster, P, scale, anime, eyeZ = nul
     inside.scale.set(0.021 * scale, 0.017 * scale, 0.016 * scale); vrm.scene.add(inside); vrm.scene.updateMatrixWorld(true);
     inside.position.set(0, c[2] / w + 0.004 * scale, -(c[1] / w) - 0.020 * scale); head.attach(inside); }
   return names;
+}
+
+/** Pieces laid on the face (brows, liner) move with the skin under them: each vertex takes the expression movement of the
+ *  three nearest skin vertices, as its own morph targets bound to the same expressions. */
+export function followSkin(vrm, body, meshes) {
+  const geo = body.geometry, targets = geo.morphAttributes.position, mgr = vrm.expressionManager; if (!targets?.length || !mgr || !meshes.length) return;
+  const names = Object.keys(body.morphTargetDictionary).sort((a, b) => body.morphTargetDictionary[a] - body.morphTargetDictionary[b]);
+  vrm.scene.updateMatrixWorld(true); const bp = geo.attributes.position, n = bp.count, head = vrm.humanoid.getRawBoneNode('head'), hy = head ? head.getWorldPosition(new THREE.Vector3()).y : 0;
+  const near = []; for (let i = 0; i < n; i++) if (bp.getY(i) > hy - 0.02) near.push(i);
+  for (const b of meshes) { const g = b.geometry, p = g.attributes.position, m = b.matrixWorld, inv = new THREE.Matrix3().setFromMatrix4(m).invert(), v = new THREE.Vector3();
+    const pick = []; for (let j = 0; j < p.count; j++) { if (b.userData.rowPairs && j % 2) { pick.push(pick[j - 1]); continue; }      // thin strokes: both edges of a slice move together, so a closing lid never crumples the line
+      v.fromBufferAttribute(p, j).applyMatrix4(m);
+      if (b.userData.followEdge) { const { ids, sigma } = b.userData.followEdge, ws = ids.map((i) => Math.exp(-((Math.abs(bp.getX(i)) - Math.abs(v.x)) ** 2) / (2 * sigma * sigma))), s = ws.reduce((a, c) => a + c, 0) || 1; pick.push(ids.map((i, q) => [i, ws[q] / s])); continue; }      // a lash line rides on the upper lid edge, blended smoothly along it
+      const best = [[1e9, 0], [1e9, 0], [1e9, 0]];
+      for (const i of near) { const d = (bp.getX(i) - v.x) ** 2 + (bp.getY(i) - v.y) ** 2 + (bp.getZ(i) - v.z) ** 2; if (d < best[2][0]) { best[2] = [d, i]; best.sort((a, c) => a[0] - c[0]); } }
+      const w = best.map(([d]) => 1 / (Math.sqrt(d) + 1e-4)), s = w[0] + w[1] + w[2]; pick.push(best.map(([, i], k) => [i, w[k] / s])); }
+    g.morphAttributes.position = targets.map((t) => { const a = new Float32Array(p.count * 3);
+      for (let j = 0; j < p.count; j++) { v.set(0, 0, 0); for (const [i, w] of pick[j]) v.x += t.getX(i) * w, v.y += t.getY(i) * w, v.z += t.getZ(i) * w; v.applyMatrix3(inv); a[j * 3] = v.x; a[j * 3 + 1] = v.y; a[j * 3 + 2] = v.z; }
+      return new THREE.BufferAttribute(a, 3); });
+    g.morphTargetsRelative = true; b.morphTargetDictionary = { ...body.morphTargetDictionary }; b.morphTargetInfluences = names.map(() => 0);
+    for (const mm of [].concat(b.material)) mm.needsUpdate = true;
+    names.forEach((nm, i) => mgr.getExpression(nm)?.addBind(new VRMExpressionMorphTargetBind({ primitives: [b], index: i, weight: 1 }))); }
 }
 
 /** Plain white eyeballs (human heads) get an iris, a darker rim and a pupil, painted per vertex so no texture is needed. */
@@ -62,7 +73,7 @@ export function paintEyes(root, colour = '#4f7396') {
     for (let i = 0; i < p.count; i++) box[p.getX(i) > 0 ? 0 : 1].expandByPoint(v.fromBufferAttribute(p, i));
     const cen = box.map((b) => b.getCenter(new THREE.Vector3())), rad = box.map((b) => b.getSize(new THREE.Vector3()).y / 2);
     for (let i = 0; i < p.count; i++) { const s = p.getX(i) > 0 ? 0 : 1; v.fromBufferAttribute(p, i).sub(cen[s]).normalize(); const a = Math.acos(Math.min(1, v.z));
-      const c = a < 0.21 ? pupil : a < 0.46 ? iris : a < 0.53 ? rim : white; col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      const c = a < 0.24 ? pupil : a < 0.55 ? iris : a < 0.63 ? rim : white; col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
     o.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
     o.material = new THREE.MeshBasicMaterial({ vertexColors: true }); o.userData.eyeRadius = (rad[0] + rad[1]) / 2;
   });
@@ -280,6 +291,12 @@ export function shapeFace({ kit, P, headBone, basis, scale, eyeRef, params }) {
 /** Eye shapes: human female heads move the eyelid skin (MakeHuman eye targets in face_kit.json, strength K);
  *  anime girl heads change the painted eye opening (size, tilt, lid line), lashes and highlights. */
 export const EYE_SHAPES = {
+  male: [['hm_classic', 'Classic', {}], ['hm_deepset', 'Deep-set (intense)', { k: 1.6 }], ['hm_narrow', 'Narrow (focused)', { k: 1.8 }], ['hm_wide', 'Wide (open, friendly)', { k: 1.8 }], ['hm_downturned', 'Downturned (calm)', { k: 2.4 }]],
+  animeMale: [['am_classic', 'Classic', {}],
+    ['am_sharp', 'Sharp', { a: 1.04, b: 0.78, tilt: 0.16, lash: 1.2, tex: 'cat' }],
+    ['am_calm', 'Calm (gentle)', { a: 1.0, b: 0.9, tilt: -0.18, lash: 0.9, tex: 'droopy' }],
+    ['am_bright', 'Bright', { a: 1.06, b: 1.08, tex: 'sparkle' }],
+    ['am_tired', 'Tired (half-lidded)', { a: 1.03, b: 1.0, top: 0.32, lash: 1.3, tex: 'sleepy' }]],
   female: [['hf_almond', 'Almond', {}], ['hf_round', 'Round', { k: 2.0 }], ['hf_upturned', 'Upturned', { k: 2.7 }], ['hf_downturned', 'Downturned', { k: 2.7 }], ['hf_hooded', 'Hooded', { k: 1.4 }]],
   anime: [['ag_classic', 'Classic', {}],
     ['ag_sparkle', 'Sparkly idol', { a: 1.07, b: 1.1, tex: 'sparkle', lash: 1.1 }],
@@ -287,7 +304,7 @@ export const EYE_SHAPES = {
     ['ag_droopy', 'Droopy (gentle)', { a: 1.02, b: 0.92, tilt: -0.24, wing: 0.6, lower: 1, lash: 0.85, tex: 'droopy' }],
     ['ag_sleepy', 'Sleepy (half-lidded)', { a: 1.04, b: 1.0, top: 0.3, lash: 1.5, wing: 0.8, tex: 'sleepy' }]],
 };
-export const eyeShapeGroup = (kit, headBody) => { const b = kit.bodies[headBody]; return !b || b.base !== 'female' ? null : b.style === 'anime' ? 'anime' : 'female'; };
+export const eyeShapeGroup = (kit, headBody) => { const b = kit.bodies[headBody]; if (!b) return null; const m = b.base === 'male'; return b.style === 'anime' ? (m ? 'animeMale' : 'anime') : (m ? 'male' : 'female'); };
 export const eyeShapeOf = (kit, recipe) => { const g = eyeShapeGroup(kit, recipe.parts.Head); if (!g) return null; const l = EYE_SHAPES[g]; return l.find(([k]) => k === recipe.eyeShape) || l[0]; };
 export function humanEyes({ face, kit, P, key, k = 1, scale = 1 }) {
   const e = face?.eyeShapes?.[key]; if (!e) return false;
@@ -295,4 +312,88 @@ export function humanEyes({ face, kit, P, key, k = 1, scale = 1 }) {
   const hp = kit.parts.indexOf('Head');
   for (let j = 0; j < e.idsA.length; j++) { const m = e.idsA[j]; if (kit.partA[m] !== hp) continue; for (let c = 0; c < 3; c++) P[m * 3 + c] += e.dA[j * 3 + c] * k * scale; }
   return true;
+}
+
+/** Human heads (MakeHuman kit heads) come with bare skin and eyeballs only. Give them a drawn, stream-readable face in the
+ *  same spirit as the anime heads: brows and an upper lash line laid onto the skin (they follow every expression and blink),
+ *  lip colour and, for women, blush painted onto the face skin itself (so they stay put when the mouth opens).
+ *  Works in glTF world space on the rest pose (x = character's left, y up, z front). Call after addFace. */
+export function humanMakeup({ vrm, body, face, toMaster, male = false, hairColor = '#4a2f22', skin = '#ecc4ad' }) {
+  const geo = body.geometry, bp = geo.attributes.position, n = bp.count, mgr = vrm.expressionManager; vrm.scene.updateMatrixWorld(true);
+  const headB = vrm.humanoid.getRawBoneNode('head'); if (!headB) return [];
+  const made = [], V = (x, y, z) => new THREE.Vector3(x, y, z);
+  // eyeballs: centre and radius per side from the eye mesh in world space
+  const eyes = {}; vrm.scene.traverse((o) => { if (!o.isMesh || o.userData.eyeRadius === undefined) return; const p = o.geometry.attributes.position, box = { L: new THREE.Box3(), R: new THREE.Box3() }, v = V();
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); box[v.x > 0 ? 'L' : 'R'].expandByPoint(v); }
+    for (const s of ['L', 'R']) if (!box[s].isEmpty()) eyes[s] = { C: box[s].getCenter(V()), R: box[s].getSize(V()).y / 2 }; });
+  if (!eyes.L || !eyes.R) return [];
+  const R = (eyes.L.R + eyes.R.R) / 2, k = R / 0.0125, eyeY = (eyes.L.C.y + eyes.R.C.y) / 2, midZ = headB.getWorldPosition(V()).z;
+  // front skin of the face, binned for quick "how far forward is the skin here" lookups
+  const front = []; for (let i = 0; i < n; i++) { const y = bp.getY(i), z = bp.getZ(i); if (y > eyeY - 0.1 * k && y < eyeY + 0.07 * k && z > midZ && Math.abs(bp.getX(i)) < 0.085 * k) front.push(i); }
+  // exact skin depth: the front-most skin triangle under (x, y), so a stroke never dips behind a bulge such as the brow ridge
+  const inFront = new Uint8Array(n); for (const i of front) inFront[i] = 1;
+  const I = geo.index.array, tris = []; for (let t = 0; t < I.length; t += 3) if (inFront[I[t]] && inFront[I[t + 1]] && inFront[I[t + 2]]) tris.push(I[t], I[t + 1], I[t + 2]);
+  const depth = (x, y) => { let best = -1e9;
+    for (let t = 0; t < tris.length; t += 3) { const a = tris[t], b = tris[t + 1], c = tris[t + 2], ax = bp.getX(a), ay = bp.getY(a), bx = bp.getX(b), by = bp.getY(b), cx = bp.getX(c), cy = bp.getY(c);
+      const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy); if (Math.abs(d) < 1e-12) continue;
+      const u = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / d, w = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / d, q = 1 - u - w;
+      if (u < -1e-4 || w < -1e-4 || q < -1e-4) continue; const z = u * bp.getZ(a) + w * bp.getZ(b) + q * bp.getZ(c); if (z > best) best = z; }
+    if (best > -1e8) return best;
+    let bd = 1e9; for (const i of front) { const dd = (bp.getX(i) - x) ** 2 + (bp.getY(i) - y) ** 2; if (dd < bd) { bd = dd; best = bp.getZ(i); } } return best; };
+  const inv = headB.matrixWorld.clone().invert();
+  const strip = (name, rows, mat) => {        // rows: [[bottom, top], ...] world points along the stroke -> a mesh on the head bone
+    const pos = [], idx = []; rows.forEach(([a, b], j) => { pos.push(...a.clone().applyMatrix4(inv).toArray(), ...b.clone().applyMatrix4(inv).toArray()); if (j) { const q = (j - 1) * 2; idx.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); } });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.name = name; m.userData.noOutline = true; m.userData.matName = name; m.frustumCulled = false; m.castShadow = false; headB.add(m); made.push(m); return m; };
+  const ink = new THREE.Color(hairColor).multiplyScalar(male ? 0.55 : 0.45).lerp(new THREE.Color('#1c1214'), 0.35);
+  const browMat = new THREE.MeshToonMaterial({ color: ink, gradientMap: null, side: THREE.DoubleSide }), lashMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#1a1013'), side: THREE.DoubleSide });
+  for (const [S, sg] of [['L', 1], ['R', -1]]) {
+    const { C } = eyes[S], ax = Math.abs(C.x);
+    // brow: thick rounded head at the inside, arching, thin tail
+    const rows = [], N = 30;
+    for (let j = 0; j <= N; j++) { const t = j / N, x = sg * (ax - 0.011 * k + 0.034 * k * t);
+      const arch = male ? 0.0022 * Math.sin(Math.PI * t) : 0.0048 * Math.sin(Math.PI * Math.min(1, t * 1.2) * 0.85) - 0.0035 * Math.max(0, t - 0.78) / 0.22;
+      const y = C.y + (male ? 0.0118 : 0.0128) * k + arch * k, th = ((male ? 0.0042 : 0.0029) * (1 - t) + (male ? 0.0026 : 0.0008) * t) * k * Math.min(1, 0.55 + t * 4);
+      rows.push([V(x, y - th / 2, depth(x, y - th / 2) + 0.0006), V(x, y + th / 2, depth(x, y + th / 2) + 0.0006)]); }
+    strip(`Makeup_brow${S}`, rows, browMat);
+    // upper lash line along the upper lid edge: skin vertices resting on the eyeball, above its middle
+    const edge = [], edgeIds = []; for (let i = 0; i < n; i++) { const v = V(bp.getX(i), bp.getY(i), bp.getZ(i)); if (Math.sign(v.x) !== sg || v.z < C.z + 0.25 * R || v.y < C.y - 0.15 * R) continue; const d = v.distanceTo(C); if (Math.abs(d - R) < 0.0022 * k && d < R * 1.25) { edge.push(v); edgeIds.push(i); } }
+    { const bins = new Map(); edge.forEach((v, q) => { const key = Math.round(Math.abs(v.x) / (0.0016 * k)); const o = bins.get(key); if (!o || v.y < edge[o].y) bins.set(key, q); });      // the lid edge is the lowest of them at each point along the eye (not the fold above it)
+      const keep = [...bins.values()]; const e2 = keep.map((q) => edge[q]), i2 = keep.map((q) => edgeIds[q]); edge.length = 0; edgeIds.length = 0; edge.push(...e2); edgeIds.push(...i2); }
+    if (edge.length >= 4) {
+      edge.sort((a, b) => Math.abs(a.x) - Math.abs(b.x));
+      const lr = [], M = 16, x0 = Math.abs(edge[0].x), x1 = Math.abs(edge[edge.length - 1].x);
+      const yAt = (ax2) => { let w = 0, y = 0; for (const e of edge) { const g = Math.exp(-((Math.abs(e.x) - ax2) ** 2) / (2 * (0.0025 * k) ** 2)); w += g; y += e.y * g; } return y / w; };
+      for (let j = 0; j <= M; j++) { const t = j / M, axj = x0 + (x1 - x0) * t, x = sg * axj, y = yAt(axj), th = ((male ? 0.0007 : 0.0009) + (male ? 0.0005 : 0.0015) * t ** 1.4) * k;
+        lr.push([V(x, y - 0.0002, Math.max(depth(x, y - 0.0002), C.z + R * Math.sqrt(Math.max(0, 1 - ((y - C.y) / R) ** 2 - ((x - C.x) / R) ** 2))) + (male ? 0.0011 : 0.0005)), V(x, y + th, depth(x, y + th) + (male ? 0.0012 : 0.0006))]); }
+      if (!male) { const last = lr[lr.length - 1][1], x = last.x + sg * 0.0032 * k, y = last.y + 0.0016 * k; lr.push([V(x - sg * 0.0006, y - 0.0004, depth(x, y) + 0.0005), V(x, y, depth(x, y) + 0.0005)]); }      // a small flick at the outer corner
+      const ln = strip(`Makeup_liner${S}`, lr, lashMat); ln.userData.rowPairs = true; ln.userData.followEdge = { ids: edgeIds, sigma: 0.0022 * k };
+    }
+  }
+  followSkin(vrm, body, made);
+  // painted onto the skin itself: the face's own triangles again, coloured, with a soft or crisp edge carried in vertex alpha
+  const overlay = (name, alpha, colour, soft) => {
+    const I = geo.index.array, idx = []; for (let t = 0; t < I.length; t += 3) if (alpha[I[t]] > 0.02 || alpha[I[t + 1]] > 0.02 || alpha[I[t + 2]] > 0.02) idx.push(I[t], I[t + 1], I[t + 2]);
+    if (!idx.length) return null;
+    const g = new THREE.BufferGeometry(); for (const a of ['position', 'normal', 'skinIndex', 'skinWeight']) g.setAttribute(a, geo.attributes[a]);
+    const col = new Float32Array(n * 4); for (let i = 0; i < n; i++) { col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = 1; col[i * 4 + 3] = alpha[i]; }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 4)); g.setIndex(idx); g.morphAttributes = geo.morphAttributes; g.morphTargetsRelative = geo.morphTargetsRelative;
+    const mat = new THREE.MeshToonMaterial({ color: colour, gradientMap: [].concat(body.material)[0].gradientMap || null, vertexColors: true, transparent: soft, alphaTest: soft ? 0 : 0.5, depthWrite: !soft, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+    const m = new THREE.SkinnedMesh(g, mat); m.name = name; m.frustumCulled = false; m.castShadow = false; m.userData.noOutline = true; m.userData.bakeLift = 0.00025; m.renderOrder = 1;
+    body.parent.add(m); m.bind(body.skeleton, body.bindMatrix);
+    if (body.morphTargetDictionary) { const names = Object.keys(body.morphTargetDictionary).sort((a, b) => body.morphTargetDictionary[a] - body.morphTargetDictionary[b]); m.morphTargetDictionary = { ...body.morphTargetDictionary }; m.morphTargetInfluences = names.map(() => 0);
+      names.forEach((nm, i) => mgr?.getExpression(nm)?.addBind(new VRMExpressionMorphTargetBind({ primitives: [m], index: i, weight: 1 }))); }
+    made.push(m); return m; };
+  // lips: rolling the lips in moves the lips and nothing else, so those two shapes outline them
+  const rl = face?.expressions?.mouthRollLower, ru = face?.expressions?.mouthRollUpper;
+  if (rl && ru) { const mag = new Float32Array(face.vertexCount);
+    for (const e of [rl, ru]) { let mx = 0; for (let j = 0; j < e.idsA.length; j++) mx = Math.max(mx, Math.hypot(e.dA[j * 3], e.dA[j * 3 + 1], e.dA[j * 3 + 2]));
+      for (let j = 0; j < e.idsA.length; j++) mag[e.idsA[j]] = Math.max(mag[e.idsA[j]], Math.hypot(e.dA[j * 3], e.dA[j * 3 + 1], e.dA[j * 3 + 2]) / mx); }
+    const a = new Float32Array(n); for (let i = 0; i < n; i++) a[i] = 0.5 + (mag[toMaster[i]] - 0.42) * 6;
+    overlay('Makeup_lips', a, new THREE.Color(skin).lerp(new THREE.Color(male ? '#b07068' : '#c4505c'), male ? 0.22 : 0.58), false); }
+  if (!male) {          // blush
+    const a = new Float32Array(n); for (const S of ['L', 'R']) { const c = eyes[S].C, cx = c.x + Math.sign(c.x) * 0.006 * k, cy = c.y - 0.03 * k;
+      for (const i of front) { const g = Math.exp(-(((bp.getX(i) - cx) / (0.014 * k)) ** 2 + ((bp.getY(i) - cy) / (0.0095 * k)) ** 2) / 2); a[i] = Math.max(a[i], 0.3 * g); } }
+    overlay('Makeup_blush', a, new THREE.Color('#ee7f86'), true); }
+  return made;
 }

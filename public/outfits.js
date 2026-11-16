@@ -47,6 +47,20 @@ export const OUTFITS = {
       { len: 0.37, flare: 0.185, shape: 0.75, top: 0.2, outset: 0.024, color: 'light', pleat: 0, ruffle: 0.004, waves: 9, band: null, arc: [-2.45, -0.69] }],
     extras: [{ type: 'puffSleeves', color: 'main', len: 0.36, puff: 0.022 }, { type: 'frill', at: 0.2, color: 'light', len: 0.022, out: 0.012, waves: 26, off: 0.03 },
       { type: 'bow', where: 'back', at: 0.21, size: 0.085, color: 'light', tails: 1.8 }], acc: ['headdress'] },
+  // premium for men: same building blocks, tailored to the male bodies
+  pm_knight: { group: 'premiumMale', label: 'Royal knight: plate armour, long cape, gauntlets', colors: { clothing: '#2a3550', accent: '#7a1c26' },
+    layers: ['longSleeves:main', 'trousers:dark', 'tank:main', 'armorPlate:metal', 'plateTrim:gold', 'gloves:dark', 'gauntlets:metal', 'boots:dark', 'bootCuffs:metal', 'belt:gold'],
+    extras: [{ type: 'cape', color: 'accent', len: 0.62, flare: 0.13, clasp: 'gold' }, { type: 'pauldrons', color: 'metal', trim: 'gold' }], acc: [] },
+  pm_butler: { group: 'premiumMale', label: 'Butler: tailcoat, waistcoat, bow tie', colors: { clothing: '#2b2935', accent: '#77708a' },
+    layers: ['shirt:light', 'trousers:dark', 'waistcoat:accent', 'jacket:main', 'cuffs:light', 'shoes:dark'],
+    extras: [{ type: 'cape', color: 'main', len: 0.34, flare: 0.035 }, { type: 'bow', where: 'front', at: 0.985, size: 0.024, color: 'dark', tails: 0, off: 0.018 }], acc: [] },
+  pm_samurai: { group: 'premiumMale', label: 'Samurai: kimono, full hakama, wide sleeves', colors: { clothing: '#2c2f3a', accent: '#8e2a2a' }, vDepth: 0.7,
+    layers: ['trousers:dark', 'socksAnkle:light', 'kimonoWrap:main', 'kimonoCollar:light', 'obi:accent', 'shoes:dark'],
+    skirts: [{ len: 0.74, flare: 0.13, shape: 0.9, top: 0.25, color: 'dark', pleat: 0.009, band: null }],
+    extras: [{ type: 'bellSleeves', color: 'main', flare: 0.05 }], acc: [] },
+  pm_idol: { group: 'premiumMale', label: 'Stage idol: band jacket, gold epaulettes, half cape', colors: { clothing: '#2d4fd6', accent: '#ffd166' },
+    layers: ['shirt:light', 'trousers:dark', 'jacket:main', 'cuffs:accent', 'belt:accent', 'boots:dark', 'bootCuffs:accent'],
+    extras: [{ type: 'pauldrons', color: 'accent', trim: 'light' }, { type: 'cape', color: 'accent', len: 0.08, flare: 0.05, clasp: 'accent' }], acc: ['headset'] },
   idol: { group: 'any', label: 'Idol: crop top, pleated skirt, long socks', layers: ['briefs', 'socksThigh', 'cropTop', 'sleeves', 'shoes'], skirt: {}, acc: [] },
   casual: { group: 'any', label: 'Casual: T-shirt and shorts', layers: ['tee', 'shorts', 'socksAnkle', 'shoes'], acc: [] },
   sport: { group: 'any', label: 'Sport: tank top and short shorts', layers: ['tank', 'shortShorts', 'shoes'], acc: [] },
@@ -66,7 +80,7 @@ export function buildOutfit(ctx) {
   const B = (n) => bones[n][0], hz = B('leftUpperLeg')[2], sz = B('leftUpperArm')[2], sx = B('leftUpperArm')[0], H = sz - hz;
   const elbow = B('leftLowerArm')[0], wrist = B('leftHand')[0], knee = B('leftLowerLeg')[2], ankle = B('leftFoot')[2], neck = B('neck'), hipx = B('leftUpperLeg')[0];
   const main = recipe.clothing, accent = recipe.accent || '#f2efe9', dark = shade(main, 0.55);
-  const pal = { main, accent, dark: def.group === 'premium' ? '#1e1b24' : dark, light: '#f6f1ea', metal: '#c9d0db', gold: '#d6b15a' };
+  const pal = { main, accent, dark: /^premium/.test(def.group) ? '#1e1b24' : dark, light: '#f6f1ea', metal: '#c9d0db', gold: '#d6b15a' };
   const isNeck = (m) => kit.parts[kit.partA[m]] === 'Neck';
   const region = new Uint8Array(kit.vertexCount);          // 0 torso, 1 arm, 2 leg, 3 foot, 4 head/neck, 5 hand
   for (let m = 0; m < kit.vertexCount; m++) {
@@ -74,7 +88,7 @@ export function buildOutfit(ctx) {
     region[m] = p.startsWith('Arm') ? 1 : p.startsWith('Hand') ? 5 : p.startsWith('Leg') ? 2 : p.startsWith('Foot') ? 3 : (p === 'Head' || p === 'Neck') ? 4
       : p === 'Torso' ? 0 : ax > sx + 0.05 ? (ax > wrist - 0.01 ? 5 : 1) : z < ankle + 0.03 ? 3 : z < hz - 0.08 ? 2 : z > neck[2] + 0.01 ? 4 : 0;
   }
-  const kEdge = (z) => { const zv = hz + 0.52 * H, zt = neck[2] + 0.01; return 0.006 + 0.068 * Math.min(1, Math.max(0, (z - zv) / (zt - zv))); };
+  const kEdge = (z) => { const zv = hz + (def.vDepth ?? 0.52) * H, zt = neck[2] + 0.01; return 0.006 + 0.068 * Math.min(1, Math.max(0, (z - zv) / (zt - zv))); };
   const scoop = (x, y, z, r) => Math.hypot(x, (y - (neck[1] - 0.012)) * 0.9, z - (neck[2] + 0.012)) - r;      // neckline: outside a ball at the base of the neck
   // cover(x, y, z, |x|, region) in metres: positive = cloth here
   // looser cuts: extra room that grows away from where the garment hangs (shoulders for tops, hips for trousers)

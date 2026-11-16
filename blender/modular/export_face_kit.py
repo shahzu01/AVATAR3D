@@ -32,6 +32,11 @@ EYE = {
   'hf_upturned': {'eye-corner1-up': 1.0, 'eye-eyefold-angle-up': 0.6, 'eye-corner2-down': 0.3},
   'hf_downturned': {'eye-corner1-down': 1.0, 'eye-corner2-up': 0.35, 'eye-height3-incr': 0.3},
   'hf_hooded': {'eye-eyefold-down': 0.95, 'eye-height1-decr': 0.45},
+  # men's eyes (human male heads)
+  'hm_deepset': {'eye-push1-in': 0.8, 'eye-push2-in': 0.6, 'eye-eyefold-down': 0.6},
+  'hm_narrow': {'eye-height1-decr': 0.9, 'eye-height3-decr': 0.6, 'eye-corner1-up': 0.2},
+  'hm_wide': {'eye-height1-incr': 0.7, 'eye-height3-incr': 0.5, 'eye-scale-incr': 0.4},
+  'hm_downturned': {'eye-corner1-down': 1.0, 'eye-eyefold-angle-down': 0.5, 'eye-height3-incr': 0.2},
 }
 def eye_unit(n):
     d = 0
