@@ -52,8 +52,8 @@ export function topbar(page, { tools = '' } = {}) {
     <nav class="nav">
       <a href="/tracker.html" class="${page === 'studio' ? 'on' : ''}">${ICON.studio}<span>Studio</span></a>
       <a href="/library.html" class="${page === 'library' ? 'on' : ''}">${ICON.library}<span>Library</span></a>
-      <a href="/creator.html" class="${page === 'creator' ? 'on' : ''}">${ICON.creator}<span>Creator</span></a>
-      <a href="/mixer.html" class="${page === 'mixer' ? 'on' : ''}">${ICON.creator}<span>Part Mixer</span></a>
+      <a href="/mixer.html" class="${page === 'mixer' ? 'on' : ''}" title="Character Maker: human and anime characters">${ICON.creator}<span>Characters</span></a>
+      <a href="/creator.html" class="${page === 'creator' ? 'on' : ''}" title="Animal Maker: cat, fox, wolf, bunny, panda and more">${ICON.creator}<span>Animals</span></a>
     </nav>
     <div class="spacer"></div>
     <div class="tools">${tools}</div>

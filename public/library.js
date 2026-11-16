@@ -111,7 +111,7 @@ function renderHomeInfo(a) {
     </div>
     <div class="btns">
       <button class="primary" id="homeActivate" ${active || !a.suitability.tracking ? 'disabled' : ''}>${active ? 'Already on stream' : a.suitability.tracking ? 'Put on stream' : 'Cannot be used live'}</button>
-      ${a.sourceType === 'created' ? `<a class="btnlink" href="${a.format?.type === 'Kael Studio mixed character' ? '/mixer.html' : '/creator.html'}?id=${a.id}" style="justify-content:center">${ICON.edit} Edit in creator</a>` : ''}
+      ${a.sourceType === 'created' ? `<a class="btnlink" href="${a.format?.type === 'Kael Studio mixed character' ? '/mixer.html' : '/creator.html'}?id=${a.id}" style="justify-content:center">${ICON.edit} Edit in ${a.format?.type === 'Kael Studio mixed character' ? 'Character' : 'Animal'} Maker</a>` : ''}
       <button id="homeDetails">${ICON.info} Details, stream setup and file</button>
     </div>
     <p class="tip">Tip: double-click an avatar to open its details. Drag the stage to turn it, scroll to zoom.</p>`;

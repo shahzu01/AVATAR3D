@@ -90,9 +90,9 @@ Open **Avatar library** from the Studio's Look panel (or http://localhost:3939/l
 - Each avatar page has **Set as active avatar** (OBS and the Studio switch instantly), **Rename**, **Duplicate settings**, **Download original**, **Replace file…** and **Delete** (with confirmation).
 - **Stream presentation** settings are saved per avatar: position, turn and size in the shot, camera framing, background, light preset, blinking on/off, and eye, mouth and expression strength.
 
-## Character Creator
+## Animal Maker
 
-Open it from **Create a New Avatar** in the library (or http://localhost:3939/creator.html).
+For animal characters (and stylised elves and humans): **Animals** in the top bar (or http://localhost:3939/creator.html).
 
 - **Start:** 12 ready-made characters (Raccoon Gamer, Fox Ranger, Neko Streamer, Panda Chef, Wolf Knight, Bunny Idol, Tiger Athlete, Bear Buddy, Mouse Inventor, Anime Hero, Elf Mage, Idol Star), two randomize buttons, and 11 species: human, elf, cat, fox, wolf, raccoon, bear, panda, bunny, tiger, mouse.
 - **Body:** height, head size, leg length, build, shoulders, chest, waist, hips, arm and leg thickness, outline thickness.
@@ -120,9 +120,9 @@ Where things are kept (inside the KaelStudio folder):
 
 Limits (changeable in `settings.json` under `importLimits`): 300 MB per file, 4 million triangles, 16384 px textures. Models over 300k triangles get a "may lower the frame rate" warning.
 
-## Part Mixer
+## Character Maker
 
-Open it from the top bar (or http://localhost:3939/mixer.html). It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
+The main place to make a character: **Characters** in the top bar (or http://localhost:3939/mixer.html), or **Create a New Avatar** in the library. **Undo / Redo** (⌘Z / ⇧⌘Z) and **Surprise me** (a random character) are at the top. It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
 
 - **Face:** 15 face shapes (5 female, 5 male, 5 cartoon) and 20 eye shapes (5 each for human women, human men, anime girls and anime boys), plus eye colour. Human heads get drawn brows, a lash line and lip colour (and blush on women). Anime heads get painted eyes, lash lines and blush.
 - **Face tracking:** every Part Mixer face has 43 of the iPhone's 52 face shapes (Perfect Sync) plus the usual blink, mouth and mood shapes, so winks, one-sided smiles, brows, cheek puffs and the jaw all follow you. Eye direction moves the eyes themselves.

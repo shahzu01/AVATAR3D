@@ -40,8 +40,8 @@ function faceShapeOptions() {
 }
 function eyeShapeOptions() {
   const el = $('eyeShape'), g = recipe.headModel ? null : eyeShapeGroup(kit, recipe.parts.Head), cur = eyeShapeOf(kit, recipe)?.[0];
-  el.disabled = !g; el.title = g ? '' : 'Eye shapes are for female heads (human and anime)';
-  el.innerHTML = g ? `<optgroup label="${g === 'anime' ? 'Anime girl eyes' : 'Female eyes'}">` + EYE_SHAPES[g].map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('') + '</optgroup>' : '<option>Not available for this head</option>';
+  el.disabled = !g; el.title = g ? '' : 'This head keeps its own eyes';
+  el.innerHTML = g ? `<optgroup label="${({ anime: 'Anime girl eyes', female: 'Female eyes', male: 'Male eyes', animeMale: 'Anime boy eyes' })[g]}">` + EYE_SHAPES[g].map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('') + '</optgroup>' : '<option>Not available for this head</option>';
 }
 function render() {
   $('starts').innerHTML = STARTS.map(([n], i) => `<button data-start="${i}">${n}</button>`).join('');
@@ -59,9 +59,32 @@ function render() {
   $('outfit').innerHTML = order.map((g) => `<optgroup label="${GN[g]}">${Object.entries(OUTFITS).filter(([, o]) => o.group === g).map(([k, o]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${o.label}</option>`).join('')}</optgroup>`).join('') + `<option value="none" ${cur === 'none' ? 'selected' : ''}>None</option>`;
   const worn = accessoriesOf(kit, recipe); $('acc').innerHTML = Object.entries(ACCESSORIES).map(([k, n]) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" data-acc="${k}" ${worn.includes(k) ? 'checked' : ''}>${n}</label>`).join('');
 }
+// undo / redo: every change is a snapshot of the recipe
+const hist = []; let hpos = -1, fromHistory = false;
+const histButtons = () => { $('undo').disabled = hpos <= 0; $('redo').disabled = hpos >= hist.length - 1; };
+function remember() { const s = JSON.stringify(recipe); if (hist[hpos] === s) return; hist.splice(hpos + 1); hist.push(s); if (hist.length > 80) hist.shift(); hpos = hist.length - 1; histButtons(); }
+function travel(d) { const p = hpos + d; if (p < 0 || p >= hist.length) return; hpos = p; const keep = recipe.name; recipe = JSON.parse(hist[p]); recipe.name = keep; fromHistory = true; render(); refresh(); histButtons(); }
+// a random character: a start, then hair, face, eyes, outfit and colours picked from what that head and body offer
+const PALETTE = ['#24315e', '#7a1c26', '#2b3f73', '#ff5fa2', '#1c1a22', '#2d6a4f', '#f2efe9', '#ffd166', '#5b6bd6', '#8e2a2a', '#3a3a46', '#e0566d', '#2f8f8a', '#c97b3a'];
+const HAIR = ['#2b2220', '#4a2f22', '#6b4226', '#a0522d', '#d9b26a', '#1c1c24', '#b03a48', '#5c7cfa', '#e8e2d6', '#f2a7c3'];
+const EYES = ['#4f7396', '#2f8f8a', '#6b4226', '#5a8a3c', '#8a4fb8', '#c0392b', '#3c6e9e', '#d4a017'];
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+function surprise() {
+  const starts = STARTS.filter(([n]) => !/body, |arms/.test(n)), keep = recipe.name; recipe = pick(starts)[1](); recipe.name = keep; render();
+  const opt = (id) => [...$(id).querySelectorAll('option')].filter((o) => !o.disabled && o.value && !/Comes with|Not available/.test(o.textContent)).map((o) => o.value);
+  if (!$('hair').disabled) recipe.hair = pick(opt('hair').filter((v) => v !== 'None')) || recipe.hair;
+  if (!$('faceShape').disabled) recipe.faceShape = pick(opt('faceShape'));
+  if (!$('eyeShape').disabled) recipe.eyeShape = pick(opt('eyeShape'));
+  const grp = outfitGroup(kit, recipe.parts.Torso), ok = Object.entries(OUTFITS).filter(([, o]) => o.group === grp || o.group === (grp === 'male' ? 'premiumMale' : 'premium'));
+  const [ok0, o] = pick(ok); recipe.outfit = ok0; recipe.accessories = null;
+  if (o.colors && Math.random() < 0.5) Object.assign(recipe, o.colors); else { recipe.clothing = pick(PALETTE); recipe.accent = pick(PALETTE.filter((c) => c !== recipe.clothing)); }
+  if (!recipe.headModel) { recipe.hairColor = pick(HAIR); recipe.eyeColor = pick(EYES); }
+  render(); refresh();
+}
 let refreshes = 0;
 async function refresh() {
   if (refreshes++) dirty = true;
+  if (!fromHistory) remember(); fromHistory = false;
   const my = ++seq; $('busy').classList.add('on');
   try {
     await viewer.loadCreated(JSON.parse(JSON.stringify(recipe)), { keepCamera: !first });
@@ -69,7 +92,7 @@ async function refresh() {
     if (first) { viewer.frame(view); first = false; }
     const n = viewer.vrm?.userData?.modularNotes || [], h = viewer.vrm?.userData?.modularHeight;
     $('notes').innerHTML = `<b>Height ${h ? h.toFixed(2) : '?'} m.</b> ` + (n.length ? n.map((x) => x.replace(/^(\w+):/, '<b>$1</b>:')).join('<br>') : 'All parts come from one body, so there are no seams to blend.');
-    document.title = 'READY Part Mixer · Kael Studio';
+    document.title = 'READY Character Maker · Kael Studio';
   } catch (e) { console.error(e); setStatus(e.message, 'err'); document.title = 'ERROR ' + e.message; }
   finally { if (my === seq) $('busy').classList.remove('on'); }
 }
@@ -96,6 +119,9 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.start) { const keep = recipe.name; recipe = STARTS[+b.dataset.start][1](); recipe.name = keep; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));
 render(); refresh(); }
+  if (b.id === 'undo') return travel(-1);
+  if (b.id === 'redo') return travel(1);
+  if (b.id === 'surprise') return surprise();
   if (b.dataset.motion) { const on = !b.classList.contains('on'); b.classList.toggle('on', on); viewer.setMotion(on ? b.dataset.motion : 'idle'); return; }
   if (b.dataset.view) { view = b.dataset.view; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x === b)); viewer.frame(view); }
 });
@@ -140,3 +166,8 @@ if (q.get('light')) viewer.setLighting(q.get('light'));
 if (q.get('view')) view = q.get('view');
 document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));
 render(); refresh();
+
+document.addEventListener('keydown', (e) => {      // ⌘Z / ⇧⌘Z (Ctrl on other keyboards), not while typing a name
+  if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || /input|select|textarea/i.test(document.activeElement?.tagName || '') && document.activeElement.type === 'text') return;
+  e.preventDefault(); travel(e.shiftKey ? 1 : -1);
+});
