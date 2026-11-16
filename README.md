@@ -116,6 +116,12 @@ Limits (changeable in `settings.json` under `importLimits`): 300 MB per file, 4 
 - **Low fps on the M2:** set **Body every** to 3rd frame, or untick Hands when you don't need fingers.
 - **OBS shows nothing:** check Kael Studio is running (click the Desktop icon: it offers Open or Quit when running), then right-click the source and choose Refresh.
 
+## Privacy and safety
+
+Kael Studio only answers this Mac. Other computers and phones on your Wi-Fi cannot open its pages or change anything, and other websites open in Chrome cannot send it commands (no deleting avatars, changing settings or spamming throws). Stream Deck buttons and the iPhone tracking apps keep working.
+
+If you really need another computer to reach it (for example OBS on a second PC), start it with `KAEL_HOST=0.0.0.0 npm start`, or set `"listenHost": "0.0.0.0"` in `settings.json`. Anyone on that network can then use it, so only do this on a network you trust.
+
 ## How it works
 
 `tracker.html` runs MediaPipe Face, Hand and Pose in Chrome and solves bone rotations and blendshapes (`solver.js`). It streams them over WebSocket to `server.js`, which relays them to every `avatar.html` (OBS, Studio preview). The server also handles VMC/OSC, Twitch chat, Stream Deck HTTP triggers and saves your settings to `settings.json`.

@@ -196,10 +196,34 @@ function status() {
     vmcActive: phone.active, phone: phone.status(), twitch: twitchState, settings: publicSettings() };
 }
 
+// ------------------------------------------------------------------ who may talk to the server
+// Only this Mac: the server listens on 127.0.0.1 unless KAEL_HOST (or "listenHost" in settings.json) says otherwise.
+// Requests must name a local host (stops DNS-rebinding tricks), and browser requests to the API or the live socket must
+// come from Kael Studio's own pages (stops other websites from deleting avatars, changing settings or firing triggers).
+// Stream Deck and Terminal requests carry no browser headers and keep working. The iPhone apps use UDP and are not affected.
+const HOST = process.env.KAEL_HOST || settings.listenHost || '127.0.0.1';
+const LOOPBACK_ONLY = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
+const LOCAL_NAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+function refuse(req) {
+  const host = String(req.headers.host || ''), name = host.replace(/:\d+$/, '').toLowerCase();
+  if (LOOPBACK_ONLY && !LOCAL_NAMES.has(name)) return 'Unknown host.';
+  const p = (req.url || '').split('?')[0];
+  if (!(p.startsWith('/api/') || p === '/ws')) return null;
+  const site = req.headers['sec-fetch-site'];
+  if (site === 'cross-site' || site === 'same-site') return 'Requests from other websites are not allowed.';
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null') { try { if (new URL(origin).host.toLowerCase() !== host.toLowerCase()) return 'Requests from other websites are not allowed.'; } catch { return 'Bad origin.'; } }
+  else if (origin === 'null') return 'Requests from other websites are not allowed.';
+  return null;
+}
+
 const server = http.createServer((req, res) => {
+  const no = refuse(req);
+  if (no) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: no })); return; }
+  if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
   const url = new URL(req.url, `http://${req.headers.host}`);
   const p = url.pathname;
-  const ok = (obj) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(obj)); };
+  const ok = (obj) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   // Stream Deck friendly endpoints (GET so a "web request" button works)
   let m;
   if ((m = p.match(/^\/api\/trigger\/([\w-]+)$/))) {
@@ -245,7 +269,7 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res, p);
 });
 
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4 * 1024 * 1024 });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4 * 1024 * 1024, verifyClient: ({ req }) => !refuse(req) });
 wss.on('connection', (ws, req) => {
   const role = new URL(req.url, 'http://x').searchParams.get('role') || 'avatar';
   const client = { ws, role }; clients.add(client);
@@ -337,8 +361,8 @@ function connectTwitch(channel) {
 }
 connectTwitch(settings.twitchChannel);
 
-server.listen(PORT, () => {
-  console.log(`\nKael Studio running`);
+server.listen(PORT, HOST, () => {
+  console.log(`\nKael Studio running${LOOPBACK_ONLY ? ' (this Mac only)' : ` (open to the network on ${HOST})`}`);
   console.log(`  Studio + tracker (open in Chrome):  http://localhost:${PORT}/tracker.html`);
   console.log(`  Avatar for OBS Browser Source:      http://localhost:${PORT}/avatar.html`);
   console.log(`  Avatar library:                     http://localhost:${PORT}/library.html`);
