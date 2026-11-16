@@ -219,8 +219,11 @@ function fingerBoneName(side, finger, j) {
 function idleTargets(t) {
   const breathe = settings.idleMotion !== false ? Math.sin(t * 1.6) * 0.012 : 0;
   const sway = settings.idleMotion !== false ? Math.sin(t * 0.45) * 0.02 : 0;
+  // a slow weight shift from hip to hip: enough to keep skirts, capes and hair gently alive; the spine turns back so the face stays on camera
+  const on = settings.idleMotion !== false, hy = on ? Math.sin(t * 0.42) * 0.07 + Math.sin(t * 0.91 + 1.3) * 0.02 : 0, hz = on ? Math.sin(t * 0.84 + 0.6) * 0.03 : 0;
   return {
-    spine: eul(breathe, sway * 0.5, sway * 0.3), chest: eul(breathe * 1.5, 0, 0),
+    hips: eul(0, hy, hz),
+    spine: eul(breathe, sway * 0.5 - hy * 0.55, sway * 0.3 - hz * 0.7), chest: eul(breathe * 1.5, -hy * 0.3, -hz * 0.2),
     leftUpperArm: aa('z', -1.22).multiply(aa('x', 0.12)), rightUpperArm: aa('z', 1.22).multiply(aa('x', 0.12)),
     leftLowerArm: aa('y', 0.25), rightLowerArm: aa('y', -0.25),
     leftHand: qI.clone(), rightHand: qI.clone(),
@@ -237,7 +240,7 @@ function gestureTargets(g, t) {
     o.head = eul(Math.sin(p * Math.PI * 4) * 0.22, 0, 0);
   } else if (g.name === 'dance') {
     const b = Math.sin(t * 6);
-    o.spine = eul(0, b * 0.15, b * 0.12); o.head = eul(Math.abs(b) * 0.12, -b * 0.15, -b * 0.1);
+    o.hips = eul(0, b * 0.32, b * 0.07); o.spine = eul(0, -b * 0.12, b * 0.06); o.head = eul(Math.abs(b) * 0.12, -b * 0.15, -b * 0.1);      // the hips lead, so skirts and hair swing
     o.leftUpperArm = aa('z', -0.6 + b * 0.4); o.rightUpperArm = aa('z', 0.6 + b * 0.4);
     o.leftLowerArm = aa('y', 1.2); o.rightLowerArm = aa('y', -1.2);
   }
@@ -267,6 +270,7 @@ function update(dt, t) {
   const spineT = idle.spine.clone().slerp(pose?.spine ? Q(pose.spine) : qI.clone().slerp(headQ, 0.18).multiply(idle.spine), Math.max(poseW, faceW * 0.6));
   smoothB('spine', spineT, 10, dt);
   smoothB('chest', idle.chest, 10, dt);
+  smoothB('hips', idle.hips, 6, dt);
   // --- arms (pose tracking where visible, otherwise relaxed)
   for (const s of ['left', 'right']) {
     const w = poseW * (pose?.conf?.[s] ? 1 : 0);

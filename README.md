@@ -25,7 +25,7 @@ Then:
 
 1. **Chrome:** open http://localhost:3939/tracker.html and press **Start camera**. Allow camera access. Look straight ahead with a relaxed face and press **Calibrate neutral**.
 2. **OBS:** add a **Browser Source** with URL `http://localhost:3939/avatar.html`, width 1920, height 1080. Leave "Shutdown source when not visible" off. Put the source above your Elgato PS5 capture.
-3. Change the camera framing, background, lights and avatar in the **Look** panel. Changes appear in OBS instantly.
+3. Change the camera framing, background, lighting preset (Cute anime, Gaming stream, Dramatic scene, Character showcase, Classic) and avatar in the **Look** panel. Changes appear in OBS instantly. **Idle breathing** also adds a slow hip-to-hip weight shift, which keeps skirts, capes and hair gently moving while you sit still.
 
 Keep the Chrome tab open while streaming. Chrome slows down background tabs, so give it its own window rather than hiding it behind another tab.
 
@@ -109,6 +109,21 @@ Where things are kept (inside the KaelStudio folder):
 
 Limits (changeable in `settings.json` under `importLimits`): 300 MB per file, 4 million triangles, 16384 px textures. Models over 300k triangles get a "may lower the frame rate" warning.
 
+## Part Mixer
+
+Open it from the top bar (or http://localhost:3939/mixer.html). It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
+
+- **Face:** 15 face shapes (5 female, 5 male, 5 cartoon) and 20 eye shapes (5 each for human women, human men, anime girls and anime boys), plus eye colour. Human heads get drawn brows, a lash line and lip colour (and blush on women). Anime heads get painted eyes, lash lines and blush.
+- **Face tracking:** every Part Mixer face has 43 of the iPhone's 52 face shapes (Perfect Sync) plus the usual blink, mouth and mood shapes, so winks, one-sided smiles, brows, cheek puffs and the jaw all follow you. Eye direction moves the eyes themselves.
+- **Outfits:** everyday sets for male, female and anime bodies, **Premium (female & anime)**: Gothic Lolita, Magical Knight, Modern Kimono, Stage Idol, Victorian Maid, and **Premium (male)**: Royal Knight, Butler, Samurai, Stage Idol. Premium outfits start in their own colours; change them with **Clothing** and **Accent**.
+- **Cloth physics:** skirts, capes and hakama swing and settle, and bounce off the legs, hands and body. Hair sways too. Press **Sway** in the view bar to try it.
+- **Save to library** saves the character and optimizes it for the stream (see below). Tick **Go live** to put it on stream when it is saved.
+- **Export .vrm file** gives you a standard VRM 1.0 file of the character for other apps (VSeeFace, Warudo, VRChat and others), with its expressions, Perfect Sync shapes, hair and cloth physics and toon materials.
+
+### Optimized for the stream
+
+A Part Mixer character is made of many pieces. Kael Studio bakes it into one optimized VRM (about 8 times less work per frame for a premium outfit) and keeps it next to the character in the library. This happens by itself after **Save to library**, after **Put on stream** in the library, and in the Studio while the camera is off. The library shows **Stream file: Optimized** when it is ready. Until then, and right after you edit a character, OBS builds it live (it looks the same, it just costs more), so the stream never shows an out-of-date version.
+
 ## Troubleshooting
 
 - **Avatar moves the wrong way:** tick **Mirror movement**. If only winks are swapped, tick **Swap face left/right**.
@@ -125,3 +140,13 @@ If you really need another computer to reach it (for example OBS on a second PC)
 ## How it works
 
 `tracker.html` runs MediaPipe Face, Hand and Pose in Chrome and solves bone rotations and blendshapes (`solver.js`). It streams them over WebSocket to `server.js`, which relays them to every `avatar.html` (OBS, Studio preview). The server also handles VMC/OSC, Twitch chat, Stream Deck HTTP triggers and saves your settings to `settings.json`.
+
+Part Mixer characters are assembled in the browser (`modular.js`, with `outfits.js`, `garments.js`, `cloth.js`, `face.js` and `accessories.js`) from the kit in `public/modular/`, which the Blender scripts in `blender/modular/` build. `bake.js` turns one into a single optimized VRM; `autobake.js` keeps the stored copy up to date.
+
+## Checking that everything works
+
+```
+npm test
+```
+
+runs a quick check (under a minute) on a spare port with a scratch data folder, so your library and settings are never touched: every script parses, every page loads, the safety lock holds, every outfit, accessory, face shape and eye shape survives saving, the face kit is complete, and the optimized-file checks refuse stale or broken files.

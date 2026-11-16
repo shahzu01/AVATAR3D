@@ -6,9 +6,12 @@
   "private": true,
   "scripts": {
     "setup": "node scripts/get-models.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test \"test/*.test.mjs\""
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.14",
     "@pixiv/three-vrm": "3.1.0",

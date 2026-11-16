@@ -16,8 +16,9 @@ import { PhoneFace } from './lib/phone.js';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3939);
 const VMC_PORT = Number(process.env.VMC_PORT || 39539);
-const SETTINGS_FILE = path.join(ROOT, 'settings.json');
-const AVATAR_DIR = path.join(ROOT, 'avatars');
+const DATA = process.env.KAEL_DATA_DIR ? path.resolve(process.env.KAEL_DATA_DIR) : ROOT;      // where the library and settings live (tests point this at a scratch folder)
+const SETTINGS_FILE = path.join(DATA, 'settings.json');
+const AVATAR_DIR = path.join(DATA, 'avatars');
 fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
 // ------------------------------------------------------------------ settings
@@ -41,7 +42,7 @@ try { settings = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(SETTINGS_F
 function saveSettings() { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); }
 
 // ------------------------------------------------------------------ avatar library
-const library = new Library(ROOT, { legacyDir: AVATAR_DIR, limits: settings.importLimits });
+const library = new Library(DATA, { legacyDir: AVATAR_DIR, limits: settings.importLimits });
 const canGoLive = (r) => r && (r.sourceType === 'created' || (r.format.type === 'VRM' && r.suitability?.tracking));
 function ensureActive() {
   if (library.get(settings.activeAvatarId) && canGoLive(library.get(settings.activeAvatarId))) return;
