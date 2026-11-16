@@ -49,6 +49,17 @@ Keep the Chrome tab open while streaming. Chrome slows down background tabs, so 
 | Gestures | Keys Z X C, chat `!wave !nod !dance` |
 | Twitch chat | Enter your channel name in the Studio and tick **Chat commands** (read-only, no login) |
 
+### Twitch events and rules
+
+In the Studio's **Interact** panel, **Twitch events** connects your channel's channel-point redeems, bits, subs, gifted subs, resubs, follows and raids. It is a one-time setup:
+
+1. Open the [Twitch developer console](https://dev.twitch.tv/console/apps/create) and register an application: any name, OAuth Redirect URL `http://localhost`, category *Broadcaster Suite*, client type **Public**.
+2. Paste its **Client ID** into the panel and press **Connect**, then enter the code it shows at twitch.tv/activate.
+
+No password or secret is ever typed into Kael Studio. The sign-in is kept in `twitch-auth.json` in the KaelStudio folder (never on GitHub) and renews itself; **Sign out** removes it. Bits and subs only work for Affiliate and Partner channels: the panel shows which events Twitch allowed.
+
+**Rules** say what happens: *when* a redeem (by name), bits (at least N), a sub, resub, gifted subs, a follow, a raid or a chat command happens, *do* any mix of thrown items (optionally one per N bits, gifts or raiders), an expression, a gesture or a lighting preset, with an optional wait before the rule can fire again. Starter rules are included (follow, bits, sub, gift subs, raid, a "Bonk" redeem). **▶ Test** on any rule pretends it just happened, so you can try it without going live; the Activity log shows every event and what it did. Chat commands you add as rules work with the read-only chat connection too.
+
 ### Stream Deck
 
 Use the **Website** action. Turn on "GET request in background" and set the URL to one of:

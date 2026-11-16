@@ -49,6 +49,23 @@
   .pip.small { width: 200px; }
   .pip.hide .cam { display: none; }
   .obsbar { right: 14px; bottom: 14px; display: flex; gap: 8px; align-items: center; padding: 8px 10px; font-size: 12px; max-width: calc(100% - 400px); }
+  .rule { border: 1px solid var(--line); background: var(--bg2); border-radius: 12px; padding: 9px 10px; margin-bottom: 8px; }
+  .rule.off { opacity: .55; }
+  .rule .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .rule .row + .row { margin-top: 6px; }
+  .rule select, .rule input[type=text], .rule input[type=number] { padding: 4px 7px; font-size: 12px; }
+  .rule input[type=number] { width: 62px; }
+  .rule .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .rule .act { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; width: 100%; padding: 5px 6px; border-radius: 9px; background: rgba(255,255,255,.03); }
+  .rule .x { padding: 2px 8px; font-size: 12px; }
+  .rule .foot { display: flex; gap: 6px; align-items: center; margin-top: 7px; }
+  .rule .foot .grow { flex: 1; font-size: 11.5px; color: var(--muted); }
+  .tv { border: 1px solid var(--line); background: var(--bg2); border-radius: 12px; padding: 10px; font-size: 12.5px; }
+  .tv .big { font: 700 22px/1.2 ui-monospace, Menlo, monospace; letter-spacing: 2px; margin: 6px 0; }
+  .tv ol { margin: 6px 0 4px 18px; padding: 0; color: var(--muted); } .tv li { margin: 3px 0; }
+  .tv .topics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tv .topics span { font-size: 11px; padding: 2px 7px; border-radius: 99px; border: 1px solid var(--line2); color: var(--muted); }
+  .tv .topics span.on { color: #7fe0a8; border-color: rgba(127,224,168,.35); }
   .obsbar code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   @media (max-width: 1050px) { .work { --panelW: 320px; } .obsbar { display: none; } }
 </style>
@@ -179,6 +196,14 @@
         <div class="checks one" style="margin-top:10px"><label><input type="checkbox" id="chatCommands"> Chat commands</label></div>
         <p class="tip">Chat: <code>!heart</code> <code>!star</code> <code>!tomato</code> <code>!bonk</code> <code>!gift</code> <code>!pizza</code> <code>!joy</code> <code>!laugh</code> <code>!angry</code> <code>!sad</code> <code>!wow</code> <code>!smug</code> <code>!blush</code> <code>!wink</code> <code>!wave</code> <code>!nod</code> <code>!dance</code></p>
         <p class="tip">Stream Deck (background web request): <code id="apiEx"></code></p>
+
+        <div class="section-t">Twitch events<span class="line"></span></div>
+        <div class="sub" style="margin:-2px 0 8px">Redeems, bits, subs, follows and raids set off your rules below. Needs a one-time Twitch sign-in.</div>
+        <div id="tvBox"></div>
+
+        <div class="section-t">Rules · when this happens, do that<span class="line"></span></div>
+        <div id="rulesBox"></div>
+        <div class="btns" style="margin-top:8px"><button id="ruleAdd">＋ Add a rule</button><button class="ghost" id="ruleReset" title="Put back the starter rules">Reset to starter rules</button></div>
       </section>
 
       <!-- ======================= activity ======================= -->
@@ -230,5 +255,6 @@
   setInterval(() => document.querySelectorAll('input[type=range]').forEach((el) => { const p = `${((+el.value - +el.min) / (+el.max - +el.min)) * 100}%`; if (el.style.getPropertyValue('--p') !== p) el.style.setProperty('--p', p); }), 600);
 </script>
 <script type="module" src="/tracker.js"></script>
+<script type="module" src="/rules.js"></script>
 </body>
 </html>

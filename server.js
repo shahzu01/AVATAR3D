@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Library, UserError, pickLook, LOOK_KEYS } from './lib/library.js';
 import { PhoneFace } from './lib/phone.js';
+import { TriggerEngine, sanitizeRules, DEFAULT_RULES, WHEN, ITEMS, EXPRESSIONS, GESTURES, PRESETS, ACTS } from './lib/triggers.js';
+import { TwitchEvents } from './lib/twitch-events.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3939);
@@ -173,6 +175,23 @@ async function libraryApi(req, res, url) {
   }
 }
 
+async function eventsApi(req, res, p) {
+  const M = req.method, json = (o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+  try {
+    if (p === '/api/triggers' && M === 'GET') return json({ rules: settings.triggers, when: WHEN, items: ITEMS, expressions: EXPRESSIONS, gestures: GESTURES, presets: PRESETS, acts: ACTS });
+    if (p === '/api/triggers' && M === 'PUT') { const b = await readJson(req, 2e5); settings.triggers = sanitizeRules(b.rules); saveSettings(); return json({ rules: settings.triggers }); }
+    if (p === '/api/triggers/reset' && M === 'POST') { settings.triggers = structuredClone(DEFAULT_RULES); saveSettings(); return json({ rules: settings.triggers }); }
+    if (p === '/api/triggers/test' && M === 'POST') {          // pretend this happened on stream
+      const b = await readJson(req, 1e4); if (!WHEN[b.when]) return json({ error: 'Unknown event.' }, 400);
+      return json({ fired: streamEvent({ when: b.when, name: String(b.name || '').slice(0, 60), amount: Number(b.amount) || 0, user: String(b.user || 'Test viewer').slice(0, 40) }, 'test') });
+    }
+    if (p === '/api/twitch/status' && M === 'GET') return json(twitchEvents.status());
+    if (p === '/api/twitch/connect' && M === 'POST') { const b = await readJson(req, 1e4); try { return json(await twitchEvents.startSignIn(b.clientId)); } catch (e) { return json({ error: e.message }, 400); } }
+    if (p === '/api/twitch/disconnect' && M === 'POST') { twitchEvents.disconnect(); return json(twitchEvents.status()); }
+    return json({ error: 'Not found.' }, 404);
+  } catch (e) { return json({ error: e instanceof UserError ? e.message : 'Invalid request.' }, e.code || 400); }
+}
+
 // ------------------------------------------------------------------ static files
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.wasm': 'application/wasm', '.png': 'image/png', '.svg': 'image/svg+xml',
@@ -234,6 +253,16 @@ function refuse(req) {
   return null;
 }
 
+// ------------------------------------------------------------------ stream events -> trigger rules -> avatar
+if (!Array.isArray(settings.triggers)) settings.triggers = structuredClone(DEFAULT_RULES); else settings.triggers = sanitizeRules(settings.triggers);
+const engine = new TriggerEngine({ getRules: () => settings.triggers, send: (m) => broadcast(m), setPreset: (p) => { settings.lightingPreset = p; saveSettings(); broadcast({ type: 'settings', settings: publicSettings() }); } });
+function streamEvent(ev, source = 'twitch') {
+  const fired = engine.handle(ev);
+  broadcast({ type: 'streamEvent', event: { ...ev, source }, fired }, ['control']);
+  return fired;
+}
+const twitchEvents = new TwitchEvents({ dataDir: DATA, onEvent: (ev) => streamEvent(ev), log: (t) => console.log(t), onStatus: (st) => broadcast({ type: 'twitchEvents', status: st }, ['control']) });
+
 const server = http.createServer((req, res) => {
   const no = refuse(req);
   if (no) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: no })); return; }
@@ -249,6 +278,7 @@ const server = http.createServer((req, res) => {
   }
   if ((m = p.match(/^\/api\/throw\/([\w-]+)$/))) { const msg = { type: 'throw', item: m[1], count: Number(url.searchParams.get('n') || 1), source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
   if ((m = p.match(/^\/api\/gesture\/([\w-]+)$/))) { const msg = { type: 'gesture', name: m[1], source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
+  if (p.startsWith('/api/triggers') || p.startsWith('/api/twitch/')) { eventsApi(req, res, p); return; }
   if (p === '/api/status') return ok(status());
   if (p === '/api/phone') return ok(phone.status());
   if (p === '/api/phone/calibrate' && req.method === 'POST') return ok({ calibrated: phone.calibrate(), status: phone.status() });
@@ -260,7 +290,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const patch = JSON.parse(body);
-        delete patch.active;
+        delete patch.active; delete patch.triggers;      // rules go through /api/triggers, which checks them
         const nextActive = patch.activeAvatarId; delete patch.activeAvatarId;
         if (patch.phone) patch.phone = { ...DEFAULT_SETTINGS.phone, ...settings.phone, ...patch.phone };
         settings = { ...settings, ...patch }; saveSettings();
@@ -366,10 +396,12 @@ function connectTwitch(channel) {
       if (!m || !settings.chatCommands) continue;
       const [, user, text] = m;
       const cmd = text.trim().toLowerCase().match(/^!(\w+)/)?.[1];
-      if (!cmd || !CHAT[cmd]) continue;
+      const own = cmd && settings.triggers.some((r) => r.on && r.when === 'command' && r.match.toLowerCase() === cmd);
+      if (!cmd || (!CHAT[cmd] && !own)) continue;
       const key = `${user}:${cmd}`, now = Date.now();
       if (now - (lastCommand.get(key) || 0) < settings.commandCooldownMs) continue;
       lastCommand.set(key, now);
+      if (own) { streamEvent({ when: 'command', name: cmd, user }, 'chat'); continue; }      // your own command rules come first
       broadcast({ ...CHAT[cmd], from: user, source: 'chat' });
     }
   });
