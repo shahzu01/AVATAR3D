@@ -42,6 +42,57 @@ cache = {}; out = {}
 for name, mix in MIX.items():
     d = sum(w * cache.setdefault(u, unit(u)) for u, w in mix.items()); ids = np.nonzero(np.linalg.norm(d, axis=1) > 2e-5)[0]
     out[name] = {'ids': base64.b64encode(ids.astype(np.uint16).tobytes()).decode(), 'd': base64.b64encode(d[ids].astype(np.float32).tobytes()).decode(), 'n': int(len(ids)), 'max_mm': round(float(np.linalg.norm(d, axis=1).max() * 1000), 2)}
+# ---- Perfect Sync: the 52 ARKit face inputs an iPhone sends (eye direction and tongue excepted: the eyes turn by bone,
+# and the kit has no tongue). Built from the same MakeHuman units: one-sided shapes are the unit faded across the face's
+# centre line, lip shapes are split into upper and lower lip, and the few movements MakeHuman lacks (jaw and mouth
+# sideways, jaw forward, cheek puff) are made from region masks taken from its units.
+def sm(t): t = np.clip(t, 0, 1); return t * t * (3 - 2 * t)
+X = P[:, 0]
+SIDE = {'L': sm((X + 0.004) / 0.008)[:, None], 'R': sm((-X + 0.004) / 0.008)[:, None]}
+def u(n): return cache.setdefault(n, unit(n))
+dO = u('mouth-open'); lowW = np.clip(-dO[:, 2] / (0.25 * (-dO[:, 2]).max()), 0, 1)[:, None]
+lipW = np.clip(np.linalg.norm(u('mouth-pursing'), axis=1) / (0.3 * np.linalg.norm(u('mouth-pursing'), axis=1).max()), 0, 1)[:, None]
+jawW = np.clip(np.linalg.norm(dO, axis=1) / (0.3 * np.linalg.norm(dO, axis=1).max()), 0, 1)[:, None]
+LOW, UP = lowW, (1 - lowW) * lipW
+# normals of the neutral face, for the cheek puff
+N = np.zeros_like(P)
+for fc in faces:
+    fc = list(fc)
+    for k in range(1, len(fc) - 1):
+        a_, b_, c_ = P[fc[0]], P[fc[k]], P[fc[k + 1]]; n = np.cross(b_ - a_, c_ - a_); N[fc[0]] += n; N[fc[k]] += n; N[fc[k + 1]] += n
+N /= np.linalg.norm(N, axis=1, keepdims=True) + 1e-12
+corner = np.argmax(np.linalg.norm(u('mouth-corner-puller'), axis=1) * (X > 0)); cx, cy, cz = P[corner]
+def cheek(sgn): c = np.array([sgn * (abs(cx) + 0.012), cy + 0.004, cz + 0.014]); g = np.exp(-np.sum((P - c) ** 2, 1) / (2 * 0.014 ** 2))[:, None]; return g * N * 0.0065
+shift = lambda w, v: w * np.array(v)[None, :]
+ARKIT = {
+  'eyeBlinkLeft': u('eye-left-closure'), 'eyeBlinkRight': u('eye-right-closure'),
+  'eyeSquintLeft': u('eye-left-slit') * 0.8, 'eyeSquintRight': u('eye-right-slit') * 0.8,
+  'eyeWideLeft': u('eye-left-opened-up'), 'eyeWideRight': u('eye-right-opened-up'),
+  'browDownLeft': u('eyebrows-left-down'), 'browDownRight': u('eyebrows-right-down'),
+  'browInnerUp': u('eyebrows-left-inner-up') + u('eyebrows-right-inner-up'),
+  'browOuterUpLeft': u('eyebrows-left-extern-up'), 'browOuterUpRight': u('eyebrows-right-extern-up'),
+  'jawOpen': dO, 'jawForward': shift(jawW * LOW, [0, -0.006, 0]), 'jawLeft': shift(jawW * LOW, [0.007, 0, 0]), 'jawRight': shift(jawW * LOW, [-0.007, 0, 0]),
+  'mouthClose': -dO * lipW * 0.6,
+  'mouthFunnel': u('mouth-pursing') * 0.6 + u('mouth-protusion') * 0.4 + dO * 0.12 * lipW,
+  'mouthPucker': u('mouth-pursing') + u('mouth-protusion') * 0.5,
+  'mouthLeft': shift(lipW, [0.006, 0, 0]), 'mouthRight': shift(lipW, [-0.006, 0, 0]),
+  'mouthRollLower': -u('mouth-eversion') * LOW, 'mouthRollUpper': -u('mouth-eversion') * UP,
+  'mouthShrugLower': u('mouth-elevation') * LOW, 'mouthShrugUpper': u('mouth-upward-retraction') * UP * 0.6,
+  'cheekPuff': cheek(1) + cheek(-1),
+  'noseSneerLeft': u('nose-left-elevation'), 'noseSneerRight': u('nose-right-elevation'),
+}
+for S, nm in (('L', 'Left'), ('R', 'Right')):
+  w = SIDE[S]
+  ARKIT.update({
+    f'mouthSmile{nm}': u('mouth-corner-puller') * w, f'mouthFrown{nm}': u('mouth-depression') * w,
+    f'mouthDimple{nm}': u('mouth-retraction') * 0.6 * w, f'mouthStretch{nm}': u('mouth-part-later') * 0.55 * w,
+    f'mouthPress{nm}': u('mouth-compression') * w, f'mouthLowerDown{nm}': u('mouth-depression-retraction') * LOW * w,
+    f'mouthUpperUp{nm}': u('mouth-upward-retraction') * UP * w,
+    f'cheekSquint{nm}': u(f'eye-{"left" if S == "L" else "right"}-slit') * 0.35 * (P[:, 2] < P[corner, 2] + 0.05)[:, None] * w + u('mouth-corner-puller') * 0.25 * w * (P[:, 2] > cz + 0.008)[:, None],
+  })
+for name, d in ARKIT.items():
+    ids = np.nonzero(np.linalg.norm(d, axis=1) > 2e-5)[0]
+    out[name] = {'ids': base64.b64encode(ids.astype(np.uint16).tobytes()).decode(), 'd': base64.b64encode(d[ids].astype(np.float32).tobytes()).decode(), 'n': int(len(ids)), 'max_mm': round(float(np.linalg.norm(d, axis=1).max() * 1000), 2) if len(ids) else 0}
 eyes = {}
 for name, mix in EYE.items():
     d = sum(w * eye_unit(u) for u, w in mix.items()); ids = np.nonzero(np.linalg.norm(d, axis=1) > 2e-5)[0]

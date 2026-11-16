@@ -74,7 +74,8 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
     for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return out; };
   const blinkDelta = (mesh, a, b) => { const d = new Float32Array(a.length), L = new Float32Array(a.length), R = new Float32Array(a.length);
     for (let i = 0; i < a.length; i += 3) for (let c = 0; c < 3; c++) { d[i + c] = b[i + c] - a[i + c]; (a[i] >= 0 ? L : R)[i + c] = d[i + c]; }
-    addExtra(mesh, ensure('blink'), d); addExtra(mesh, ensure('blinkLeft'), L); addExtra(mesh, ensure('blinkRight'), R); };
+    addExtra(mesh, ensure('blink'), d); addExtra(mesh, ensure('blinkLeft'), L); addExtra(mesh, ensure('blinkRight'), R);
+    if (exprIx.has('eyeBlinkLeft')) { addExtra(mesh, exprIx.get('eyeBlinkLeft'), L.slice()); addExtra(mesh, exprIx.get('eyeBlinkRight'), R.slice()); } };      // iPhone blinks close the painted eyes too
   const fa = bk.faceArt;
   if (fa?.sides) for (const d of fa.sides) {
     // lash line: scale and drop are linear in the blink value, so one morph reproduces it exactly

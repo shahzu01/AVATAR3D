@@ -20,14 +20,29 @@ export function addFace({ face, vrm, body, toMaster, P, scale, anime, eyeZ = nul
     for (let i = 0; i < n; i++) { const k = at.get(toMaster[i]); if (k === undefined) continue; const m = toMaster[i], w = eyeZ === null ? 1 : Math.min(1, Math.max(0, (eyeZ - 0.04 * scale - P[m * 3 + 2]) / (0.015 * scale)));      // the cheek lift stops below the eyes
       if (w > 0) pos.setXYZ(i, pos.getX(i) + rest.dA[k * 3] * scale * w, pos.getY(i) + rest.dA[k * 3 + 2] * scale * w, pos.getZ(i) - rest.dA[k * 3 + 1] * scale * w); } pos.needsUpdate = true; }
   for (const name of names) { const e = face.expressions[name], dense = new Float32Array(face.vertexCount * 3), lid = anime ? 2.1 : 1;      // anime eyes are taller: the lids travel further
-    for (let k = 0; k < e.idsA.length; k++) { const m = e.idsA[k]; dense[m * 3] = e.dA[k * 3] * scale; dense[m * 3 + 1] = e.dA[k * 3 + 1] * scale; dense[m * 3 + 2] = e.dA[k * 3 + 2] * scale * (/blink/.test(name) ? lid : 1); }
+    for (let k = 0; k < e.idsA.length; k++) { const m = e.idsA[k]; dense[m * 3] = e.dA[k * 3] * scale; dense[m * 3 + 1] = e.dA[k * 3 + 1] * scale; dense[m * 3 + 2] = e.dA[k * 3 + 2] * scale * (/blink/i.test(name) ? lid : 1); }
     const a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const m = toMaster[i]; a[i * 3] = dense[m * 3]; a[i * 3 + 1] = dense[m * 3 + 2]; a[i * 3 + 2] = -dense[m * 3 + 1]; }
     targets.push(new THREE.BufferAttribute(a, 3)); }
   geo.morphAttributes.position = targets; geo.morphTargetsRelative = true; body.morphTargetDictionary = Object.fromEntries(names.map((nm, i) => [nm, i])); body.morphTargetInfluences = names.map(() => 0);
   for (const m of [].concat(body.material)) m.needsUpdate = true;
   const mgr = new VRMExpressionManager();
-  names.forEach((nm, i) => { const ex = new VRMExpression(nm); ex.addBind(new VRMExpressionMorphTargetBind({ primitives: [body], index: i, weight: 1 })); if (/^blink/.test(nm)) ex.isBinary = false; mgr.registerExpression(ex); });
+  names.forEach((nm, i) => { const ex = new VRMExpression(nm); ex.addBind(new VRMExpressionMorphTargetBind({ primitives: [body], index: i, weight: 1 })); if (/blink/i.test(nm)) ex.isBinary = false; mgr.registerExpression(ex); });
   vrm.expressionManager = mgr;
+  // brows are separate pieces on the kit heads: give each brow vertex the movement of the skin just under it, so brow
+  // raises, frowns and every expression that moves the forehead carry the brows along
+  const brows = []; vrm.scene.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh && /brow/i.test(o.userData.matName || o.name)) { let p = o, inHead = false; while (p) { if (p.name === 'HeadModel') inHead = true; p = p.parent; } if (!inHead) brows.push(o); } });
+  if (brows.length) { vrm.scene.updateMatrixWorld(true); const bp = geo.attributes.position, head = vrm.humanoid.getRawBoneNode('head'), hy = head ? head.getWorldPosition(new THREE.Vector3()).y : 0;
+    const near = []; for (let i = 0; i < n; i++) if (bp.getY(i) > hy - 0.02) near.push(i);
+    for (const b of brows) { const g = b.geometry, p = g.attributes.position, m = b.matrixWorld, inv = new THREE.Matrix3().setFromMatrix4(m).invert(), v = new THREE.Vector3();
+      const pick = []; for (let j = 0; j < p.count; j++) { v.fromBufferAttribute(p, j).applyMatrix4(m); const best = [[1e9, 0], [1e9, 0], [1e9, 0]];
+        for (const i of near) { const d = (bp.getX(i) - v.x) ** 2 + (bp.getY(i) - v.y) ** 2 + (bp.getZ(i) - v.z) ** 2; if (d < best[2][0]) { best[2] = [d, i]; best.sort((a, c) => a[0] - c[0]); } }
+        const w = best.map(([d]) => 1 / (Math.sqrt(d) + 1e-4)), s = w[0] + w[1] + w[2]; pick.push(best.map(([, i], k) => [i, w[k] / s])); }
+      g.morphAttributes.position = targets.map((t) => { const a = new Float32Array(p.count * 3);
+        for (let j = 0; j < p.count; j++) { v.set(0, 0, 0); for (const [i, w] of pick[j]) v.x += t.getX(i) * w, v.y += t.getY(i) * w, v.z += t.getZ(i) * w; v.applyMatrix3(inv); a[j * 3] = v.x; a[j * 3 + 1] = v.y; a[j * 3 + 2] = v.z; }
+        return new THREE.BufferAttribute(a, 3); });
+      g.morphTargetsRelative = true; b.morphTargetDictionary = { ...body.morphTargetDictionary }; b.morphTargetInfluences = names.map(() => 0);
+      for (const mm of [].concat(b.material)) mm.needsUpdate = true;
+      names.forEach((nm, i) => mgr.getExpression(nm)?.addBind(new VRMExpressionMorphTargetBind({ primitives: [b], index: i, weight: 1 }))); } }
   // something dark behind the lips, so an open mouth is not a hole through the head
   const aa = face.expressions.aa, c = [0, 0, 0]; let w = 0;
   for (let k = 0; k < aa.idsA.length; k++) { const d = Math.hypot(aa.dA[k * 3], aa.dA[k * 3 + 1], aa.dA[k * 3 + 2]); if (d > 0.012) { const m = aa.idsA[k]; c[0] += P[m * 3] * d; c[1] += P[m * 3 + 1] * d; c[2] += P[m * 3 + 2] * d; w += d; } }
@@ -80,7 +95,7 @@ export function animeBlink(vrm, head) {
   head.traverse((o) => { if (!o.isMesh) return; const n = o.userData.matName || ''; if (/lash/i.test(n)) lashes.push(o); else if (/eyes/i.test(n)) { eyes.push(o); o.geometry.computeBoundingBox(); h = Math.max(h, o.geometry.boundingBox.max.y - o.geometry.boundingBox.min.y); } });
   if (!eyes.length) return; const base = lashes.map((l) => l.position.y), prev = vrm.__hairSprings;
   vrm.__hairSprings = (dt) => { prev?.(dt); const em = vrm.expressionManager; if (!em) return;
-    const b = Math.max(em.getValue('blink') || 0, ((em.getValue('blinkLeft') || 0) + (em.getValue('blinkRight') || 0)) / 2);
+    const v = (n) => em.getValue(n) || 0, b = Math.max(v('blink'), (Math.max(v('blinkLeft'), v('eyeBlinkLeft')) + Math.max(v('blinkRight'), v('eyeBlinkRight'))) / 2);
     lashes.forEach((l, i) => { l.position.y = base[i] - h * 0.42 * b; }); for (const e of eyes) e.visible = b < 0.8; };
   return { eyes, lashes, h };
 }

@@ -247,7 +247,7 @@ export async function loadModular(input) {
     else { if (faceArt) { const old = []; head.traverse((o) => { if (o.isMesh && /Eyes_Anime|Lashes/i.test(o.userData.matName || '')) old.push(o); else if (o.isMesh && /brow/i.test(o.userData.matName || '')) o.position.y += faceArt.browShift; });
         for (const o of old) o.parent.remove(o); head.add(faceArt.group); notes.push('Face: anime styling (painted eyes, lash line, blush)');
         const skinMat = [].concat(body.material)[0]; for (const l of faceArt.lids) l.material = skinMat;
-        const prev = vrm.__hairSprings; vrm.__hairSprings = (dt) => { prev?.(dt); const em = vrm.expressionManager; if (!em) return; const bb = em.getValue('blink') || 0; faceArt.blink(Math.max(bb, em.getValue('blinkLeft') || 0), Math.max(bb, em.getValue('blinkRight') || 0)); }; }
+        const prev = vrm.__hairSprings; vrm.__hairSprings = (dt) => { prev?.(dt); const em = vrm.expressionManager; if (!em) return; const v = (n) => em.getValue(n) || 0, bb = v('blink'); faceArt.blink(Math.max(bb, v('blinkLeft'), v('eyeBlinkLeft')), Math.max(bb, v('blinkRight'), v('eyeBlinkRight'))); }; }
       else bake.animeBlink = animeBlink(vrm, head); }
     attachToHead(vrm, head, basis, exScale);
   } catch (e) { console.warn('modular head extras', e); }
