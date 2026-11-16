@@ -232,6 +232,10 @@ export class AvatarViewer {
     }
     if (m === 'wave') {
       o.rightUpperArm = aa('y', 0.35).multiply(aa('z', -0.5)); o.rightLowerArm = aa('z', -1.3 + Math.sin(t * 9) * 0.32); o.rightHand = aa('z', Math.sin(t * 9 + 0.6) * 0.25);
+    } else if (m === 'sway') {         // hips turn and bounce: shows off cloth and hair physics
+      const k = Math.min(1, el / 0.6);
+      o.hips = aa('y', Math.sin(el * 4.2) * 0.45 * k).multiply(aa('z', Math.sin(el * 8.4) * 0.06 * k)); o.spine = aa('y', -Math.sin(el * 4.2) * 0.2 * k);
+      o.leftUpperLeg = aa('x', Math.sin(el * 4.2) * 0.25 * k); o.rightUpperLeg = aa('x', -Math.sin(el * 4.2) * 0.25 * k);
     } else if (m === 'nod') {
       o.head = aa('x', Math.max(0, Math.sin(el * 7)) * 0.3); o.neck = aa('x', Math.max(0, Math.sin(el * 7)) * 0.1);
     } else if (m === 'look') {

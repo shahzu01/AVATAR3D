@@ -119,11 +119,14 @@ export function buildExtras(ctx, extras, pal) {
       for (let m = 0; m < kit.vertexCount; m++) { const p = partOf(m); if (!(p === 'Torso' || p === 'Neck' || p.startsWith('Leg') || (p.startsWith('Arm') && Math.abs(P[m * 3]) < sx + 0.07))) continue;
         const x = P[m * 3], y = P[m * 3 + 1] - cy0, z = P[m * 3 + 2]; if (z > zt + 0.03 || z < zb - 0.05) continue; const th = Math.atan2(y, x), rad = Math.hypot(x, y);
         for (let r = 0; r < rows; r++) { if (Math.abs(z - rowsZ[r]) > 0.035) continue; const c = Math.round(((th - Math.PI / 2) / half(r) + 1) / 2 * (cols - 1)); for (let d = -1; d <= 1; d++) { const q = c + d; if (q >= 0 && q < cols && rad > reach[r * cols + q]) reach[r * cols + q] = rad; } } }
+      for (const sm of ctx.pieces || []) { if (!/^Outfit_skirt/.test(sm.name)) continue; const sp = sm.geometry.attributes.position;      // hang clear of the skirts too
+        for (let i = 0; i < sp.count; i++) { const x = sp.getX(i), y = -sp.getZ(i) - cy0, z = sp.getY(i); const th = Math.atan2(y, x), rad = Math.hypot(x, y);
+          for (let r = 0; r < rows; r++) { if (Math.abs(z - rowsZ[r]) > 0.035) continue; const c = Math.round(((th - Math.PI / 2) / half(r) + 1) / 2 * (cols - 1)); for (let d = -1; d <= 1; d++) { const q = c + d; if (q >= 0 && q < cols && rad + 0.012 > reach[r * cols + q]) reach[r * cols + q] = rad + 0.012; } } } }
       for (let r = 1; r < rows; r++) for (let c = 0; c < cols; c++) reach[r * cols + c] = Math.max(reach[r * cols + c], reach[(r - 1) * cols + c] * 0.97);
       for (let r = 0; r < rows; r++) { const f = r / (rows - 1), z = rowsZ[r], bone = torsoBone(Math.max(z, hz + 0.05));
         for (let c = 0; c < cols; c++) { const th = Math.PI / 2 + (c / (cols - 1) * 2 - 1) * half(r), cc = c / (cols - 1) * 2 - 1;
           let s = 0, k = 0; for (let d = -2; d <= 2; d++) { const q = Math.min(cols - 1, Math.max(0, c + d)); s += reach[r * cols + q]; k++; }
-          const rad = Math.max(reach[r * cols + c], s / k) + 0.02 + (e.flare || 0.09) * f ** 1.3 + 0.006 * Math.sin(9 * cc * Math.PI) * f;
+          const rad = Math.max(reach[r * cols + c], s / k) + 0.02 + (e.flare || 0.09) * f ** 1.3 + 0.017 * (0.5 + 0.5 * Math.sin(7 * cc * Math.PI)) * f ** 1.2;      // soft folds that deepen toward the hem
           pos.push(...GL(rad * Math.cos(th), cy0 + rad * Math.sin(th), z - 0.012 * cc * cc * f)); wts.push([bi(bone), bi(bone), 0]); } }
       emit('cape', pos, grid(rows, cols, false), color, wts);
       if (e.clasp) for (const s of [1, -1]) { const g = new THREE.SphereGeometry(0.011, 12, 10); g.scale(1, 1, 0.6); g.translate(...GL(s * 0.075, frontY(s * 0.075, sz - 0.03) - 0.012, sz - 0.03));

@@ -135,7 +135,7 @@ async function attachHeadModel(vrm, def, chinGL, scale) {
   hv.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   hv.springBoneManager?.setInitState(); hv.springBoneManager?.reset();
   if (hv.expressionManager) vrm.expressionManager = hv.expressionManager;
-  if (hv.springBoneManager) vrm.springBoneManager = hv.springBoneManager;
+  if (hv.springBoneManager) { if (vrm.springBoneManager) { for (const j of hv.springBoneManager.joints) vrm.springBoneManager.addJoint(j); vrm.springBoneManager.setInitState(); } else vrm.springBoneManager = hv.springBoneManager; }      // cloth chains may already be there
   if (hv.materials) vrm.materials = [...(vrm.materials || []), ...hv.materials];
   return hv;
 }

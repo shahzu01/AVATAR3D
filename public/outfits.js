@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { toonGradient } from '/creator/geom.js';
 import { buildExtras } from '/garments.js';
+import { rigCloth } from '/cloth.js';
 
 // group: which characters the outfit was designed for (any outfit still works on any body). acc: accessories it comes with.
 export const OUTFITS = {
@@ -155,7 +156,9 @@ export function buildOutfit(ctx) {
   }
   if (def.skirt) out.push(buildSkirt(ctx, { hz, H, hipx, main, accent, ...def.skirt }));
   (def.skirts || []).forEach((sp, i) => out.push(buildSkirt(ctx, { hz, H, hipx, ...sp, main: pal[sp.color] || main, accent: sp.band ? pal[sp.band] : null, name: 'skirt' + i })));
+  ctx.pieces = out;
   if (def.extras) try { out.push(...buildExtras(ctx, def.extras, pal)); } catch (e) { console.warn('outfit extras', e); }
+  if (ctx.recipe?.physics !== false) try { ctx.vrm.__clothChains = rigCloth(ctx, out); } catch (e) { console.warn('cloth physics', e); }
   return out;
 }
 

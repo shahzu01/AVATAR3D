@@ -92,6 +92,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.start) { const keep = recipe.name; recipe = STARTS[+b.dataset.start][1](); recipe.name = keep; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));
 render(); refresh(); }
+  if (b.dataset.motion) { const on = !b.classList.contains('on'); b.classList.toggle('on', on); viewer.setMotion(on ? b.dataset.motion : 'idle'); return; }
   if (b.dataset.view) { view = b.dataset.view; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x === b)); viewer.frame(view); }
 });
 $('save').addEventListener('click', async () => {
