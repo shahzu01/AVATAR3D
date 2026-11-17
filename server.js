@@ -182,7 +182,7 @@ async function libraryApi(req, res, url) {
 
 // Picture cards for the Character Maker's choices. The browser renders a missing card itself (on your GPU, in the
 // background) and stores it here, so each picture is made once. THUMB_VERSION changes when the look of characters does.
-const THUMB_VERSION = 1, THUMB_CATS = new Set(['face', 'eyes', 'hair', 'hairset', 'hairpart', 'outfit', 'piece', 'acc', 'ears', 'tail', 'base']), THUMB_KEY = /^[\w-]{1,80}$/;
+const THUMB_VERSION = 2, THUMB_CATS = new Set(['face', 'eyes', 'hair', 'hairset', 'hairpart', 'outfit', 'piece', 'acc', 'ears', 'tail', 'base']), THUMB_KEY = /^[\w-]{1,80}$/;
 const thumbDir = () => path.join(DATA, 'thumbs', `v${THUMB_VERSION}`);
 async function thumbsApi(req, res, url) {
   const json = (o, c = 200) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };

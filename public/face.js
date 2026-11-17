@@ -137,7 +137,7 @@ export function addOutlines(vrm, { width = 0.0017, skin = '#ecc4ad' } = {}) {
  *  Works in the head's own reference frame (kit axes: x left, -y front, z up) and writes the reshaped skin back into P.
  *  Returns a group (glTF axes, same frame as the head's other extras) holding eyes, lashes and blush. */
 export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeColor, hairColor, eyeStyle = {} }) {
-  const es = { a: 1, b: 1, tilt: 0, top: 9, lash: 1, wing: 1, lower: 0, tex: 'classic', ...eyeStyle };
+  const es = { a: 1, b: 1, tilt: 0, top: 9, lash: 1, wing: 1, lower: 0, tex: 'classic', noseDot: false, ...eyeStyle };
   const ids = kit.partVerts[kit.parts.indexOf('Head')], n = ids.length, R = new Float32Array(n * 3);
   for (let k = 0; k < n; k++) for (let c = 0; c < 3; c++) R[k * 3 + c] = basis[c] + (P[ids[k] * 3 + c] - headBone[c]) / scale;
   const front = []; for (let k = 0; k < n; k++) if (R[k * 3 + 1] < basis[1] - 0.015) front.push(k);
@@ -155,7 +155,7 @@ export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeCol
   let tip = -1; for (const k of front) if (Math.abs(R[k * 3]) < 0.008 && R[k * 3 + 2] < ez - 0.008 && R[k * 3 + 2] > ez - 0.045 && (tip < 0 || R[k * 3 + 1] < R[tip * 3 + 1])) tip = k;
   let tz = ez - 0.025;
   if (tip >= 0) { tz = R[tip * 3 + 2]; const prot = (depthAt(0.024, tz) + depthAt(-0.024, tz)) / 2 - R[tip * 3 + 1], push = Math.max(0, prot) * (male ? 0.45 : 0.72);
-    const plane = (depthAt(0.024, tz) + depthAt(-0.024, tz)) / 2 - Math.max(0, prot) * (male ? 0.55 : 0.28), keep = male ? 0.5 : 0.12;      // nostrils and bridge collapse onto one small soft bump
+    const plane = (depthAt(0.024, tz) + depthAt(-0.024, tz)) / 2 - Math.max(0, prot) * (male ? 0.55 : 0.28), keep = male ? 0.5 : es.noseDot ? 0.02 : 0.12;      // nostrils and bridge collapse onto one small soft bump
     for (const k of front) { const gs = Math.exp(-(R[k * 3] ** 2) / (2 * 0.014 ** 2) - ((R[k * 3 + 2] - tz) ** 2) / (2 * 0.015 ** 2)), bump = plane - (plane - R[k * 3 + 1]) * keep;
       R[k * 3 + 1] += (bump + 0.006 * (1 - gs) - R[k * 3 + 1]) * gs * (male ? 0.6 : 0.92); } void push; }
   // jaw: narrower toward the chin, a little fuller at the cheeks
@@ -206,6 +206,10 @@ export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeCol
       mk(qp, qi, blushMaterial(), 'Blush', 'Blush', qu).renderOrder = 2;
     }
   }
+  if (es.noseDot) {                              // a tiny soft dot for the nose, the usual anime shorthand
+    const nz = tz + 0.002, qp = [], qu = [], qi = [], BS = 14; for (let i = 0; i <= 2; i++) for (let j = 0; j < BS; j++) { const rho = i / 2, t = j / BS * Math.PI * 2, x = 0.0026 * rho * Math.cos(t), z = nz + 0.0018 * rho * Math.sin(t); qp.push(...GL(x, depthAt(x, z) - 0.0016, z)); qu.push(0.5 + 0.5 * rho * Math.cos(t), 0.5 + 0.5 * rho * Math.sin(t)); }
+    for (let i = 0; i < 2; i++) for (let j = 0; j < BS; j++) { const p = i * BS + j, q = i * BS + (j + 1) % BS; qi.push(p, q, q + BS, p, q + BS, p + BS); }
+    mk(qp, qi, blushMaterial('rgba(200,110,110,0.55)'), 'NoseDot', 'Blush', qu).renderOrder = 2; }
   for (let k = 0; k < n; k++) for (let c = 0; c < 3; c++) P[ids[k] * 3 + c] = headBone[c] + (R[k * 3 + c] - basis[c]) * scale;
   // blink: the lash line comes down and turns into a soft downward curve, the lid follows it and covers the eye
   const topZ = ez + Math.min(0.95 * b, TOP) + Math.abs(es.tilt) * a * 0.4, zp = ez - 0.1 * b, was = [-1, -1];
@@ -234,18 +238,20 @@ function eyeTexture(colour = '#4f7396', style = 'classic') {
     const star = (cx, cy, r) => { x.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 - Math.PI / 2, rr = i % 2 ? r * 0.28 : r; x.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); } x.closePath(); x.fill(); };
     star(204, 196, 50); star(318, 330, 26); for (const [px, py, pr] of [[290, 186, 9], [196, 300, 7], [336, 250, 6], [232, 360, 5]]) { x.beginPath(); x.arc(px, py, pr, 0, Math.PI * 2); x.fill(); }
   } else if (style === 'sleepy') { x.beginPath(); x.ellipse(214, 270, 22, 18, -0.4, 0, Math.PI * 2); x.fill(); }
+  else if (style === 'cute') { x.beginPath(); x.ellipse(196, 214, 52, 44, -0.35, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(318, 336, 22, 0, Math.PI * 2); x.fill(); x.globalAlpha = 0.8; x.beginPath(); x.arc(286, 182, 11, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1; }      // one big soft highlight and two small ones
   else if (style === 'droopy') { x.beginPath(); x.ellipse(210, 214, 40, 34, -0.3, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(300, 350, 20, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(320, 316, 8, 0, Math.PI * 2); x.fill(); }
   else { x.beginPath(); x.ellipse(206, 196, 36, 30, -0.4, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(314, 342, 15, 0, Math.PI * 2); x.fill(); }
   const t = new THREE.CanvasTexture(c); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texCache.set(key, t); return t;
 }
-function blushMaterial() {
+function blushMaterial(core = 'rgba(255,120,140,0.62)') {
   const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 2, 32, 32, 32);
-  gr.addColorStop(0, 'rgba(255,120,140,0.62)'); gr.addColorStop(1, 'rgba(255,120,140,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  gr.addColorStop(0, core); gr.addColorStop(1, 'rgba(255,120,140,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
 }
 
 /** Face shapes for kit heads. Widths are scale factors at the forehead (fw), cheekbones (cw), jaw corners (jw) and chin (chw);
- *  len stretches the face below the mouth, fwd brings the chin forward (m), full rounds the cheeks (m). The eyes, nose and
+ *  len stretches the face below the mouth, fwd brings the chin forward (m), full rounds the cheeks (m) at height fullU,
+ *  mouthUp lifts the mouth toward the nose (m). The eyes, nose and
  *  mouth line stay where they are, so painted eyes, brows and expressions still line up. */
 export const FACE_SHAPES = {
   female: [['f_oval', 'Oval', {}], ['f_heart', 'Heart', { fw: 1.04, cw: 1.045, jw: 0.9, chw: 0.72, len: 0.06, fwd: 0.002 }],
@@ -254,16 +260,16 @@ export const FACE_SHAPES = {
   male: [['m_oval', 'Oval', {}], ['m_square', 'Square', { cw: 1.02, jw: 1.13, chw: 1.22, len: 0.03, fwd: 0.003 }],
     ['m_diamond', 'Diamond', { fw: 0.94, cw: 1.08, jw: 0.92, chw: 0.82, len: 0.07, fwd: 0.002 }], ['m_long', 'Long', { fw: 0.98, cw: 0.97, jw: 1.05, chw: 1.1, len: 0.22, fwd: 0.002 }],
     ['m_round', 'Round', { cw: 1.06, jw: 1.07, chw: 1.08, len: -0.1, full: 0.0045 }]],
-  cartoon: [['c_classic', 'Classic', {}], ['c_vline', 'V-line', { cw: 1.02, jw: 0.86, chw: 0.6, len: 0.1, fwd: 0.003 }],
+  cartoon: [['c_cute', 'Cute', { cw: 1.05, jw: 0.98, chw: 1.38, len: -0.29, mouthUp: 0.004, full: 0.003, fullU: 0.25 }], ['c_classic', 'Classic', {}], ['c_vline', 'V-line', { cw: 1.02, jw: 0.86, chw: 0.6, len: 0.1, fwd: 0.003 }],
     ['c_round', 'Round (chibi)', { cw: 1.09, jw: 1.1, chw: 1.16, len: -0.22, full: 0.006 }], ['c_heart', 'Heart', { fw: 1.05, cw: 1.06, jw: 0.88, chw: 0.7, len: 0.02 }],
     ['c_mature', 'Mature', { fw: 0.98, cw: 0.96, jw: 1.0, chw: 0.9, len: 0.18, fwd: 0.002 }]],
 };
 export const faceShapeGroup = (kit, headBody) => { const b = kit.bodies[headBody]; return b?.style === 'anime' ? 'cartoon' : b?.base === 'male' ? 'male' : 'female'; };
-export const faceShapeOf = (kit, recipe) => { const list = FACE_SHAPES[faceShapeGroup(kit, recipe.parts.Head)]; return (list.find(([k]) => k === recipe.faceShape) || list[0]); };
+export const faceShapeOf = (kit, recipe) => { const list = FACE_SHAPES[faceShapeGroup(kit, recipe.parts.Head)], male = kit.bodies[recipe.parts.Head]?.base === 'male'; return (list.find(([k]) => k === recipe.faceShape) || (male ? list.find(([k]) => k === 'c_classic') : null) || list[0]); };      // anime girls start Cute, anime boys Classic
 
 export function shapeFace({ kit, P, headBone, basis, scale, eyeRef, params }) {
   const K = 1.35, q = params || {};          // presets are written mild; K sets how strongly they show
-  const p = { fw: 1, cw: 1, jw: 1, chw: 1, len: 0, fwd: 0, full: 0 }; for (const [k, v] of Object.entries(q)) p[k] = ['fw', 'cw', 'jw', 'chw'].includes(k) ? 1 + (v - 1) * K : v * K;
+  const p = { fw: 1, cw: 1, jw: 1, chw: 1, len: 0, fwd: 0, full: 0, fullU: 0.48, mouthUp: 0 }; for (const [k, v] of Object.entries(q)) p[k] = ['fw', 'cw', 'jw', 'chw'].includes(k) ? 1 + (v - 1) * K : k === 'fullU' ? v : v * K;
   if (Object.keys(params || {}).length === 0) return null;
   const ids = kit.partVerts[kit.parts.indexOf('Head')], ring = kit.rings.HEAD_NECK_SOCKET, toR = (i, c) => basis[c] + (P[i * 3 + c] - headBone[c]) / scale;
   const sm = (t) => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }, ez = eyeRef[2];
@@ -282,7 +288,8 @@ export function shapeFace({ kit, P, headBone, basis, scale, eyeRef, params }) {
     x *= 1 + (width(u) - 1) * w * (u < 0 ? sm((basis[1] - 0.01 - y) / 0.04) : 1);              // forehead only changes at the front, so hair still fits
     if (z < mz && p.len) z = mz + (z - mz) * (1 + p.len * w);
     if (p.fwd) y -= p.fwd * Math.exp(-(((u - 1) / 0.28) ** 2)) * Math.exp(-((x0 / 0.032) ** 2)) * wN;
-    if (p.full) { const g = Math.exp(-(((u - 0.48) / 0.2) ** 2) - (((Math.abs(x0) - 0.048) / 0.022) ** 2)) * sm((basis[1] - 0.03 - y0) / 0.03) * wN; y -= p.full * g; x += Math.sign(x0) * p.full * 0.8 * g; }
+    if (p.full) { const g = Math.exp(-(((u - p.fullU) / 0.2) ** 2) - (((Math.abs(x0) - 0.046) / 0.022) ** 2)) * sm((basis[1] - 0.03 - y0) / 0.03) * wN; y -= p.full * g; x += Math.sign(x0) * p.full * 0.8 * g; }
+    if (p.mouthUp) { const g = Math.exp(-(((u - 0.62) / 0.16) ** 2)) * Math.exp(-((x0 / 0.04) ** 2)) * wD * wN; z += p.mouthUp * g; }      // mouth closer to the nose
     if (x !== x0 || y !== y0 || z !== z0) moved++;
     P[i * 3] = headBone[0] + (x - basis[0]) * scale; P[i * 3 + 1] = headBone[1] + (y - basis[1]) * scale; P[i * 3 + 2] = headBone[2] + (z - basis[2]) * scale;
   }
@@ -299,7 +306,7 @@ export const EYE_SHAPES = {
     ['am_bright', 'Bright', { a: 1.06, b: 1.08, tex: 'sparkle' }],
     ['am_tired', 'Tired (half-lidded)', { a: 1.03, b: 1.0, top: 0.32, lash: 1.3, tex: 'sleepy' }]],
   female: [['hf_almond', 'Almond', {}], ['hf_round', 'Round', { k: 2.0 }], ['hf_upturned', 'Upturned', { k: 2.7 }], ['hf_downturned', 'Downturned', { k: 2.7 }], ['hf_hooded', 'Hooded', { k: 1.4 }]],
-  anime: [['ag_classic', 'Classic', {}],
+  anime: [['ag_cute', 'Cute', { a: 1.06, b: 1.14, top: 0.72, lash: 1.25, wing: 0.6, lower: 0.5, tex: 'cute', noseDot: true }], ['ag_classic', 'Classic', {}],
     ['ag_sparkle', 'Sparkly idol', { a: 1.07, b: 1.1, tex: 'sparkle', lash: 1.1 }],
     ['ag_cat', 'Cat (upturned)', { a: 1.06, b: 0.8, tilt: 0.2, wing: 1.25, lash: 1.15, tex: 'cat' }],
     ['ag_droopy', 'Droopy (gentle)', { a: 1.02, b: 0.92, tilt: -0.24, wing: 0.6, lower: 1, lash: 0.85, tex: 'droopy' }],
