@@ -76,11 +76,41 @@ const toon = (o) => new THREE.MeshToonMaterial({ gradientMap: toonGradient(), ..
 const shade = (hex, k) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
 
 /** ctx: { kit, P (Blender axes), bones, body (SkinnedMesh), toMaster, fromMaster, pos, nrm, recipe } */
+// ------------------------------------------------------------------ separate pieces (VRoid-style Tops / Bottoms / Legwear / Shoes)
+// Every outfit splits into four slots; a "custom" outfit takes each slot from any outfit, with its own two colours.
+export const SLOTS = [['top', 'Tops'], ['bottom', 'Bottoms'], ['legs', 'Legwear'], ['shoes', 'Shoes']];
+const LAYER_SLOT = { briefs: 'bottom', shorts: 'bottom', shortShorts: 'bottom', trousers: 'bottom', belt: 'bottom', waistband: 'bottom',
+  socksThigh: 'legs', socksKnee: 'legs', socksAnkle: 'legs', tights: 'legs', garters: 'legs', shoes: 'shoes', boots: 'shoes', bootCuffs: 'shoes', maryJanes: 'shoes' };
+const extraSlot = (e) => (['bow', 'frill'].includes(e.type) && (e.at ?? 1) < 0.45 ? 'bottom' : 'top');
+/** The part of an outfit that belongs to one slot (null when the outfit has nothing there). */
+export function outfitSlice(key, slot) {
+  const o = OUTFITS[key]; if (!o) return null;
+  const layers = o.layers.filter((l) => (LAYER_SLOT[l.split(':')[0]] || 'top') === slot);
+  const extras = (o.extras || []).filter((e) => extraSlot(e) === slot);
+  const d = { group: o.group, layers, extras, vDepth: slot === 'top' ? o.vDepth : undefined };
+  if (slot === 'bottom') { if (o.skirt) d.skirt = o.skirt; if (o.skirts) d.skirts = o.skirts; }
+  return layers.length || extras.length || d.skirt || d.skirts ? d : null;
+}
+/** Turn a whole outfit into a custom one, slot by slot, keeping its colours. */
+export function customFrom(key, clothing, accent) { const c = {}; for (const [s] of SLOTS) c[s] = { from: outfitSlice(key, s) ? key : 'none', main: clothing, accent }; return c; }
+
 export function buildOutfit(ctx) {
-  const { kit, P, bones, body, toMaster, pos, nrm, recipe } = ctx; const def = OUTFITS[recipe.outfit] || OUTFITS[defaultOutfit(kit, recipe.parts.Torso)];
+  const { recipe } = ctx; let out = [];
+  if (recipe.outfit === 'custom' && recipe.custom) {
+    for (const s of ['bottom', 'legs', 'shoes', 'top']) { const c = recipe.custom[s], d = c && c.from !== 'none' ? outfitSlice(c.from, s) : null; if (!d) continue;      // tops last: capes and bows hang clear of the skirts
+      ctx.prior = out; out = out.concat(buildPart(ctx, d, c.main || recipe.clothing, c.accent || recipe.accent || '#f2efe9', s)); }
+    ctx.prior = null;
+  } else { const { kit } = ctx; out = buildPart(ctx, OUTFITS[recipe.outfit] || OUTFITS[defaultOutfit(kit, recipe.parts.Torso)], recipe.clothing, recipe.accent || '#f2efe9', ''); }
+  ctx.pieces = out;
+  if (recipe?.physics !== false) try { ctx.vrm.__clothChains = rigCloth(ctx, out); } catch (e) { console.warn('cloth physics', e); }
+  return out;
+}
+
+function buildPart(ctx, def, clothing, accentColour, tag) {
+  const { kit, P, bones, body, toMaster, pos, nrm, recipe } = ctx;
   const B = (n) => bones[n][0], hz = B('leftUpperLeg')[2], sz = B('leftUpperArm')[2], sx = B('leftUpperArm')[0], H = sz - hz;
   const elbow = B('leftLowerArm')[0], wrist = B('leftHand')[0], knee = B('leftLowerLeg')[2], ankle = B('leftFoot')[2], neck = B('neck'), hipx = B('leftUpperLeg')[0];
-  const main = recipe.clothing, accent = recipe.accent || '#f2efe9', dark = shade(main, 0.55);
+  const main = clothing, accent = accentColour, dark = shade(main, 0.55);
   const pal = { main, accent, dark: /^premium/.test(def.group) ? '#1e1b24' : dark, light: '#f6f1ea', metal: '#c9d0db', gold: '#d6b15a' };
   const isNeck = (m) => kit.parts[kit.partA[m]] === 'Neck';
   const region = new Uint8Array(kit.vertexCount);          // 0 torso, 1 arm, 2 leg, 3 foot, 4 head/neck, 5 hand
@@ -189,9 +219,7 @@ export function buildOutfit(ctx) {
   }
   if (def.skirt) out.push(buildSkirt(ctx, { hz, H, hipx, main, accent, ...def.skirt }));
   (def.skirts || []).forEach((sp, i) => out.push(buildSkirt(ctx, { hz, H, hipx, ...sp, main: pal[sp.color] || main, accent: sp.band ? pal[sp.band] : null, name: 'skirt' + i })));
-  ctx.pieces = out;
-  if (def.extras) try { out.push(...buildExtras(ctx, def.extras, pal)); } catch (e) { console.warn('outfit extras', e); }
-  if (ctx.recipe?.physics !== false) try { ctx.vrm.__clothChains = rigCloth(ctx, out); } catch (e) { console.warn('cloth physics', e); }
+  if (def.extras?.length) try { ctx.pieces = [...(ctx.prior || []), ...out]; out.push(...buildExtras(ctx, def.extras, pal)); } catch (e) { console.warn('outfit extras', e); }
   return out;
 }
 

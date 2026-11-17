@@ -2,7 +2,7 @@
 // viewer, photograph it and store the picture with the server (/api/thumbs). Runs one at a time in the background,
 // so the page stays usable; each picture is only ever made once (until the look of characters changes).
 import { AvatarViewer } from '/viewer.js';
-import { defaultModular, loadKit, hairChoices, OUTFITS, ACCESSORIES, FACE_SHAPES, EYE_SHAPES } from '/modular.js';
+import { defaultModular, loadKit, hairChoices, OUTFITS, ACCESSORIES, FACE_SHAPES, EYE_SHAPES, SLOTS, outfitSlice } from '/modular.js';
 import { EARS, TAILS } from '/animal.js';
 
 export const thumbUrl = (cat, key) => `/api/thumbs/${cat}/${String(key).replace(/[^\w-]+/g, '_')}`;
@@ -19,6 +19,9 @@ export async function allJobs(only = null) {
   for (const [g, b] of [['anime', 'anime_female'], ['animeMale', 'anime_male'], ['female', 'female'], ['male', 'male']]) for (const [k] of EYE_SHAPES[g]) add('eyes', k, base(b, { eyeShape: k }), 'face');
   for (const b of ['anime_female', 'anime_male']) for (const h of hairChoices(kit, b)) add('hair', `${b}__${h.name}`, base(b, { hair: h.name }), 'threequarter');
   for (const [k, o] of Object.entries(OUTFITS)) add('outfit', k, base(['male', 'premiumMale'].includes(o.group) ? 'anime_male' : 'anime_female', { outfit: k, ...(o.colors || {}) }), 'front-full');
+  for (const [slot] of SLOTS) { const seen = new Set(); for (const [k, o] of Object.entries(OUTFITS)) { const d = outfitSlice(k, slot); if (!d) continue; const sig = JSON.stringify(d); if (seen.has(sig)) continue; seen.add(sig);
+    const custom = Object.fromEntries(SLOTS.map(([s]) => [s, { from: s === slot ? k : 'none', main: o.colors?.clothing || '#3a4a7a', accent: o.colors?.accent || '#f2efe9' }]));
+    add('piece', `${slot}_${k}`, base(['male', 'premiumMale'].includes(o.group) ? 'anime_male' : 'anime_female', { outfit: 'custom', custom }), slot === 'top' ? 'front' : 'front-full'); } }
   for (const k of Object.keys(ACCESSORIES)) add('acc', k, base('anime_female', { accessories: [k], accent: '#e0566d', hairColor: k === 'tail' || k === 'catEars' ? '#c97b3a' : '#4a2f22' }), ['scarf', 'choker'].includes(k) ? 'front' : k === 'tail' ? 'back' : 'head');
   for (const k of Object.keys(EARS)) if (k !== 'none') add('ears', k, base('anime_female', { ears: k, hairColor: '#c97b3a' }), 'head');
   for (const k of Object.keys(TAILS)) if (k !== 'none') add('tail', k, base('anime_female', { tail: k, hairColor: '#c97b3a' }), 'back');

@@ -131,3 +131,14 @@ test('picture cards: stored once, only JPEGs, only known names', async () => {
   assert.equal((await post('/api/thumbs/face/..%2F..%2Fsettings', jpeg)).status, 404, 'no paths');
   assert.equal((await fetch(`${BASE}/api/thumbs/face/c_round`, { method: 'POST', headers: { Origin: 'https://evil.example' }, body: jpeg })).status, 403, 'other websites cannot write');
 });
+
+test('mixed outfits and body proportions are saved safely', async () => {
+  const { sanitizeRecipe } = await import('../lib/recipe.js');
+  const r = sanitizeRecipe({ kind: 'modular', parts: {}, outfit: 'custom', custom: { top: { from: 'p_maid', main: '#112233', accent: 'red' }, bottom: { from: '../../x' }, shoes: { from: 'p_idol' } }, body: { height: 3, legs: 0.9, hips: 'wide', waist: -0.4 }, fit: { Head: 1.2, Arm_L: 9 } });
+  assert.equal(r.outfit, 'custom');
+  assert.deepEqual(r.custom.top, { from: 'p_maid', main: '#112233', accent: null });
+  assert.equal(r.custom.bottom.from, 'none', 'odd names are dropped'); assert.equal(r.custom.legs.from, 'none');
+  assert.deepEqual(r.body, { height: 1.15, legs: 0.9, shoulders: 0, waist: -0.4, hips: 0 });
+  assert.equal(r.fit.Head, 1.2); assert.equal(r.fit.Arm_L, 1.6, 'sizes are clamped');
+  assert.equal(sanitizeRecipe({ kind: 'modular', parts: {}, outfit: 'p_maid', custom: { top: { from: 'x' } } }).custom, null, 'pieces only apply to a mixed outfit');
+});

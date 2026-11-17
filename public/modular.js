@@ -6,13 +6,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 import { patchSkeleton } from '/human.js';
 import { toonGradient } from '/creator/geom.js';
-import { buildOutfit, OUTFITS, defaultOutfit, outfitGroup } from '/outfits.js';
+import { buildOutfit, OUTFITS, defaultOutfit, outfitGroup, SLOTS, outfitSlice, customFrom } from '/outfits.js';
 import { buildAccessories, ACCESSORIES } from '/accessories.js';
 import { buildAnimal } from '/animal.js';
 import { paintHair, animeShading } from '/paint.js';
 import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes, humanMakeup } from '/face.js';
 export { FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf };
-export { OUTFITS, defaultOutfit, outfitGroup, ACCESSORIES };
+export { OUTFITS, defaultOutfit, outfitGroup, ACCESSORIES, SLOTS, outfitSlice, customFrom };
 /** The accessories a recipe wears: its own list if it has one, otherwise the ones its outfit comes with. */
 export const accessoriesOf = (kit, recipe) => Array.isArray(recipe.accessories) ? recipe.accessories : (recipe.outfit === 'none' ? [] : (OUTFITS[recipe.outfit] || OUTFITS[defaultOutfit(kit, recipe.parts.Torso)])?.acc || []);
 
@@ -39,6 +39,33 @@ export function defaultModular(body = 'anime_female') {
 
 const circ = (R) => { let s = 0; for (let i = 0; i < R.length; i++) { const a = R[i], b = R[(i + 1) % R.length]; s += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); } return s; };
 const mean = (R) => { const c = [0, 0, 0]; for (const p of R) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; } return c.map((x) => x / R.length); };
+
+export const BODY_SLIDERS = [['height', 'Height', 0.85, 1.15, 1], ['legs', 'Leg length', 0.85, 1.15, 1], ['shoulders', 'Shoulders', -1, 1, 0], ['waist', 'Waist', -1, 1, 0], ['hips', 'Hips', -1, 1, 0]];
+/** Body proportion sliders, applied to the stitched body (Blender axes, metres: x across, -y front, z up, feet at z = 0) and its
+ *  bones, before anything is built on it, so clothes, hair, the face and the stream file all follow. A = assemble()'s result. */
+export function reshapeBody(A, kit, body) {
+  const b = { height: 1, legs: 1, shoulders: 0, waist: 0, hips: 0, ...(body || {}) }; if (b.height === 1 && b.legs === 1 && !b.shoulders && !b.waist && !b.hips) return;
+  const { P, bones } = A, NV = kit.vertexCount, sm = (a, c, x) => { const t = Math.min(1, Math.max(0, (x - a) / (c - a))); return t * t * (3 - 2 * t); };
+  const bump = (z, c, w) => Math.max(0, 1 - ((z - c) / w) ** 2) ** 2;
+  const hz = bones.leftUpperLeg[0][2], sz = bones.leftUpperArm[0][2], sx = Math.abs(bones.leftUpperArm[0][0]), Hh = sz - hz;
+  const hipx = Math.abs(bones.leftUpperLeg[0][0]) + 0.06, waistZ = hz + 0.36 * Hh, hipZ = hz + 0.02, k = b.legs, d = 0.05;
+  const part = (i) => kit.parts[kit.partA[i]] || '', army = (p) => /^(Arm|Hand)/.test(p), torso = (p) => p === 'Torso';
+  const move = (q, p) => {
+    let [x, y, z] = q;
+    // widths first (measured before the legs stretch)
+    if (!army(p) && p !== 'Head' && p !== 'Neck') { const wh = b.hips * 0.13 * bump(z, hipZ, 0.17), ww = b.waist * 0.14 * bump(z, waistZ, 0.11); x *= 1 + wh + ww; y *= 1 + ww * 0.7 + wh * 0.4; }
+    if (b.shoulders) { const dx = b.shoulders * 0.035; if (army(p)) x += Math.sign(x) * dx; else if (torso(p)) x += Math.sign(x) * dx * sm(hz + 0.45 * Hh, sz, z) * Math.min(1, Math.abs(x) / sx); }
+    // leg length: below the hips stretch from the floor, above it everything rides up; a smooth blend in between
+    if (k !== 1) { const lo = z * k, hi = z + hz * (k - 1), w = sm(hz - d, hz + d, z); z = lo * (1 - w) + hi * w; }
+    return [x * b.height, y * b.height, z * b.height];
+  };
+  for (let i = 0; i < NV; i++) { const p = part(i), q = move([P[i * 3], P[i * 3 + 1], P[i * 3 + 2]], p); P[i * 3] = q[0]; P[i * 3 + 1] = q[1]; P[i * 3 + 2] = q[2]; }
+  const boneP = {}; for (const [p, list] of Object.entries(kit.partBones)) for (const n of list) boneP[n] = p;
+  for (const [n, ends] of Object.entries(bones)) bones[n] = ends.map((q) => move(q, boneP[n] || 'Torso'));
+  const shiftZ = hz * (k - 1), xf = A.headXf;
+  A.headScale *= b.height; A.headXf = (x) => { const v = xf(x); return [v[0] * b.height, v[1] * b.height, (v[2] + shiftZ) * b.height]; };
+  let h = 0; for (let i = 0; i < NV; i++) h = Math.max(h, P[i * 3 + 2]); A.height = h;
+}
 
 /** Stitch a body. Returns positions (Blender axes, metres), bone head/tail positions, the head's scale and seam notes. */
 export function assemble(kit, recipe, blend = 0.05) {
@@ -147,7 +174,8 @@ export async function loadModular(input) {
   const kit = await loadKit(), recipe = { ...defaultModular(), ...input, parts: { ...defaultModular().parts, ...(input.parts || {}) }, fit: { ...(input.fit || {}) } };
   const model = kit.heads?.[recipe.headModel] || null;
   if (model?.neckFit && (recipe.fit.Neck ?? 'own') === 'own') recipe.fit.Neck = model.neckFit;      // slim the kit neck so it sits inside the head's own neck and collar
-  const { P, bones, headScale, headXf, height, notes } = assemble(kit, recipe);
+  const stitched = assemble(kit, recipe); reshapeBody(stitched, kit, recipe.body);      // body sliders: height, legs, shoulders, waist, hips
+  const { P, bones, headScale, headXf, height, notes } = stitched;
   // anime heads: reshape the face and paint the eyes (public/face.js). Done here, before normals and clothing are made from P.
   let faceArt = null;
   { const k0 = kit.bodies[recipe.parts.Head] ? recipe.parts.Head : 'female', e0 = kit.extras[k0], src = e0.from || k0;
