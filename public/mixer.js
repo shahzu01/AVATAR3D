@@ -6,6 +6,8 @@ import { loadKit, defaultModular, PART_ROWS, OUTFITS, defaultOutfit, hairChoices
 const $ = (id) => document.getElementById(id);
 const q = new URLSearchParams(location.search); const editId = q.get('id');
 import { ensureBaked } from '/autobake.js';
+import { EARS, TAILS, furTipFor } from '/animal.js';
+import { READY } from '/readymade.js';
 let savedId = editId, dirty = false;      // the library character this page is editing, and whether it has unsaved changes
 topbar('mixer');
 const viewer = new AvatarViewer($('viewer')); viewer.setGrid(false); window.viewer = viewer;
@@ -44,6 +46,7 @@ function eyeShapeOptions() {
   el.innerHTML = g ? `<optgroup label="${({ anime: 'Anime girl eyes', female: 'Female eyes', male: 'Male eyes', animeMale: 'Anime boy eyes' })[g]}">` + EYE_SHAPES[g].map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('') + '</optgroup>' : '<option>Not available for this head</option>';
 }
 function render() {
+  $('ready').innerHTML = READY.map((r, i) => `<button data-ready="${i}" title="Start from ${r.label}: everything can be changed"><img src="/readymade/${r.key}.png" alt="" loading="lazy"><span>${r.label}</span></button>`).join('');
   $('starts').innerHTML = STARTS.map(([n], i) => `<button data-start="${i}">${n}</button>`).join('');
   $('parts').innerHTML = PART_ROWS.map(([label, ps]) => {
     const isHead = label === 'Head', cur = isHead && recipe.headModel ? `model:${recipe.headModel}` : recipe.parts[ps[0]], fit = recipe.fit[ps[0]] ?? 'own';
@@ -57,7 +60,10 @@ function render() {
   const cur = recipe.outfit || defaultOutfit(kit, recipe.parts.Torso);
   const grp = outfitGroup(kit, recipe.parts.Torso), GN = { male: 'For male characters', female: 'For female characters', anime: 'For anime characters', premium: 'Premium (female & anime)', premiumMale: 'Premium (male)', any: 'Basics' }, order = grp === 'male' ? ['male', 'premiumMale', 'anime', 'female', 'premium', 'any'] : [grp, 'premium', ...['anime', 'female', 'male'].filter((g) => g !== grp), 'premiumMale', 'any'];
   $('outfit').innerHTML = order.map((g) => `<optgroup label="${GN[g]}">${Object.entries(OUTFITS).filter(([, o]) => o.group === g).map(([k, o]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${o.label}</option>`).join('')}</optgroup>`).join('') + `<option value="none" ${cur === 'none' ? 'selected' : ''}>None</option>`;
-  const worn = accessoriesOf(kit, recipe); $('acc').innerHTML = Object.entries(ACCESSORIES).map(([k, n]) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" data-acc="${k}" ${worn.includes(k) ? 'checked' : ''}>${n}</label>`).join('');
+  $('ears').innerHTML = Object.entries(EARS).map(([k, n]) => `<option value="${k}" ${k === (recipe.ears || 'none') ? 'selected' : ''}>${n}</option>`).join(''); $('ears').disabled = !!recipe.headModel; $('ears').title = recipe.headModel ? 'This head has its own ears' : '';
+  $('tail').innerHTML = Object.entries(TAILS).map(([k, n]) => `<option value="${k}" ${k === (recipe.tail || 'none') ? 'selected' : ''}>${n}</option>`).join('');
+  $('furMatch').checked = !recipe.furColor; $('furColor').value = recipe.furColor || recipe.hairColor; $('furColor').disabled = !recipe.furColor; $('furTip').value = recipe.furTip || furTipFor(recipe.tail !== 'none' ? recipe.tail : recipe.ears, recipe.furColor || recipe.hairColor);
+  const worn = accessoriesOf(kit, recipe); $('acc').innerHTML = Object.entries(ACCESSORIES).filter(([k]) => !['catEars', 'tail'].includes(k) || worn.includes(k)).map(([k, n]) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" data-acc="${k}" ${worn.includes(k) ? 'checked' : ''}>${n}</label>`).join('');
 }
 // undo / redo: every change is a snapshot of the recipe
 const hist = []; let hpos = -1, fromHistory = false;
@@ -79,6 +85,8 @@ function surprise() {
   const [ok0, o] = pick(ok); recipe.outfit = ok0; recipe.accessories = null;
   if (o.colors && Math.random() < 0.5) Object.assign(recipe, o.colors); else { recipe.clothing = pick(PALETTE); recipe.accent = pick(PALETTE.filter((c) => c !== recipe.clothing)); }
   if (!recipe.headModel) { recipe.hairColor = pick(HAIR); recipe.eyeColor = pick(EYES); }
+  recipe.ears = recipe.tail = 'none'; recipe.furColor = recipe.furTip = null;          // about half get animal ears, most of those a tail too
+  if (Math.random() < 0.5) { const k = pick(['cat', 'cat', 'fox', 'wolf', 'bunny', 'bear', 'elf']); if (!recipe.headModel) recipe.ears = k; if (k !== 'elf' && Math.random() < 0.8) recipe.tail = k; if (Array.isArray(recipe.accessories)) recipe.accessories = recipe.accessories.filter((a) => !['catEars', 'tail', 'headset'].includes(a)); }
   render(); refresh();
 }
 let refreshes = 0;
@@ -111,6 +119,10 @@ document.addEventListener('change', (e) => {
   else if (t.dataset.acc) recipe.accessories = [...document.querySelectorAll('[data-acc]')].filter((c) => c.checked).map((c) => c.dataset.acc);
   else if (t.id === 'outfit') { recipe.outfit = t.value; recipe.accessories = null; const c = OUTFITS[t.value]?.colors; if (c) Object.assign(recipe, c); render(); }      // premium outfits start in their signature colours       // a new outfit brings its own accessories
   else if (['hairColor', 'skin', 'clothing', 'accent', 'eyeColor'].includes(t.id)) recipe[t.id] = t.value;
+  else if (t.id === 'ears' || t.id === 'tail') { recipe[t.id] = t.value; if (t.value !== 'none' && Array.isArray(recipe.accessories)) recipe.accessories = recipe.accessories.filter((a) => a !== (t.id === 'ears' ? 'catEars' : 'tail')); if (!recipe.furTip) $('furTip').value = furTipFor(t.value, recipe.furColor || recipe.hairColor); }
+  else if (t.id === 'furMatch') { recipe.furColor = t.checked ? null : $('furColor').value; $('furColor').disabled = t.checked; }
+  else if (t.id === 'furColor') recipe.furColor = t.value;
+  else if (t.id === 'furTip') recipe.furTip = t.value;
   else if (t.id === 'name') { recipe.name = t.value; return; }
   else return;
   refresh();
@@ -119,6 +131,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.start) { const keep = recipe.name; recipe = STARTS[+b.dataset.start][1](); recipe.name = keep; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));
 render(); refresh(); }
+  if (b.dataset.ready) { recipe = READY[+b.dataset.ready].make(); $('name').value = recipe.name; render(); refresh(); return; }
   if (b.id === 'undo') return travel(-1);
   if (b.id === 'redo') return travel(1);
   if (b.id === 'surprise') return surprise();
@@ -158,10 +171,11 @@ if (editId) {
   try { const rec = await fetch(`/api/library/${editId}/file`).then((r) => r.json()); if (rec.kind === 'modular') recipe = { ...defaultModular(), ...rec }; } catch { /* start fresh */ }
 }
 if (q.get('start')) recipe = { ...STARTS[+q.get('start')][1](), name: recipe.name };
+if (q.get('ready')) { const r = READY.find((x) => x.key === q.get('ready')); if (r) recipe = r.make(); }
 if (q.get('outfit')) { recipe.outfit = q.get('outfit'); if (OUTFITS[recipe.outfit]?.colors) Object.assign(recipe, OUTFITS[recipe.outfit].colors); }
 if (q.get('outline')) recipe.outline = q.get('outline') !== '0';
 if (q.get('acc') !== null) recipe.accessories = q.get('acc').split(',').filter(Boolean);
-for (const k of ['clothing', 'accent', 'hairColor', 'hair', 'eyeColor', 'face', 'faceShape', 'eyeShape']) if (q.get(k)) recipe[k] = q.get(k);
+for (const k of ['clothing', 'accent', 'hairColor', 'hair', 'eyeColor', 'face', 'faceShape', 'eyeShape', 'ears', 'tail', 'furColor', 'furTip']) if (q.get(k)) recipe[k] = q.get(k);
 if (q.get('light')) viewer.setLighting(q.get('light'));
 if (q.get('view')) view = q.get('view');
 document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));

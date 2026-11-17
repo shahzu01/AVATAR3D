@@ -112,24 +112,9 @@ Open **Avatar library** from the Studio's Look panel (or http://localhost:3939/l
 - Each avatar page has **Set as active avatar** (OBS and the Studio switch instantly), **Rename**, **Duplicate settings**, **Download original**, **Replace file…** and **Delete** (with confirmation).
 - **Stream presentation** settings are saved per avatar: position, turn and size in the shot, camera framing, background, light preset, blinking on/off, and eye, mouth and expression strength.
 
-## Animal Maker
+## Characters made in the old Animal Maker
 
-For animal characters (and stylised elves and humans): **Animals** in the top bar (or http://localhost:3939/creator.html).
-
-- **Start:** 12 ready-made characters (Raccoon Gamer, Fox Ranger, Neko Streamer, Panda Chef, Wolf Knight, Bunny Idol, Tiger Athlete, Bear Buddy, Mouse Inventor, Anime Hero, Elf Mage, Idol Star), two randomize buttons, and 11 species: human, elf, cat, fox, wolf, raccoon, bear, panda, bunny, tiger, mouse.
-- **Body:** height, head size, leg length, build, shoulders, chest, waist, hips, arm and leg thickness, outline thickness.
-- **Face:** 9 eye styles plus eye colour, size, spacing, height and tilt; eyelashes; 7 brow styles; 7 mouths; noses; snout length; markings (bandit mask, panda patches, freckles, cheek marks, whisker dots, star, scar, blush).
-- **Fur & skin:** main, muzzle/belly, markings, inner-ear and nose colours; patterns (stripes, spots, socks, tuxedo, dark tips).
-- **Ears & tail:** 10 ear types and 8 tails, with sizes. Bunny ears, tails and long hair swing as you move.
-- **Hair:** 14 styles with a main colour and a tip colour.
-- **Outfit:** 11 tops, 6 bottoms, 5 kinds of shoes, each with colours.
-- **Accessories:** up to 6 of 18 (gaming headset, headphones, glasses, sunglasses, cap, beanie, crown, horns, halo, bow, flower, scarf, choker, earrings, backpack, wings, bandana), each with a colour.
-- **Test:** idle, wave, nod, look around, blink, talk, and 16 face expressions on the preview.
-- **Undo / redo** (⌘Z / ⇧⌘Z). Name it and press **Save to library**. Later, use **Edit in creator** on its library page; OBS updates as soon as you save.
-
-Faces are drawn toon-style and driven by all 52 face-tracking inputs, so blinking, the mouth, brows, gaze and emotions follow your webcam (or iPhone). Extra stream expressions for Stream Deck buttons: `HeartEyes`, `StarEyes`, `Crying`, `Sweat`, `Dizzy`, `Pout`, `Shocked`, `Thinking`, plus the usual `Joy`, `Laughing`, `Angry`, `Sad`, `Surprised`, `Embarrassed`, `Smug`, `Wink_L`. For example: `http://localhost:3939/api/trigger/HeartEyes`.
-
-A created character is saved as a small recipe file (`.kaelchar.json`), so it works only inside Kael Studio. It is not a .vrm for other apps.
+The Animal Maker has been retired: animal ears and tails are now part of the Character Maker (below). Animals you made before still load, stream and can be edited: **Edit** on their library page opens them where they were made.
 
 Where things are kept (inside the KaelStudio folder):
 
@@ -144,8 +129,10 @@ Limits (changeable in `settings.json` under `importLimits`): 300 MB per file, 4 
 
 ## Character Maker
 
-The main place to make a character: **Characters** in the top bar (or http://localhost:3939/mixer.html), or **Create a New Avatar** in the library. **Undo / Redo** (⌘Z / ⇧⌘Z) and **Surprise me** (a random character) are at the top. It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
+The main place to make a character: **Characters** in the top bar (or http://localhost:3939/mixer.html), or **Create a New Avatar** in the library. **Undo / Redo** (⌘Z / ⇧⌘Z) and **Surprise me** (a random character, sometimes with animal ears and a tail) are at the top. It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
 
+- **Ready-made:** eight complete anime characters to start from (Neko Streamer, Fox Shrine Maiden, Bunny Idol, Elf Mage, Wolf Knight, Cat Butler, Bear Buddy, Anime Idol). Everything about them can be changed.
+- **Animal:** cat, fox, wolf, bunny, bear or pointed elf ears, and cat, fox or wolf tails or a bunny or bear puff, in the hair colour or a fur colour of your own, with a tip colour for fox and wolf tails. Ears are fitted to the head and hairstyle; tails swing with spring physics and come along in a baked or exported .vrm.
 - **Face:** 15 face shapes (5 female, 5 male, 5 cartoon) and 20 eye shapes (5 each for human women, human men, anime girls and anime boys), plus eye colour. Human heads get drawn brows, a lash line and lip colour (and blush on women). Anime heads get painted eyes, lash lines and blush.
 - **Face tracking:** every Part Mixer face has 43 of the iPhone's 52 face shapes (Perfect Sync) plus the usual blink, mouth and mood shapes, so winks, one-sided smiles, brows, cheek puffs and the jaw all follow you. Eye direction moves the eyes themselves.
 - **Outfits:** everyday sets for male, female and anime bodies, **Premium (female & anime)**: Gothic Lolita, Magical Knight, Modern Kimono, Stage Idol, Victorian Maid, and **Premium (male)**: Royal Knight, Butler, Samurai, Stage Idol. Premium outfits start in their own colours; change them with **Clothing** and **Accent**.

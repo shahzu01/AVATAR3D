@@ -106,3 +106,16 @@ test('pose and camera settings are checked', async () => {
   const { POSE_NAMES } = await import('../lib/triggers.js');
   assert.deepEqual(listed, poses, 'Studio list matches the stream page'); assert.deepEqual(POSE_NAMES, poses, 'rules list matches the stream page');
 });
+
+test('animal ears and tails are saved; ready-made characters all have pictures', async () => {
+  const { sanitizeRecipe } = await import('../lib/recipe.js');
+  const r = sanitizeRecipe({ kind: 'modular', parts: {}, ears: 'fox', tail: 'wolf', furColor: '#aabbcc', furTip: 'red' });
+  assert.deepEqual([r.ears, r.tail, r.furColor, r.furTip], ['fox', 'wolf', '#aabbcc', null]);
+  const bad = sanitizeRecipe({ kind: 'modular', parts: {}, ears: 'dragon', tail: '<b>' }); assert.deepEqual([bad.ears, bad.tail], ['none', 'none']);
+  const src = read('public/animal.js'), keys = (name) => Object.keys(eval(`(${src.match(new RegExp(`export const ${name} = (\\{[^}]*\\})`))[1]})`)).filter((k) => k !== 'none');
+  assert.deepEqual(keys('EARS'), ['cat', 'fox', 'wolf', 'bunny', 'bear', 'elf'], 'the server keeps every ear the maker offers');
+  assert.deepEqual(keys('TAILS'), ['cat', 'fox', 'wolf', 'bunny', 'bear'], 'and every tail');
+  const ready = [...read('public/readymade.js').matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
+  assert.ok(ready.length >= 8);
+  for (const k of ready) assert.equal((await fetch(`${BASE}/readymade/${k}.png`)).status, 200, `picture for ${k}`);
+});

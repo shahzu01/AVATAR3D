@@ -8,6 +8,7 @@ import { patchSkeleton } from '/human.js';
 import { toonGradient } from '/creator/geom.js';
 import { buildOutfit, OUTFITS, defaultOutfit, outfitGroup } from '/outfits.js';
 import { buildAccessories, ACCESSORIES } from '/accessories.js';
+import { buildAnimal } from '/animal.js';
 import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes, humanMakeup } from '/face.js';
 export { FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf };
 export { OUTFITS, defaultOutfit, outfitGroup, ACCESSORIES };
@@ -32,7 +33,7 @@ export function loadKit() {
 }
 export function defaultModular(body = 'anime_female') {
   const parts = {}, fit = {}; for (const [, ps] of PART_ROWS) for (const p of ps) { parts[p] = body; if (p !== 'Torso') fit[p] = 'own'; }
-  return { version: 1, kind: 'modular', name: 'Mixed character', parts, fit, headModel: null, hair: 'None', skin: '#ecc4ad', hairColor: '#5c3a29', clothing: '#2b2c36', accent: '#f2efe9', outfit: null };
+  return { version: 1, kind: 'modular', name: 'Mixed character', parts, fit, headModel: null, hair: 'None', skin: '#ecc4ad', hairColor: '#5c3a29', clothing: '#2b2c36', accent: '#f2efe9', outfit: null, ears: 'none', tail: 'none' };
 }
 
 const circ = (R) => { let s = 0; for (let i = 0; i < R.length; i++) { const a = R[i], b = R[(i + 1) % R.length]; s += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); } return s; };
@@ -273,6 +274,7 @@ export async function loadModular(input) {
   for (const s of ['left', 'right']) { const mid = dir(s, 'Middle'); if (mid === null) continue;
     for (const f of ['Index', 'Ring', 'Little']) { const d = dir(s, f); if (d !== null) kitHand[`${s}${f}Proximal`] = Math.atan2(Math.sin(d - mid), Math.cos(d - mid)) * 0.92; } }
   try { const acc = buildAccessories({ kit, P, bones, vrm, recipe, list: accessoriesOf(kit, recipe), hasHeadModel: !!model }); if (acc.length) notes.push(`Accessories: ${acc.map((a) => ACCESSORIES[a]).join(', ')}`); } catch (e) { console.warn('modular accessories', e); }
+  try { const an = buildAnimal({ vrm, recipe, hasHeadModel: !!model, height }); if (an.length) notes.push(`Animal: ${an.join(', ')}`); } catch (e) { console.warn('modular animal parts', e); }
   // blink, mouth shapes and expressions for the kit heads (a complete head such as NekoMika brings its own)
   let faceNames = [];
   if (!model) faceNames = addFace({ face: await loadFaceKit(KIT_BASE), vrm, body, toMaster, P, scale: headScale * (HEAD_SCALE[ex.from || hk] || 1) * (ex.scale || 1), anime: kit.bodies[hk].style === 'anime', eyeZ: bones.leftEye ? bones.leftEye[0][2] : null });

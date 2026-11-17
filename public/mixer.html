@@ -16,6 +16,10 @@
   .line { display: grid; grid-template-columns: 62px 1fr; gap: 8px; align-items: center; margin-bottom: 7px; }
   .quick { display: flex; flex-wrap: wrap; gap: 6px; }
   .quick button { font-size: 12px; padding: 5px 10px; }
+  .ready { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .ready button { padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: stretch; border-radius: 10px; font-size: 11px; line-height: 1.2; }
+  .ready img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; background: #1a1a26; }
+  .ready span { padding: 4px 2px 5px; text-align: center; }
   #notes { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 8px; }
   #notes b { color: var(--text, #e8e9f2); font-weight: 600; }
   .stage { min-width: 0; position: relative; }
@@ -39,9 +43,10 @@
   <div class="work">
     <aside id="editor">
       <h2>Character Maker</h2>
-      <div class="sub">Human and anime characters: pick a start, then change anything, down to which body each part comes from. Making an animal? Use the <a href="/creator.html">Animal Maker</a>.</div>
+      <div class="sub">Anime and human characters: pick a ready-made or a start, then change anything, down to which body each part comes from. Animal ears and tails are under <b>Animal</b>.</div>
       <div class="quick" style="margin-bottom:4px"><button id="undo" title="Undo (⌘Z)" disabled>↶ Undo</button><button id="redo" title="Redo (⇧⌘Z)" disabled>↷ Redo</button><button id="surprise" title="A random character from the kit">🎲 Surprise me</button></div>
-      <h3>Start from</h3><div class="quick" id="starts"></div>
+      <h3>Ready-made</h3><div class="ready" id="ready"></div>
+      <h3>Or start from</h3><div class="quick" id="starts"></div>
       <h3>Parts</h3><div id="parts"></div>
       <h3>Look</h3>
       <div class="line"><span class="k">Hair</span><select id="hair"></select></div>
@@ -55,6 +60,10 @@
       <div class="line"><span class="k">Extras</span><div id="acc" style="display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px"></div></div>
       <div class="line"><span class="k">Clothing</span><input type="color" id="clothing"></div>
       <div class="line"><span class="k">Accent</span><input type="color" id="accent"></div>
+      <h3>Animal</h3>
+      <div class="line"><span class="k">Ears</span><select id="ears"></select></div>
+      <div class="line"><span class="k">Tail</span><select id="tail"></select></div>
+      <div class="line"><span class="k">Fur</span><div style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="color" id="furColor" title="Ears and tail"><label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="furMatch"> Same as hair</label><input type="color" id="furTip" title="Tail tip (fox, wolf) and bunny puff"></div></div>
       <h3>Seams</h3><div id="notes"></div>
     </aside>
     <main class="stage">
