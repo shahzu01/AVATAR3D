@@ -35,11 +35,11 @@ function hairTexture(color, ringV, ringH) {
   const y = ringV * H, band = H * ringH;
   g.globalAlpha = 0.28; const sh = g.createLinearGradient(0, y, 0, y + band * 3.2); sh.addColorStop(0, dark); sh.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = sh; g.fillRect(0, y + band * 0.6, W, band * 3);
   // the shine ring: jagged highlight streaks, one per lock, brightest in the middle
-  const hi = tint(color, 1.0, '#ffffff', lum < 0.2 ? 0.45 : 0.6), core = tint(color, 1.0, '#ffffff', 0.85);
-  g.globalAlpha = 0.3; const glow = g.createLinearGradient(0, y - band, 0, y + band); glow.addColorStop(0, 'rgba(255,255,255,0)'); glow.addColorStop(0.5, hi); glow.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = glow; g.fillRect(0, y - band, W, band * 2);
+  const hi = tint(color, 1.0, '#ffffff', lum < 0.2 ? 0.32 : 0.42), core = tint(color, 1.0, '#ffffff', 0.62);
+  g.globalAlpha = 0.22; const glow = g.createLinearGradient(0, y - band, 0, y + band); glow.addColorStop(0, 'rgba(255,255,255,0)'); glow.addColorStop(0.5, hi); glow.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = glow; g.fillRect(0, y - band, W, band * 2);
   for (let x = 0; x < W; x += 4 + r() * 7) { const h = band * (0.5 + r() * 1.3), yy = y - h * (0.35 + r() * 0.3), w = 4 + r() * 9;
-    g.globalAlpha = 0.75 + r() * 0.25; g.fillStyle = hi; g.beginPath(); g.moveTo(x, yy); g.lineTo(x + w, yy + h * 0.15); g.lineTo(x + w * 0.5, yy + h); g.closePath(); g.fill();
-    if (r() < 0.45) { g.globalAlpha = 0.7; g.fillStyle = core; g.fillRect(x + w * 0.3, yy + h * 0.25, Math.max(1.5, w * 0.25), h * 0.45); } }
+    g.globalAlpha = 0.45 + r() * 0.3; g.fillStyle = hi; g.beginPath(); g.moveTo(x, yy); g.lineTo(x + w, yy + h * 0.15); g.lineTo(x + w * 0.5, yy + h); g.closePath(); g.fill();
+    if (r() < 0.2) { g.globalAlpha = 0.45; g.fillStyle = core; g.fillRect(x + w * 0.3, yy + h * 0.25, Math.max(1.5, w * 0.25), h * 0.45); } }
   g.globalAlpha = 1;
   const t = new THREE.CanvasTexture(cv); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 4; t.name = 'hair'; t.needsUpdate = true;
   cache.set(key, t); return t;
