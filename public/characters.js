@@ -24,7 +24,8 @@ async function load() {
     </div>`).join('');
   $('mine').innerHTML = $('createCard').outerHTML + cards;
 }
-$('samples').innerHTML = READY.map((r) => `<a class="card" href="/mixer.html?ready=${r.key}"><div class="pic"><img src="/readymade/${r.key}.png" alt="" loading="lazy"></div><div class="row"><span class="nm">${esc(r.label)}</span></div></a>`).join('');
+const sampleCards = (group) => READY.filter((r) => r.group === group).map((r) => `<a class="card" href="/mixer.html?ready=${r.key}"><div class="pic"><img src="/readymade/${r.key}.png" alt="" loading="lazy"></div><div class="row"><span class="nm">${esc(r.label)}</span></div></a>`).join('');
+$('samples').innerHTML = sampleCards('stream'); $('samplesAnimal').innerHTML = sampleCards('animal');
 
 function closeMenu() { document.querySelector('.menu')?.remove(); }
 function menu(a, at) {

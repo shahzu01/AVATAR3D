@@ -109,7 +109,7 @@ The Studio's **Look** panel dresses the stream:
 - **My Characters:** what you made and what you imported, newest first. Click one to edit it (or, for an imported model, to see its details). The **⋯** menu has Put on stream, Details, Rename, Duplicate and Delete. The card marked **On stream** is what OBS shows.
 - **Create New** asks for a base: **Feminine** or **Masculine** (or Mika, a human body or NekoMika's head under *More bases*), then opens the editor.
 - **Open a .vrm** imports a model you already have, for example one made in VRoid Studio.
-- **Sample Models:** the ready-made anime characters. Open one to use it or change it.
+- **Ready to Stream** and **Animal & Fantasy:** the ready-made anime characters. Open one to use it or change it.
 
 ### Avatar library (details and import)
 
@@ -142,7 +142,7 @@ The editor works like VRoid Studio: tabs across the top (**Face, Hairstyle, Body
 
 **Undo / Redo** (⌘Z / ⇧⌘Z) and **Surprise me** (a random character, sometimes with animal ears and a tail) are at the top. It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
 
-- **Ready-made:** eight complete anime characters to start from (Neko Streamer, Fox Shrine Maiden, Bunny Idol, Elf Mage, Wolf Knight, Cat Butler, Bear Buddy, Anime Idol). Everything about them can be changed.
+- **Ready-made:** fifteen complete anime characters to start from. Ready to Stream: School Day, Sky Stage Idol, Cyber Runner, Cozy Streamer, Star Knight, Street Gamer, Idol Prince (classic face, built hair). Animal & Fantasy: Neko Streamer, Fox Shrine Maiden, Bunny Idol, Elf Mage, Wolf Knight, Cat Butler, Bear Buddy, Anime Idol. Everything about them can be changed.
 - **Animal:** cat, fox, wolf, bunny, bear or pointed elf ears, and cat, fox or wolf tails or a bunny or bear puff, in the hair colour or a fur colour of your own, with a tip colour for fox and wolf tails. Ears are fitted to the head and hairstyle; tails swing with spring physics and come along in a baked or exported .vrm.
 - **Face:** 15 face shapes (5 female, 5 male, 5 cartoon) and 20 eye shapes (5 each for human women, human men, anime girls and anime boys), plus eye colour. Human heads get drawn brows, a lash line and lip colour (and blush on women). Anime heads get painted eyes, lash lines and blush.
 - **Face tracking:** every Part Mixer face has 43 of the iPhone's 52 face shapes (Perfect Sync) plus the usual blink, mouth and mood shapes, so winks, one-sided smiles, brows, cheek puffs and the jaw all follow you. Eye direction moves the eyes themselves.
