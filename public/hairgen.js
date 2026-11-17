@@ -100,6 +100,10 @@ export function buildHair({ vrm, body, recipe }) {
       const tuckIn = o.tuck ? -o.tuck * 0.16 * Math.max(0, (t - 0.55) / 0.45) : 0;
       dir.multiplyScalar(0.72).add(grav.multiplyScalar(0.28)).addScaledVector(side, (o.sweep || 0) * 0.08 * Math.min(1, t * 2.5)).addScaledVector(V(p.x - cx, 0, p.z - cz).normalize(), (o.out || 0) * 0.05 - (p.y < Hb.y ? 0.06 : p.y < C.y ? 0.025 : 0) + tuckIn).normalize();      // below the head, hair settles onto the back and shoulders
       p = p.clone().addScaledVector(dir, ds); clear(p, gap0 + (o.vol ?? 0.006) * Math.min(1, t * 3) + i * 0.00002);
+      const hugK = o.hug ? 0.35 * Math.min(1, Math.max(0, (C.y + 0.035 - p.y) / 0.07)) : 0;      // eases in from just above the eyes, so there is no crease
+      if (hugK > 0) {          // below the eyes the hair follows the head, jaw and neck at a set thickness instead of hanging straight
+        const th = angleOf(p), r = Math.hypot(p.x - cx, p.z - cz), R = earBand(p.y) && Math.abs(Math.sin(th)) > 0.6 ? Math.min(radial(p.y, th), Rh * 1.04) : radial(p.y, th);
+        if (R > 0) { const want = R + o.hug, k = (r + (want - r) * hugK) / Math.max(1e-4, r); p.x = cx + (p.x - cx) * k; p.z = cz + (p.z - cz) * k; } }
       path.push(p); if (o.endY !== undefined && p.y < o.endY + (r() - 0.5) * 0.012 && t > 0.25) break;
     }
     const M = path.length, w0 = o.w, widths = path.map((_, i) => { const t = i / (M - 1); return w0 * (0.88 + 0.28 * Math.sin(Math.PI * Math.min(1, t * 1.1))) * Math.pow(1 - t, o.tip ?? 0.7) + 0.0004; });
@@ -124,10 +128,11 @@ export function buildHair({ vrm, body, recipe }) {
   // ---------------------------------------------------------------- back
   const backEnd = { short: Hb.y - 0.02, bob: eye.y - 0.11, medium: Hb.y - 0.2, long: Hb.y - 0.42, xlong: Hb.y - 0.66 }[parts.back];
   if (backEnd !== undefined) { const span = THREE.MathUtils.degToRad(parts.back === 'short' ? 230 : 250);
-    for (const [layer, n, w, ph0] of [[0, 30, 0.075, 0.2], [1, 26, 0.07, 0.3]]) for (let k = 0; k < n; k++) {         // an inner and an outer layer, offset, so no gaps show
+    const bob = parts.back === 'bob' || parts.back === 'short', L2 = bob ? [[0, 22, 0.1, 0.2], [1, 18, 0.095, 0.3]] : [[0, 30, 0.075, 0.2], [1, 26, 0.07, 0.3]];
+    for (const [layer, n, w, ph0] of L2) for (let k = 0; k < n; k++) {         // an inner and an outer layer, offset, so no gaps show
       const th = Math.PI - span / 2 + span * (k + 0.5 + layer * 0.5) / n, ph = ph0 + 0.1 * Math.abs(Math.sin(th));
-      const vary = ((k * 7 + layer * 3) % 5 - 2) * 0.006, tuck = { short: 0.6, bob: 1, medium: 0.5, long: 0.15, xlong: 0.05 }[parts.back];
-      lock({ th, ph, len: (top - backEnd) * 1.7 + 0.1, endY: backEnd + vary + (layer ? 0.012 : 0) + (Math.abs(Math.sin(th)) > 0.75 ? 0.015 : 0), w, tip: 0.32, tuck, gap: 0.003 + layer * 0.0035, vol: parts.back === 'short' ? 0.0015 : 0.003, seed: 100 + k + layer * 50 }); } }
+      const vary = ((k * 7 + layer * 3) % 5 - 2) * (bob ? 0.0025 : 0.006), tuck = { short: 0.6, bob: 1, medium: 0.5, long: 0.15, xlong: 0.05 }[parts.back];
+      lock({ th, ph, len: (top - backEnd) * 1.7 + 0.1, endY: backEnd + vary + (layer ? 0.008 : 0) + (Math.abs(Math.sin(th)) > 0.75 ? 0.01 : 0), w, tip: bob ? 0.16 : 0.32, tuck, hug: bob ? 0.016 + layer * 0.004 : 0, gap: 0.003 + layer * 0.0035, vol: parts.back === 'short' ? 0.0015 : 0.003, seed: 100 + k + layer * 50 }); } }
   // ---------------------------------------------------------------- front (bangs)
   const brow = eye.y + 0.028;
   const bang = (k, n, spread, f) => { const th = THREE.MathUtils.degToRad(-spread + (2 * spread) * (k + 0.5) / n); return { th, ph: 0.28 + 0.1 * Math.abs(th), ...f(th, k), seed: 300 + k }; };
@@ -141,7 +146,7 @@ export function buildHair({ vrm, body, recipe }) {
   const S = parts.side;
   if (S !== 'none') for (const sg of [1, -1]) {
     const list = S === 'short' ? [[78, 0.022, eye.y - 0.085]] : S === 'long' ? [[76, 0.026, Hb.y - 0.13], [86, 0.022, Hb.y - 0.09]] : [[72, 0.03, Hb.y - 0.26], [82, 0.026, Hb.y - 0.22]];
-    list.forEach(([deg, w, endY], k) => lock({ th: sg * THREE.MathUtils.degToRad(deg), ph: 0.55 + k * 0.08, len: 0.5, endY, w, gap: 0.008 + k * 0.003, vol: 0.006, out: 0.2, seed: 500 + k + (sg > 0 ? 10 : 0) }));
+    list.forEach(([deg, w, endY], k) => lock({ th: sg * THREE.MathUtils.degToRad(deg), ph: 0.55 + k * 0.08, len: 0.5, endY, w: w * 1.3, tip: 0.3, gap: 0.008 + k * 0.003, vol: 0.004, hug: 0.012 + k * 0.004, seed: 500 + k + (sg > 0 ? 10 : 0) }));
   }
   // ---------------------------------------------------------------- extensions
   const extras = [];      // separate meshes in the accent colour (hair ties)
