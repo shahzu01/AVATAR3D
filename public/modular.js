@@ -68,8 +68,8 @@ export function reshapeBody(A, kit, body) {
   let h = 0; for (let i = 0; i < NV; i++) h = Math.max(h, P[i * 3 + 2]); A.height = h;
 }
 
-/** No anatomy between the legs on any body: the groin is relaxed into a smooth, flat surface (Laplacian smoothing that
- *  fades out toward the thighs and belly), so nothing shows under shorts or a skirt and the stream file carries the same shape. */
+/** No anatomy between the legs on any body: the groin is relaxed into a smooth, flat surface (Laplacian smoothing across and
+ *  front-to-back only, so the crotch keeps its height; it fades out toward the thighs and belly), so nothing shows under shorts or a skirt and the stream file carries the same shape. */
 export function smoothGroin(A, kit) {
   const { P, bones } = A, NV = kit.vertexCount, Q = kit.quadsA; if (!Q || !bones.leftUpperLeg) return;
   const hz = bones.leftUpperLeg[0][2], hx = Math.abs(bones.leftUpperLeg[0][0]), torso = kit.parts.indexOf('Torso');
@@ -85,7 +85,7 @@ export function smoothGroin(A, kit) {
   for (let it = 0; it < 60; it++) { const nx = new Float32Array(act.length * 3);
     act.forEach((i, a) => { let x = 0, y = 0, z = 0, c = 0; for (const j of nb[i]) { x += P[j * 3]; y += P[j * 3 + 1]; z += P[j * 3 + 2]; c++; }
       const k = c ? 0.6 * w[i] : 0; nx[a * 3] = P[i * 3] + ((c ? x / c : P[i * 3]) - P[i * 3]) * k; nx[a * 3 + 1] = P[i * 3 + 1] + ((c ? y / c : P[i * 3 + 1]) - P[i * 3 + 1]) * k; nx[a * 3 + 2] = P[i * 3 + 2] + ((c ? z / c : P[i * 3 + 2]) - P[i * 3 + 2]) * k; });
-    act.forEach((i, a) => { P[i * 3] = nx[a * 3]; P[i * 3 + 1] = nx[a * 3 + 1]; P[i * 3 + 2] = nx[a * 3 + 2]; }); }
+    act.forEach((i, a) => { P[i * 3] = nx[a * 3]; P[i * 3 + 1] = nx[a * 3 + 1]; }); }      // across and front-to-back only: smoothing must not lift the crotch
 }
 
 /** Stitch a body. Returns positions (Blender axes, metres), bone head/tail positions, the head's scale and seam notes. */

@@ -119,6 +119,9 @@ function buildPart(ctx, def, clothing, accentColour, tag) {
     region[m] = p.startsWith('Arm') ? 1 : p.startsWith('Hand') ? 5 : p.startsWith('Leg') ? 2 : p.startsWith('Foot') ? 3 : (p === 'Head' || p === 'Neck') ? 4
       : p === 'Torso' ? 0 : ax > sx + 0.05 ? (ax > wrist - 0.01 ? 5 : 1) : z < ankle + 0.03 ? 3 : z < hz - 0.08 ? 2 : z > neck[2] + 0.01 ? 4 : 0;
   }
+  // crotch panel: where the legs meet, shorts and underwear span the gap like fabric instead of following the skin into it
+  let crotchZ = Infinity; { const t = kit.parts.indexOf('Torso'); for (let m = 0; m < kit.vertexCount; m++) if (kit.partA[m] === t && Math.abs(P[m * 3]) < 0.012) crotchZ = Math.min(crotchZ, P[m * 3 + 2]); }
+  const GUSSET = new Set(['shorts', 'shortShorts', 'briefs', 'tights', 'trousers']), hx0 = Math.abs(hipx);
   const inseam = (hem, ax) => hem - 0.16 * Math.max(0, 1 - ax / (Math.abs(hipx) * 0.95)) ** 2;      // the hem line, lower toward the middle
   const kEdge = (z) => { const zv = hz + (def.vDepth ?? 0.52) * H, zt = neck[2] + 0.01; return 0.006 + 0.068 * Math.min(1, Math.max(0, (z - zv) / (zt - zv))); };
   const scoop = (x, y, z, r) => Math.hypot(x, (y - (neck[1] - 0.012)) * 0.9, z - (neck[2] + 0.012)) - r;      // neckline: outside a ball at the base of the neck
@@ -199,6 +202,10 @@ function buildPart(ctx, def, clothing, accentColour, tag) {
     let wide = 0; for (let m = 0; m < kit.vertexCount; m++) if (cov[m] > wide) wide = cov[m];
     const base = new THREE.Color(colour), sh = shadeOf(colour), ratio = ['r', 'g', 'b'].map((k) => Math.min(1, sh[k] / Math.max(0.02, base[k])));
     const tones = [[1, 1, 1], ratio.map((x) => 1 + (x - 1) * 0.55), ratio];
+    if (GUSSET.has(name) && Number.isFinite(crotchZ)) for (let i = 0; i < n; i++) { const m = toMaster[i], z = P[m * 3 + 2], ax = Math.abs(P[m * 3]);
+      if (z > crotchZ + 0.008 || z < crotchZ - 0.045 || ax > hx0 * 0.8) continue;
+      const depth = Math.min(1, Math.max(0, (crotchZ + 0.008 - z) / 0.053)), f = (1 - depth) ** 1.2, inner = Math.min(1, Math.max(0, (hx0 * 0.8 - ax) / (hx0 * 0.35)));
+      gp[i * 3] *= 1 - 0.92 * f * inner; }                                         // pull the inner-thigh cloth toward the middle: a web that closes the gap
     for (let i = 0; i < n; i++) { const c = cov[toMaster[i]];
       col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = 1; col[i * 4 + 3] = 0.5 + Math.max(-1, Math.min(1, c)) * 20; }       // 0.5 = the hem; kept linear so the cut is straight
     const I = ctx.fullIndex, idx = [];
