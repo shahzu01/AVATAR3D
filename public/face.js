@@ -260,12 +260,12 @@ export const FACE_SHAPES = {
   male: [['m_oval', 'Oval', {}], ['m_square', 'Square', { cw: 1.02, jw: 1.13, chw: 1.22, len: 0.03, fwd: 0.003 }],
     ['m_diamond', 'Diamond', { fw: 0.94, cw: 1.08, jw: 0.92, chw: 0.82, len: 0.07, fwd: 0.002 }], ['m_long', 'Long', { fw: 0.98, cw: 0.97, jw: 1.05, chw: 1.1, len: 0.22, fwd: 0.002 }],
     ['m_round', 'Round', { cw: 1.06, jw: 1.07, chw: 1.08, len: -0.1, full: 0.0045 }]],
-  cartoon: [['c_cute', 'Cute', { cw: 1.05, jw: 0.98, chw: 1.38, len: -0.29, mouthUp: 0.004, full: 0.003, fullU: 0.25 }], ['c_classic', 'Classic', {}], ['c_vline', 'V-line', { cw: 1.02, jw: 0.86, chw: 0.6, len: 0.1, fwd: 0.003 }],
+  cartoon: [['c_classic', 'Classic', {}], ['c_cute', 'Cute (short, round)', { cw: 1.05, jw: 0.98, chw: 1.38, len: -0.29, mouthUp: 0.004, full: 0.003, fullU: 0.25 }], ['c_vline', 'V-line', { cw: 1.02, jw: 0.86, chw: 0.6, len: 0.1, fwd: 0.003 }],
     ['c_round', 'Round (chibi)', { cw: 1.09, jw: 1.1, chw: 1.16, len: -0.22, full: 0.006 }], ['c_heart', 'Heart', { fw: 1.05, cw: 1.06, jw: 0.88, chw: 0.7, len: 0.02 }],
     ['c_mature', 'Mature', { fw: 0.98, cw: 0.96, jw: 1.0, chw: 0.9, len: 0.18, fwd: 0.002 }]],
 };
 export const faceShapeGroup = (kit, headBody) => { const b = kit.bodies[headBody]; return b?.style === 'anime' ? 'cartoon' : b?.base === 'male' ? 'male' : 'female'; };
-export const faceShapeOf = (kit, recipe) => { const list = FACE_SHAPES[faceShapeGroup(kit, recipe.parts.Head)], male = kit.bodies[recipe.parts.Head]?.base === 'male'; return (list.find(([k]) => k === recipe.faceShape) || (male ? list.find(([k]) => k === 'c_classic') : null) || list[0]); };      // anime girls start Cute, anime boys Classic
+export const faceShapeOf = (kit, recipe) => { const list = FACE_SHAPES[faceShapeGroup(kit, recipe.parts.Head)]; return (list.find(([k]) => k === recipe.faceShape) || list[0]); };
 
 export function shapeFace({ kit, P, headBone, basis, scale, eyeRef, params }) {
   const K = 1.35, q = params || {};          // presets are written mild; K sets how strongly they show
@@ -306,7 +306,7 @@ export const EYE_SHAPES = {
     ['am_bright', 'Bright', { a: 1.06, b: 1.08, tex: 'sparkle' }],
     ['am_tired', 'Tired (half-lidded)', { a: 1.03, b: 1.0, top: 0.32, lash: 1.3, tex: 'sleepy' }]],
   female: [['hf_almond', 'Almond', {}], ['hf_round', 'Round', { k: 2.0 }], ['hf_upturned', 'Upturned', { k: 2.7 }], ['hf_downturned', 'Downturned', { k: 2.7 }], ['hf_hooded', 'Hooded', { k: 1.4 }]],
-  anime: [['ag_cute', 'Cute', { a: 1.06, b: 1.14, top: 0.72, lash: 1.25, wing: 0.6, lower: 0.5, tex: 'cute', noseDot: true }], ['ag_classic', 'Classic', {}],
+  anime: [['ag_classic', 'Classic', {}], ['ag_cute', 'Cute (soft highlight, dot nose)', { a: 1.06, b: 1.14, top: 0.72, lash: 1.25, wing: 0.6, lower: 0.5, tex: 'cute', noseDot: true }],
     ['ag_sparkle', 'Sparkly idol', { a: 1.07, b: 1.1, tex: 'sparkle', lash: 1.1 }],
     ['ag_cat', 'Cat (upturned)', { a: 1.06, b: 0.8, tilt: 0.2, wing: 1.25, lash: 1.15, tex: 'cat' }],
     ['ag_droopy', 'Droopy (gentle)', { a: 1.02, b: 0.92, tilt: -0.24, wing: 0.6, lower: 1, lash: 0.85, tex: 'droopy' }],

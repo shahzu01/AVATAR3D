@@ -49,7 +49,8 @@ export function buildHair({ vrm, body, recipe }) {
   const ray = new THREE.Raycaster(), hit = (from, to) => { const d = to.clone().sub(from); const len = d.length(); ray.set(from, d.divideScalar(len)); ray.far = len + 0.05; return ray.intersectObject(skin, false)[0] || null; };
 
   // head centre and size
-  const yE = eye.y + 0.01, ext = (dir) => { const h = hit(V(Hb.x, yE, Hb.z).addScaledVector(dir, 0.5), V(Hb.x, yE, Hb.z)); return h ? h.point : null; };
+  const yE = eye.y + 0.045, ext = (dir) =>      // forehead height: above the ears, so they do not count as head width
+   { const h = hit(V(Hb.x, yE, Hb.z).addScaledVector(dir, 0.5), V(Hb.x, yE, Hb.z)); return h ? h.point : null; };
   const pF = ext(V(0, 0, fz)), pB = ext(V(0, 0, -fz)), pL = ext(V(1, 0, 0)), pR = ext(V(-1, 0, 0));
   const cx = pL && pR ? (pL.x + pR.x) / 2 : Hb.x, cz = pF && pB ? (pF.z + pB.z) / 2 : Hb.z;
   const topHit = hit(V(cx, Hb.y + 0.6, cz), V(cx, Hb.y - 0.2, cz)), top = topHit ? topHit.point.y : Hb.y + 0.2;
@@ -65,7 +66,9 @@ export function buildHair({ vrm, body, recipe }) {
     return field.get(k); };
   const angleOf = (p) => Math.atan2(p.x - cx, (p.z - cz) * fz);
   /** keep a point at least `gap` outside the skin */
-  const clear = (p, gap) => { const th = angleOf(p), r = Math.hypot(p.x - cx, p.z - cz), R = Math.max(radial(p.y, th), radial(p.y + 0.006, th), radial(p.y - 0.006, th));
+  const earBand = (y) => y < eye.y + 0.035 && y > eye.y - 0.075;      // the ears stick out here: hair lies over them, not around them
+  const clear = (p, gap) => { const th = angleOf(p), r = Math.hypot(p.x - cx, p.z - cz); let R = Math.max(radial(p.y, th), radial(p.y + 0.006, th), radial(p.y - 0.006, th));
+    if (earBand(p.y) && Math.abs(Math.sin(th)) > 0.6) R = Math.min(R, Rh * 1.04);
     if (p.y < top + 0.005 && r < R + gap) { const k = (R + gap) / Math.max(1e-4, r); p.x = cx + (p.x - cx) * k; p.z = cz + (p.z - cz) * k; }
     if (p.y > C.y) { const d = p.distanceTo(C), need = Rh * 0.98 + gap; if (d < need) p.sub(C).setLength(need).add(C); }      // over the crown
     return p; };
@@ -94,7 +97,8 @@ export function buildHair({ vrm, body, recipe }) {
     for (let i = 1; i <= N; i++) {
       const t = i / N, below = Math.min(1, Math.max(0, (C.y - p.y) / (Rh * 0.8)));
       const grav = V(0, -1, 0).multiplyScalar(0.25 + 0.75 * below + (o.lift ? -o.lift * (1 - t) : 0));
-      dir.multiplyScalar(0.72).add(grav.multiplyScalar(0.28)).addScaledVector(side, (o.sweep || 0) * 0.08 * Math.min(1, t * 2.5)).addScaledVector(V(p.x - cx, 0, p.z - cz).normalize(), (o.out || 0) * 0.05 - (p.y < Hb.y ? 0.06 : p.y < C.y ? 0.025 : 0)).normalize();      // below the head, hair settles onto the back and shoulders
+      const tuckIn = o.tuck ? -o.tuck * 0.16 * Math.max(0, (t - 0.55) / 0.45) : 0;
+      dir.multiplyScalar(0.72).add(grav.multiplyScalar(0.28)).addScaledVector(side, (o.sweep || 0) * 0.08 * Math.min(1, t * 2.5)).addScaledVector(V(p.x - cx, 0, p.z - cz).normalize(), (o.out || 0) * 0.05 - (p.y < Hb.y ? 0.06 : p.y < C.y ? 0.025 : 0) + tuckIn).normalize();      // below the head, hair settles onto the back and shoulders
       p = p.clone().addScaledVector(dir, ds); clear(p, gap0 + (o.vol ?? 0.006) * Math.min(1, t * 3) + i * 0.00002);
       path.push(p); if (o.endY !== undefined && p.y < o.endY + (r() - 0.5) * 0.012 && t > 0.25) break;
     }
@@ -122,14 +126,15 @@ export function buildHair({ vrm, body, recipe }) {
   if (backEnd !== undefined) { const span = THREE.MathUtils.degToRad(parts.back === 'short' ? 230 : 250);
     for (const [layer, n, w, ph0] of [[0, 30, 0.075, 0.2], [1, 26, 0.07, 0.3]]) for (let k = 0; k < n; k++) {         // an inner and an outer layer, offset, so no gaps show
       const th = Math.PI - span / 2 + span * (k + 0.5 + layer * 0.5) / n, ph = ph0 + 0.1 * Math.abs(Math.sin(th));
-      lock({ th, ph, len: (top - backEnd) * 1.7 + 0.1, endY: backEnd + (layer ? 0.015 : 0) + (Math.abs(Math.sin(th)) > 0.75 ? 0.02 : 0), w, tip: 0.45, gap: 0.004 + layer * 0.004, vol: parts.back === 'short' ? 0.002 : 0.004, seed: 100 + k + layer * 50 }); } }
+      const vary = ((k * 7 + layer * 3) % 5 - 2) * 0.006, tuck = { short: 0.6, bob: 1, medium: 0.5, long: 0.15, xlong: 0.05 }[parts.back];
+      lock({ th, ph, len: (top - backEnd) * 1.7 + 0.1, endY: backEnd + vary + (layer ? 0.012 : 0) + (Math.abs(Math.sin(th)) > 0.75 ? 0.015 : 0), w, tip: 0.32, tuck, gap: 0.003 + layer * 0.0035, vol: parts.back === 'short' ? 0.0015 : 0.003, seed: 100 + k + layer * 50 }); } }
   // ---------------------------------------------------------------- front (bangs)
   const brow = eye.y + 0.028;
   const bang = (k, n, spread, f) => { const th = THREE.MathUtils.degToRad(-spread + (2 * spread) * (k + 0.5) / n); return { th, ph: 0.28 + 0.1 * Math.abs(th), ...f(th, k), seed: 300 + k }; };
   const F = parts.front;
-  if (F === 'straight') for (let k = 0; k < 11; k++) lock(bang(k, 11, 62, (th) => ({ len: 0.2, endY: brow - 0.008 * Math.abs(th), w: 0.032, gap: 0.006 + (k % 2) * 0.003, vol: 0.004 })));
-  if (F === 'swept') for (let k = 0; k < 10; k++) lock(bang(k, 10, 60, (th) => ({ len: 0.22, endY: brow - 0.035 + 0.04 * (th + 1.05) / 2.1, sweep: 1.4, w: 0.034, gap: 0.006 + (k % 2) * 0.003, vol: 0.004 })));
-  if (F === 'parted') for (let k = 0; k < 12; k++) lock(bang(k, 12, 64, (th) => ({ len: 0.24, endY: brow - 0.06 * Math.abs(th) - 0.005, sweep: Math.sign(th) * 1.8, w: 0.032, gap: 0.006 + (k % 2) * 0.003, vol: 0.005 })));
+  if (F === 'straight') for (let k = 0; k < 9; k++) lock(bang(k, 9, 60, (th) => ({ len: 0.2, endY: brow - 0.008 * Math.abs(th) + [0, -0.006, 0.004, -0.01, 0.002][k % 5], w: 0.042, tip: 0.38, tuck: 0.4, gap: 0.005 + (k % 2) * 0.003, vol: 0.003 })));
+  if (F === 'swept') for (let k = 0; k < 9; k++) lock(bang(k, 9, 60, (th) => ({ len: 0.22, endY: brow - 0.035 + 0.04 * (th + 1.05) / 2.1, sweep: 1.4, w: 0.042, tip: 0.4, tuck: 0.3, gap: 0.006 + (k % 2) * 0.003, vol: 0.004 })));
+  if (F === 'parted') for (let k = 0; k < 10; k++) lock(bang(k, 10, 64, (th) => ({ len: 0.24, endY: brow - 0.06 * Math.abs(th) - 0.005, sweep: Math.sign(th) * 1.8, w: 0.04, tip: 0.4, tuck: 0.3, gap: 0.006 + (k % 2) * 0.003, vol: 0.005 })));
   if (F === 'wispy') for (let k = 0; k < 8; k++) lock(bang(k, 8, 55, (th) => ({ len: 0.2, endY: eye.y - 0.004 + 0.012 * (k % 3), w: 0.022, tip: 0.9, gap: 0.006 + (k % 2) * 0.003, vol: 0.003 })));
   if (F === 'curtain') for (let k = 0; k < 12; k++) lock(bang(k, 12, 66, (th) => ({ len: 0.34, endY: eye.y - 0.1, sweep: Math.sign(th) * 2.2, w: 0.035, gap: 0.006 + (k % 2) * 0.003, vol: 0.006 })));
   // ---------------------------------------------------------------- side locks (in front of the ears)
