@@ -34,6 +34,9 @@ function renderProps() {
   $('propPick').innerHTML = `<optgroup label="Built in">${Object.entries(BUILTIN_PROPS).map(([k, b]) => `<option value="builtin:${k}">${b.label}</option>`).join('')}</optgroup>`
     + (files.some((f) => f.type === 'model') ? `<optgroup label="Yours">${files.filter((f) => f.type === 'model').map((f) => `<option value="file:${f.file}">${esc(f.name)}</option>`).join('')}</optgroup>` : '');
 }
+// A built-in scene comes with the lighting that suits it; the Lighting preset menu can change it again afterwards.
+function matchLight(name) { const el = $('lightingPreset'); if (!name || !el || el.value === name || ![...el.options].some((o) => o.value === name)) return;
+  el.value = name; el.dispatchEvent(new Event('change')); $('propTip').textContent = `Lighting set to "${el.selectedOptions[0].textContent}" to match the scene. You can change it under Lighting.`; }
 const fitOf = (src) => { const b = src.startsWith('builtin:') && BUILTIN_PROPS[src.slice(8)]; return b ? { attach: b.fit.bone, pos: [...b.fit.pos], rot: [...b.fit.rot], scale: 1 } : { attach: 'rightHand', pos: [-0.08, 0, 0.03], rot: [0, 0, 0], scale: 1 }; };
 
 document.addEventListener('input', (e) => {
@@ -45,7 +48,7 @@ document.addEventListener('input', (e) => {
 });
 document.addEventListener('change', (e) => {
   const t = e.target;
-  if (t.id === 'scenePick') { const v = t.value; if (v === 'none') sceneCfg = { kind: 'none' }; else if (v.startsWith('builtin:')) sceneCfg = { kind: 'builtin', key: v.slice(8), scale: 1, x: 0, y: 0, z: 0, rotY: 0 };
+  if (t.id === 'scenePick') { const v = t.value; if (v === 'none') sceneCfg = { kind: 'none' }; else if (v.startsWith('builtin:')) { sceneCfg = { kind: 'builtin', key: v.slice(8), scale: 1, x: 0, y: 0, z: 0, rotY: 0 }; matchLight(BUILTIN_SCENES[sceneCfg.key]?.light); }
     else { const f = files.find((q) => `file:${q.file}` === v); sceneCfg = { kind: f.type, file: f.file, scale: 1, x: 0, y: 0, z: 0, rotY: 0 }; } renderScene(); save('scene'); return; }
   const card = t.closest('[data-pi]'); if (!card || !$('propsBox').contains(card)) return; const p = props[+card.dataset.pi];
   if (t.dataset.p === 'on') { p.on = t.checked; card.classList.toggle('off', !t.checked); save('props'); }

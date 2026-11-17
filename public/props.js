@@ -4,6 +4,7 @@
 // pictures, stored next to settings.json (props/), and checked by the server before they are kept.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MORE_SCENES } from '/scenes.js';
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, ...o });
 const glow = (color, k = 2) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: k, roughness: 0.4 });
@@ -44,14 +45,14 @@ export const BUILTIN_PROPS = {
 
 // ---------------------------------------------------------------- built-in scenes (what stands behind the character)
 export const BUILTIN_SCENES = {
-  stage: { label: 'Concert stage', make: () => {
+  stage: { label: 'Concert stage', light: 'gaming', make: () => {
     const g = new THREE.Group(), floor = M(new THREE.CircleGeometry(3.2, 64), std('#15131c', { roughness: 0.25, metalness: 0.3 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; floor.castShadow = false;
     const ring = M(new THREE.RingGeometry(1.15, 1.2, 64), glow('#ff5fa2', 1.6), 0, 0.003, 0); ring.rotation.x = -Math.PI / 2;
     const wall = M(new THREE.CylinderGeometry(4.2, 4.2, 4.5, 64, 1, true, Math.PI * 0.62, Math.PI * 0.76), std('#120f1c', { side: THREE.BackSide, roughness: 0.9 }), 0, 2.2, 0.6);
     g.add(floor, ring, wall);
     for (let i = 0; i < 9; i++) { const a = Math.PI * 0.68 + i / 8 * Math.PI * 0.64, col = i % 2 ? '#7a5cff' : '#3fd0ff'; const strip = M(new THREE.BoxGeometry(0.05, 3.6, 0.05), glow(col, 2.2), Math.sin(a) * 4.05, 2.1, Math.cos(a) * 4.05 + 0.6); strip.castShadow = false; g.add(strip); }
     return g; } },
-  room: { label: 'Cozy room', make: () => {
+  room: { label: 'Cozy room', light: 'cute', make: () => {
     const g = new THREE.Group(), wallTex = canvasTex(64, 64, (c, w, h) => { c.fillStyle = '#efe3d6'; c.fillRect(0, 0, w, h); c.fillStyle = '#e7d8c8'; for (let x = 0; x < w; x += 16) c.fillRect(x, 0, 8, h); }); wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping; wallTex.repeat.set(12, 6);
     const wall = M(new THREE.PlaneGeometry(9, 4.5), std('#ffffff', { map: wallTex, roughness: 0.95 }), 0, 2.25, -1.6); wall.receiveShadow = true;
     const floor = M(new THREE.PlaneGeometry(9, 5), std('#9a6a45', { roughness: 0.7 }), 0, 0, 0.9); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
@@ -64,7 +65,7 @@ export const BUILTIN_SCENES = {
     for (let i = 0; i < 7; i++) leaves.push(M(new THREE.SphereGeometry(0.17, 16, 12), std('#3f8f5a', { roughness: 0.8 }), -2.1 + Math.sin(i * 2.4) * 0.14, 0.45 + i * 0.07, -1.1 + Math.cos(i * 2.4) * 0.1));
     const lights = []; for (let i = 0; i < 16; i++) { const x = -2.8 + i * 0.37; lights.push(M(new THREE.SphereGeometry(0.025, 10, 8), glow(['#ffd166', '#ff9ec7', '#9fe6ff'][i % 3], 2.5), x, 3.05 - Math.sin(i / 15 * Math.PI) * 0.25, -1.55)); }
     g.add(wall, floor, win, ...bars, shelf, ...books, pot, ...leaves, ...lights); return g; } },
-  night: { label: 'Night city window', make: () => {
+  night: { label: 'Night city window', light: 'moonlight', make: () => {
     const g = new THREE.Group(), city = canvasTex(1024, 512, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0b1030'); gr.addColorStop(0.7, '#3a2a6a'); gr.addColorStop(1, '#ff7aa8'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
       c.fillStyle = '#fff7d6'; c.beginPath(); c.arc(820, 90, 34, 0, 7); c.fill(); let s = 7; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
       for (let i = 0; i < 120; i++) { c.fillStyle = `rgba(255,255,255,${0.3 + rnd() * 0.6})`; c.fillRect(rnd() * w, rnd() * h * 0.5, 2, 2); }
@@ -74,6 +75,7 @@ export const BUILTIN_SCENES = {
     const mullions = [-1.75, 0, 1.75].map((x) => M(new THREE.BoxGeometry(0.07, 3.6, 0.08), frame, x, 1.9, -2.15)).concat([M(new THREE.BoxGeometry(7.1, 0.08, 0.08), frame, 0, 0.12, -2.15), M(new THREE.BoxGeometry(7.1, 0.08, 0.08), frame, 0, 3.68, -2.15)]);
     const floor = M(new THREE.PlaneGeometry(10, 5), std('#2a2338', { roughness: 0.4, metalness: 0.2 }), 0, 0, 0.3); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
     wall.position.z = -2.3; g.add(wall, view, ...mullions, floor); return g; } },
+  ...MORE_SCENES,
 };
 
 const BONES = ['rightHand', 'leftHand', 'head', 'chest', 'hips'];
@@ -112,7 +114,7 @@ export class PropStage {
   detachAll() { for (const it of this.items.values()) if (it.obj) this.rig.add(it.obj); }
   /** A rule shows a prop for a while, even one that is switched off. */
   show(id, seconds = 5) { this.flash.set(id, performance.now() + seconds * 1000); const p = (this.settings?.props || []).find((q) => q.id === id), it = this.items.get(id); if (p && it?.obj) this.place(it.obj, p); }
-  update() { if (!this.flash.size) return; const now = performance.now(); for (const [id, until] of this.flash) if (now > until) { this.flash.delete(id); const p = (this.settings?.props || []).find((q) => q.id === id), it = this.items.get(id); if (p && it?.obj) this.place(it.obj, p); } }
+  update() { this.sceneObj?.userData.tick?.(performance.now() / 1000); if (!this.flash.size) return; const now = performance.now(); for (const [id, until] of this.flash) if (now > until) { this.flash.delete(id); const p = (this.settings?.props || []).find((q) => q.id === id), it = this.items.get(id); if (p && it?.obj) this.place(it.obj, p); } }
   async applyScene(s) {
     const key = JSON.stringify([s.kind, s.key, s.file]);
     if (key !== this.sceneKey) {

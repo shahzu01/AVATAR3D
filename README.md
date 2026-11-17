@@ -36,7 +36,7 @@ Then:
 
 1. **Chrome:** open http://localhost:3939/tracker.html and press **Start camera**. Allow camera access. Look straight ahead with a relaxed face and press **Calibrate neutral**.
 2. **OBS:** add a **Browser Source** with URL `http://localhost:3939/avatar.html`, width 1920, height 1080. Leave "Shutdown source when not visible" off. Put the source above your Elgato PS5 capture.
-3. Change the camera framing, background, lighting preset (Cute anime, Gaming stream, Dramatic scene, Character showcase, Classic) and avatar in the **Look** panel. Changes appear in OBS instantly. **Idle breathing** also adds a slow hip-to-hip weight shift, which keeps skirts, capes and hair gently moving while you sit still.
+3. Change the camera framing, background, lighting preset (Cute anime, Gaming stream, Dramatic scene, Character showcase, Warm café, Sunny day, Moonlit night, Classic) and avatar in the **Look** panel. Changes appear in OBS instantly. **Idle breathing** also adds a slow hip-to-hip weight shift, which keeps skirts, capes and hair gently moving while you sit still.
 
 Keep the Chrome tab open while streaming. Chrome slows down background tabs, so give it its own window rather than hiding it behind another tab.
 
@@ -84,7 +84,7 @@ Phone and Mac must be on the same Wi-Fi. If macOS asks about incoming connection
 
 The Studio's **Look** panel dresses the stream:
 
-- **Scene behind you:** a built-in stage, cosy room or night sky, or your own `.glb` room or a picture, instead of a flat colour. Sliders move, scale and turn it.
+- **Scene behind you:** one of eight built-in sets (concert stage, cosy room, night city window, gaming room, cosy café, neon street at night, cherry blossom park, starry stage), or your own `.glb` room or a picture, instead of a flat colour. Sliders move, scale and turn it. Picking a built-in set also switches to the lighting that suits it (you can change it again under Lighting). Some sets move a little: the gaming room's RGB strips, falling petals in the park, the starry stage's bulbs, spotlights and sparkles.
 - **Props:** a microphone, mug, lightstick, plushie, "Thank you!" sign or crown, or your own `.glb` models and pictures. Each one attaches to the right or left hand, the head, chest, hips or the floor, and follows it; sliders fine-tune where it sits. Rules can show a prop for a few seconds (for example a sign on a follow). Uploads are checked: only single-file `.glb` models (textures inside the file) and PNG, JPEG or WebP pictures, up to 60 MB, and they stay in the `props` folder on your Mac.
 - **Pose:** Relaxed, Hands on hips, Arms crossed, Thinking, Shy, Leaning, or Sitting (a stool appears under the character). When the camera sees your arms, they follow you as usual; tick **Keep the pose** to hold it anyway.
 - **Camera:** framing changes glide instead of cutting. **Camera motion** adds a gentle drift or a slow sway around the character to keep the shot alive.

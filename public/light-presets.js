@@ -9,6 +9,12 @@ export const LIGHT_PRESETS = {
     sky: '#8a93b8', ground: '#1b1420', hemi: 0.2, env: 0.12, ao: 1.0, shadow: 0.62, selfShadow: true, skinGlow: ['#ff8a5c', 0.42] },
   showcase: { label: 'Character showcase', key: ['#ffffff', 1.55, [-1.2, 1.9, 2.3]], fill: ['#eaf0ff', 0.45, [2.1, 0.7, 1.7]], rim: ['#ffffff', 1.35, [1.4, 1.8, -2.4]], kick: ['#ffffff', 0.6, [-1.6, 1.2, -2.1]],
     sky: '#ffffff', ground: '#8f8a99', hemi: 0.6, env: 0.5, ao: 0.8, shadow: 0.45, selfShadow: true, skinGlow: ['#ffc2ae', 0.30] },
+  cafe: { label: 'Warm café', key: ['#ffe2bf', 1.5, [-1.0, 1.7, 2.3]], fill: ['#ffcf9e', 0.6, [1.9, 0.5, 1.8]], rim: ['#ffb36b', 1.15, [1.4, 1.5, -2.3]], kick: ['#fff1d6', 0.45, [-1.6, 1.1, -2.0]],
+    sky: '#fff0dc', ground: '#c08a5a', hemi: 0.85, env: 0.4, ao: 0.7, shadow: 0.35, selfShadow: false, skinGlow: ['#ffae86', 0.36] },
+  daylight: { label: 'Sunny day', key: ['#fffaf0', 1.7, [-1.0, 2.3, 2.2]], fill: ['#cfe6ff', 0.55, [2.0, 0.6, 1.8]], rim: ['#ffd1e3', 1.0, [1.4, 1.7, -2.3]], kick: ['#ffffff', 0.4, [-1.6, 1.2, -2.0]],
+    sky: '#dff0ff', ground: '#a8d38a', hemi: 1.0, env: 0.5, ao: 0.6, shadow: 0.4, selfShadow: false, skinGlow: ['#ffb7a8', 0.3] },
+  moonlight: { label: 'Moonlit night', key: ['#dbe4ff', 1.35, [-1.2, 1.8, 2.2]], fill: ['#6f7cff', 0.45, [2.0, 0.4, 1.6]], rim: ['#b48cff', 1.7, [1.5, 1.4, -2.2]], kick: ['#7fe3ff', 1.0, [-1.7, 1.1, -2.0]],
+    sky: '#7a86d6', ground: '#1c1838', hemi: 0.5, env: 0.25, ao: 0.85, shadow: 0.4, selfShadow: false, skinGlow: ['#ff9ad5', 0.3] },
   classic: { label: 'Classic (flat)', key: ['#ffffff', 1.6, [-1.2, 2.2, 2.5]], fill: ['#bfd4ff', 0.0, [2.2, 0.6, 1.6]], rim: ['#a35cff', 0.72, [1.5, 1.8, -2.5]], kick: null,
     sky: '#ffffff', ground: '#444455', hemi: 0.9, env: 0.0, ao: 0.0, shadow: 0.0, selfShadow: false, skinGlow: null },
 };
