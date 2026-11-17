@@ -180,6 +180,26 @@ async function libraryApi(req, res, url) {
   }
 }
 
+// Picture cards for the Character Maker's choices. The browser renders a missing card itself (on your GPU, in the
+// background) and stores it here, so each picture is made once. THUMB_VERSION changes when the look of characters does.
+const THUMB_VERSION = 1, THUMB_CATS = new Set(['face', 'eyes', 'hair', 'outfit', 'acc', 'ears', 'tail', 'base']), THUMB_KEY = /^[\w-]{1,80}$/;
+const thumbDir = () => path.join(DATA, 'thumbs', `v${THUMB_VERSION}`);
+async function thumbsApi(req, res, url) {
+  const json = (o, c = 200) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+  const m = url.pathname.match(/^\/api\/thumbs(?:\/([a-z]+)\/([\w-]+))?$/);
+  if (!m) return json({ error: 'Not found' }, 404);
+  const [, cat, key] = m;
+  if (!cat && req.method === 'GET') { const have = []; for (const c of THUMB_CATS) { try { for (const f of fs.readdirSync(path.join(thumbDir(), c))) if (f.endsWith('.jpg')) have.push(`${c}/${f.slice(0, -4)}`); } catch { /* none yet */ } } return json({ version: THUMB_VERSION, have }); }
+  if (!THUMB_CATS.has(cat) || !THUMB_KEY.test(key)) return json({ error: 'Not found' }, 404);
+  const file = path.join(thumbDir(), cat, `${key}.jpg`);
+  if (req.method === 'GET') return sendFile(res, file, 'image/jpeg');
+  if (req.method === 'POST') {
+    const buf = await readBinary(req, 600000);
+    if (!(buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff)) return json({ error: 'A JPEG picture is expected.' }, 400);
+    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, buf); return json({ saved: `${cat}/${key}` });
+  }
+  return json({ error: 'Not allowed' }, 405);
+}
 async function propsApi(req, res, url) {
   const p = url.pathname, M = req.method, json = (o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
   try {
@@ -299,6 +319,7 @@ const server = http.createServer((req, res) => {
   if ((m = p.match(/^\/api\/gesture\/([\w-]+)$/))) { const msg = { type: 'gesture', name: m[1], source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
   if (p.startsWith('/api/triggers') || p.startsWith('/api/twitch/')) { eventsApi(req, res, p); return; }
   if (p.startsWith('/api/props')) { propsApi(req, res, url); return; }
+  if (p.startsWith('/api/thumbs')) { thumbsApi(req, res, url).catch((e) => { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }); return; }
   if (p.startsWith('/userprops/')) {          // your uploaded props and scenes
     const f = p.slice(11), fp = PROP_FILE_RE.test(f) && propStore.has(f) ? propStore.filePath(f) : null;
     if (!fp) { res.writeHead(404); res.end(); return; }

@@ -270,6 +270,19 @@ export class AvatarViewer {
   }
 
   /** Square PNG thumbnail (data URL), bust shot from the front-three-quarter. */
+  /** A picture of the character at rest, w x h pixels, from one of the frame() views (dolly > 1 steps back). Returns a JPEG blob. */
+  async snapshot(w, h, view = 'front-full', { dolly = 1, drop = 0 } = {}) {
+    const pw = this.el.clientWidth, ph = this.el.clientHeight, prevPR = this.renderer.getPixelRatio(), grid = this.grid.visible;
+    this.renderer.setPixelRatio(1); this.renderer.setSize(w, h, false); this.rig?.setSize(w, h); this.camera.aspect = w / h; this.camera.clearViewOffset(); this.camera.updateProjectionMatrix();
+    this.grid.visible = false;
+    if (this.vrm) { const keepMotion = this.motion; this.motion = 'idle'; this.pose(0); this.vrm.update(0); this.model.updateMatrixWorld(true); this.motion = keepMotion; }
+    this.frame(view);
+    const t = this.controls.target; if (dolly !== 1) this.camera.position.sub(t).multiplyScalar(dolly).add(t); if (drop) { this.camera.position.y -= drop; t.y -= drop; }
+    this.camera.lookAt(t); this.rig.render();
+    const blob = await new Promise((r) => this.renderer.domElement.toBlob(r, 'image/jpeg', 0.86));
+    this.renderer.setPixelRatio(prevPR); this.grid.visible = grid; this.renderer.setSize(pw, ph, false); this.resize();
+    return blob;
+  }
   thumbnail(size = 384) {
     const prev = { pos: this.camera.position.clone(), target: this.controls.target.clone(), aspect: this.camera.aspect, grid: this.grid.visible, bg: this.background };
     const w = this.el.clientWidth, h = this.el.clientHeight;

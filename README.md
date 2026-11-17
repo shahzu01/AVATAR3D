@@ -102,9 +102,18 @@ The Studio's **Look** panel dresses the stream:
 - Keep the Studio in its own visible window; Chrome pauses hidden tabs (the Studio warns you if that happened).
 - Light in front of you, camera at eye level, charger plugged in, Low Power Mode off.
 
-## Avatar Library
+## Characters
 
-Open **Avatar library** from the Studio's Look panel (or http://localhost:3939/library.html).
+**Characters** in the top bar (http://localhost:3939/characters.html) is the home for every character, laid out like VRoid Studio:
+
+- **My Characters:** what you made and what you imported, newest first. Click one to edit it (or, for an imported model, to see its details). The **⋯** menu has Put on stream, Details, Rename, Duplicate and Delete. The card marked **On stream** is what OBS shows.
+- **Create New** asks for a base: **Feminine** or **Masculine** (or Mika, a human body or NekoMika's head under *More bases*), then opens the editor.
+- **Open a .vrm** imports a model you already have, for example one made in VRoid Studio.
+- **Sample Models:** the ready-made anime characters. Open one to use it or change it.
+
+### Avatar library (details and import)
+
+The library page (http://localhost:3939/library.html, or *Details* in a card's menu) still handles importing, checking and the per-avatar settings below.
 
 - **Import My 3D Avatar:** choose or drag in a `.vrm` (VRM 1.0 or 0.x). Kael Studio checks the file first: type, size, damage, and links to outside files are not allowed. It then shows a 3D preview you can rotate and zoom, with front, ¾, side, back and full-body views, light and background presets, expression buttons and test motions (wave, nod, look around, blink). A report lists what the model supports: humanoid rig, fingers, expressions, Perfect Sync face tracking, blinking, lip sync, eye control, spring bones, textures, size and facing direction. Name it and save it.
 - `.glb` models can be stored and previewed, but they have no VRM humanoid rig, so they cannot be driven by tracking.
@@ -129,7 +138,9 @@ Limits (changeable in `settings.json` under `importLimits`): 300 MB per file, 4 
 
 ## Character Maker
 
-The main place to make a character: **Characters** in the top bar (or http://localhost:3939/mixer.html), or **Create a New Avatar** in the library. **Undo / Redo** (⌘Z / ⇧⌘Z) and **Surprise me** (a random character, sometimes with animal ears and a tail) are at the top. It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
+The editor works like VRoid Studio: tabs across the top (**Face, Hairstyle, Body, Outfit, Accessories, Animal, Look**), sections down the left, picture cards for every choice, the character in the middle and colours on the right. Save, Go live and Export .vrm are at the top right; ☰ goes back to My Characters or opens a sample. The picture cards are drawn on your Mac the first time you open the editor (a second or two each, in the background) and kept in the `thumbs` folder, so later visits show them at once.
+
+**Undo / Redo** (⌘Z / ⇧⌘Z) and **Surprise me** (a random character, sometimes with animal ears and a tail) are at the top. It builds a character from parts that fit together: five bodies (female, male, anime female, anime male, and Mika), swappable heads (including complete heads such as NekoMika), hair, outfits and accessories.
 
 - **Ready-made:** eight complete anime characters to start from (Neko Streamer, Fox Shrine Maiden, Bunny Idol, Elf Mage, Wolf Knight, Cat Butler, Bear Buddy, Anime Idol). Everything about them can be changed.
 - **Animal:** cat, fox, wolf, bunny, bear or pointed elf ears, and cat, fox or wolf tails or a bunny or bear puff, in the hair colour or a fur colour of your own, with a tip colour for fox and wolf tails. Ears are fitted to the head and hairstyle; tails swing with spring physics and come along in a baked or exported .vrm.

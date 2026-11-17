@@ -29,7 +29,7 @@ test('every script parses', () => {
 });
 
 test('pages load', async () => {
-  for (const p of ['/', '/tracker.html', '/avatar.html', '/library.html', '/creator.html', '/mixer.html', '/modular/kit.json', '/modular/face_kit.json']) assert.equal((await fetch(BASE + p)).status, 200, p);
+  for (const p of ['/', '/tracker.html', '/avatar.html', '/library.html', '/characters.html', '/creator.html', '/mixer.html', '/modular/kit.json', '/modular/face_kit.json']) assert.equal((await fetch(BASE + p)).status, 200, p);
 });
 
 test('safety lock: only this Mac and Kael Studio pages', async () => {
@@ -118,4 +118,16 @@ test('animal ears and tails are saved; ready-made characters all have pictures',
   const ready = [...read('public/readymade.js').matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
   assert.ok(ready.length >= 8);
   for (const k of ready) assert.equal((await fetch(`${BASE}/readymade/${k}.png`)).status, 200, `picture for ${k}`);
+});
+
+test('picture cards: stored once, only JPEGs, only known names', async () => {
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+  const post = (p, body) => fetch(BASE + p, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Origin: BASE, 'Sec-Fetch-Site': 'same-origin' }, body });
+  assert.equal((await post('/api/thumbs/face/c_round', jpeg)).status, 200);
+  assert.equal((await fetch(`${BASE}/api/thumbs/face/c_round`)).status, 200);
+  assert.ok((await api('/api/thumbs')).j.have.includes('face/c_round'));
+  assert.equal((await post('/api/thumbs/face/x', Buffer.from('<svg onload=alert(1)>'))).status, 400, 'not a JPEG');
+  assert.equal((await post('/api/thumbs/secrets/x', jpeg)).status, 404, 'unknown kind of card');
+  assert.equal((await post('/api/thumbs/face/..%2F..%2Fsettings', jpeg)).status, 404, 'no paths');
+  assert.equal((await fetch(`${BASE}/api/thumbs/face/c_round`, { method: 'POST', headers: { Origin: 'https://evil.example' }, body: jpeg })).status, 403, 'other websites cannot write');
 });

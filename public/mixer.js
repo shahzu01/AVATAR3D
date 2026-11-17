@@ -1,94 +1,148 @@
-// Part Mixer: pick a body for every part, a fit for every part, and see the stitched character live.
+// Character Maker, laid out like VRoid Studio: tabs across the top (Face, Hair, Body, Outfit, Accessories, Animal, Look),
+// sections down the left, a grid of picture cards for the choices, the character in the middle, colours on the right.
+// Start points (Create New, sample models) are on the Characters home page (/characters.html).
 import { AvatarViewer } from '/viewer.js';
 import { topbar, toast } from '/ui.js';
-import { loadKit, defaultModular, PART_ROWS, OUTFITS, defaultOutfit, hairChoices, outfitGroup, ACCESSORIES, accessoriesOf, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf } from '/modular.js';
-
-const $ = (id) => document.getElementById(id);
-const q = new URLSearchParams(location.search); const editId = q.get('id');
+import { loadKit, defaultModular, PART_ROWS, OUTFITS, defaultOutfit, hairChoices, hairSource, outfitGroup, ACCESSORIES, accessoriesOf, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf } from '/modular.js';
 import { ensureBaked } from '/autobake.js';
 import { EARS, TAILS, furTipFor } from '/animal.js';
 import { READY } from '/readymade.js';
+import { allJobs, makeMissing, thumbUrl } from '/thumbmaker.js';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const q = new URLSearchParams(location.search); const editId = q.get('id');
 let savedId = editId, dirty = false;      // the library character this page is editing, and whether it has unsaved changes
 topbar('mixer');
 const viewer = new AvatarViewer($('viewer')); viewer.setGrid(false); window.viewer = viewer;
 const kit = await loadKit();
-let recipe = defaultModular('anime_female'); recipe.hair = 'Bob';
-let view = 'front-full', seq = 0, first = true;
-const bodies = Object.entries(kit.bodies);
-const FITS = [['own', 'Own size'], ['match', 'Match']];
-const STARTS = [
-  ['Anime Female', () => ({ ...defaultModular('anime_female'), hair: 'Bob' })],
-  ['Anime Male', () => ({ ...defaultModular('anime_male'), hair: 'Side part comb over' })],
-  ...(kit.bodies.mika_female ? [['Mika Female', () => ({ ...defaultModular('mika_female'), hair: 'High ponytail' })]] : []),
-  ['Human Female', () => ({ ...defaultModular('female'), hair: 'Bob' })], ['Human Male', () => ({ ...defaultModular('male'), hair: 'Short crew cut' })],
-  ...Object.entries(kit.heads || {}).map(([k, h]) => [`${h.label} head`, () => ({ ...defaultModular(kit.bodies.mika_female ? 'mika_female' : 'anime_female'), headModel: k, skin: h.skin || '#ecc4ad', clothing: '#26262e', accent: '#f08a24' })]),
-  ['Anime head, human body', () => { const r = defaultModular('female'); r.parts.Head = 'anime_female'; r.hair = 'High ponytail'; return r; }],
-  ['Male body, female arms', () => { const r = defaultModular('male'); for (const p of ['Arm_L', 'Arm_R', 'Hand_L', 'Hand_R']) { r.parts[p] = 'female'; r.fit[p] = 'match'; } return r; }],
-];
+const HEADS = Object.entries(kit.heads || {});
+const DEFAULT_HAIR = { anime_female: 'Bob', mika_female: 'High ponytail', female: 'Bob', anime_male: 'Side part comb over', male: 'Short crew cut' };
+/** A fresh character on one body, in the plain starting clothes (like VRoid's T-shirt and shorts). */
+function fromBase(b) {
+  const head = HEADS.find(([k]) => k === b || (b === 'nekomika' && /neko/i.test(k)));
+  if (head) { const body = kit.bodies.mika_female ? 'mika_female' : 'anime_female'; return { ...defaultModular(body), name: '', headModel: head[0], skin: head[1].skin || '#ecc4ad', outfit: 'casual', clothing: '#26262e', accent: '#f2efe9' }; }
+  if (!kit.bodies[b]) b = 'anime_female';
+  return { ...defaultModular(b), hair: DEFAULT_HAIR[b] || 'Bob', outfit: 'casual', clothing: '#26262e', accent: '#f2efe9' };
+}
+let recipe = fromBase('anime_female');
+let view = 'front-full', seq = 0, first = true, tab = 'face', section = null;
+const made = new Map();       // pictures made during this visit (fresh URLs)
+const thumb = (cat, key) => { const k = `${cat}/${String(key).replace(/[^\w-]+/g, '_')}`; return { k, url: made.get(k) || thumbUrl(cat, key) }; };
+const card = (pick, label, img, on, cls = '') => `<button class="opt ${on ? 'on' : ''} ${cls}" data-pick="${esc(pick)}" title="${esc(label)}"><span class="im" ${img ? `data-thumb="${img.k}" style="background-image:url('${img.url}')"` : ''}>${img ? '' : '∅'}</span><span class="lb">${esc(label)}</span></button>`;
 
-function setStatus(t, kind = '') { $('status').textContent = t; $('status').className = `status ${kind}`; }
-function hairOptions() {
-  if (recipe.headModel) { $('hair').innerHTML = '<option>Comes with this head</option>'; $('hair').disabled = true; $('hair').title = 'This head has its own hair'; $('hairColor').disabled = true; return; }
-  $('hairColor').disabled = false;
-  const list = hairChoices(kit, recipe.parts.Head);
-  if (recipe.hair !== 'None' && !list.some((h) => h.name === recipe.hair)) recipe.hair = list[0]?.name || 'None';      // a head never goes bald just because it was swapped
-  $('hair').innerHTML = ['None', ...list.map((h) => h.name)].map((n) => `<option ${n === recipe.hair ? 'selected' : ''}>${n}</option>`).join('');
-  $('hair').disabled = !list.length; $('hair').title = list.length ? '' : 'This head has no hairstyles in the kit yet';
-}
-function faceShapeOptions() {
-  const el = $('faceShape'), g = faceShapeGroup(kit, recipe.parts.Head), cur = faceShapeOf(kit, recipe)[0], GN = { female: 'Female face', male: 'Male face', cartoon: 'Cartoon face' };
-  el.disabled = !!recipe.headModel; el.title = recipe.headModel ? 'This head keeps its own face' : '';
-  el.innerHTML = recipe.headModel ? '<option>Comes with this head</option>' : `<optgroup label="${GN[g]}">` + FACE_SHAPES[g].map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('') + '</optgroup>';
-}
-function eyeShapeOptions() {
-  const el = $('eyeShape'), g = recipe.headModel ? null : eyeShapeGroup(kit, recipe.parts.Head), cur = eyeShapeOf(kit, recipe)?.[0];
-  el.disabled = !g; el.title = g ? '' : 'This head keeps its own eyes';
-  el.innerHTML = g ? `<optgroup label="${({ anime: 'Anime girl eyes', female: 'Female eyes', male: 'Male eyes', animeMale: 'Anime boy eyes' })[g]}">` + EYE_SHAPES[g].map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${n}</option>`).join('') + '</optgroup>' : '<option>Not available for this head</option>';
-}
+// ------------------------------------------------------------------ what each tab offers
+const hairKey = () => { const src = hairSource(kit, recipe.parts.Head).body; return src === 'mika_female' ? 'anime_female' : src; };
+const worn = () => accessoriesOf(kit, recipe);
+const HAIR_EXTRA = ['bow', 'kanzashi', 'headdress', 'tiara'], ACC_MAIN = ['headset', 'glasses', 'choker', 'scarf'];
+const TABS = {
+  face: { label: 'Face', sections: [['shape', 'Face shape', '◯'], ['eyes', 'Eyes', '◉']] },
+  hair: { label: 'Hairstyle', sections: [['style', 'Hairstyle', '♒'], ['extra', 'Extra', '✿']] },
+  body: { label: 'Body', sections: [['base', 'Base body', '⚲'], ['mix', 'Mix parts', '⧉']] },
+  outfit: { label: 'Outfit', sections: [['sets', 'Whole sets', '👕']] },
+  acc: { label: 'Accessories', sections: [['acc', 'Accessories', '🎧']] },
+  animal: { label: 'Animal', sections: [['ears', 'Ears', '▲'], ['tail', 'Tail', '∿']] },
+  look: { label: 'Look', sections: [['look', 'Look', '✦']] },
+};
+const panels = {
+  shape() {
+    if (recipe.headModel) return '<h3>Face shape</h3><p class="hint">This head keeps its own face. Pick another base on the Body tab to choose a face shape.</p>';
+    const g = faceShapeGroup(kit, recipe.parts.Head), cur = faceShapeOf(kit, recipe)[0];
+    return `<h3>Face shape</h3><div class="cards">${FACE_SHAPES[g].map(([k, n]) => card(`faceShape:${k}`, n, thumb('face', k), k === cur)).join('')}</div>`;
+  },
+  eyes() {
+    const g = recipe.headModel ? null : eyeShapeGroup(kit, recipe.parts.Head);
+    if (!g) return '<h3>Eyes</h3><p class="hint">This head keeps its own eyes. You can still change the eye colour on the right.</p>';
+    const cur = eyeShapeOf(kit, recipe)?.[0];
+    return `<h3>Eyes</h3><div class="cards">${EYE_SHAPES[g].map(([k, n]) => card(`eyeShape:${k}`, n, thumb('eyes', k), k === cur)).join('')}</div>`;
+  },
+  style() {
+    if (recipe.headModel) return '<h3>Hairstyle</h3><p class="hint">This head comes with its own hair.</p>';
+    const list = hairChoices(kit, recipe.parts.Head), hk = hairKey();
+    return `<h3>Hairstyle</h3><div class="cards">${card('hair:None', 'None', null, recipe.hair === 'None', 'none')}${list.map((h) => card(`hair:${h.name}`, h.name, thumb('hair', `${hk}__${h.name}`), h.name === recipe.hair)).join('')}</div>`;
+  },
+  extra() { const w = worn(); return `<h3>Extra</h3><p class="hint">Bows, pins and headpieces that sit in the hair. Tap to add or remove.</p><div class="cards">${HAIR_EXTRA.map((k) => card(`acc:${k}`, ACCESSORIES[k], thumb('acc', k), w.includes(k))).join('')}</div>`; },
+  base() {
+    const bodies = Object.entries(kit.bodies).map(([k, b]) => [k, b.label]), cur = recipe.headModel ? `head:${recipe.headModel}` : (PART_ROWS.every(([, ps]) => ps.every((p) => recipe.parts[p] === recipe.parts.Torso)) ? recipe.parts.Torso : null);
+    return `<h3>Base body</h3><p class="hint">Changes the whole body. Your hair, outfit and colours stay where they can.</p><div class="cards">${bodies.map(([k, n]) => card(`base:${k}`, n, thumb('base', k), cur === k)).join('')}${HEADS.map(([k, h]) => card(`base:${k}`, `${h.label} head`, thumb('base', k), cur === `head:${k}`)).join('')}</div>`;
+  },
+  mix() {
+    const bodies = Object.entries(kit.bodies), FITS = [['own', 'Own size'], ['match', 'Match']];
+    return `<h3>Mix parts</h3><p class="hint">Take each part from a different body. <b>Match</b> scales a part to what it attaches to.</p>` + PART_ROWS.map(([label, ps]) => {
+      const isHead = label === 'Head', cur = isHead && recipe.headModel ? `model:${recipe.headModel}` : recipe.parts[ps[0]], fit = recipe.fit[ps[0]] ?? 'own';
+      const extra = isHead ? HEADS.map(([k, h]) => `<option value="model:${k}" ${cur === `model:${k}` ? 'selected' : ''}>${esc(h.label)} (complete head)</option>`).join('') : '';
+      return `<div class="prow"><span class="k">${label}</span><select data-part="${label}">${bodies.map(([k, b]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(b.label)}</option>`).join('')}${extra}</select>
+        ${ps[0] === 'Torso' ? '<span></span>' : `<select data-fit="${label}">${FITS.map(([v, n]) => `<option value="${v}" ${v === fit ? 'selected' : ''}>${n}</option>`).join('')}</select>`}</div>`;
+    }).join('') + '<div id="notes"></div>';
+  },
+  sets() {
+    const cur = recipe.outfit || defaultOutfit(kit, recipe.parts.Torso), grp = outfitGroup(kit, recipe.parts.Torso);
+    const GN = { anime: 'Anime', female: 'Everyday (women)', male: 'Everyday (men)', premium: 'Premium', premiumMale: 'Premium (men)', any: 'Basics' };
+    const order = grp === 'male' ? ['premiumMale', 'male', 'any', 'premium', 'anime', 'female'] : ['premium', grp, 'any', ...['anime', 'female'].filter((g) => g !== grp), 'premiumMale', 'male'];
+    return '<h3>Whole sets</h3><p class="hint">Change the colours on the right.</p>' + order.map((g) => { const list = Object.entries(OUTFITS).filter(([, o]) => o.group === g); if (!list.length) return '';
+      return `<h4>${GN[g]}</h4><div class="cards">${list.map(([k, o]) => card(`outfit:${k}`, o.label.split(':')[0], thumb('outfit', k), k === cur)).join('')}</div>`; }).join('') + `<h4>Nothing</h4><div class="cards">${card('outfit:none', 'No outfit', null, cur === 'none', 'none')}</div>`;
+  },
+  acc() { const w = worn(), list = [...ACC_MAIN, ...['catEars', 'tail'].filter((k) => w.includes(k))]; return `<h3>Accessories</h3><p class="hint">Tap to add or remove. Each outfit starts with its own; hair pieces are under Hairstyle › Extra.</p><div class="cards">${list.map((k) => card(`acc:${k}`, ACCESSORIES[k], thumb('acc', k), w.includes(k))).join('')}</div>`; },
+  ears() { if (recipe.headModel) return '<h3>Ears</h3><p class="hint">This head has its own ears.</p>'; return `<h3>Ears</h3><div class="cards">${Object.entries(EARS).map(([k, n]) => card(`ears:${k}`, n, k === 'none' ? null : thumb('ears', k), (recipe.ears || 'none') === k, k === 'none' ? 'none' : '')).join('')}</div>`; },
+  tail() { return `<h3>Tail</h3><p class="hint">Tails swing as you move: press <b>Sway</b> above the character.</p><div class="cards">${Object.entries(TAILS).map(([k, n]) => card(`tail:${k}`, n, k === 'none' ? null : thumb('tail', k), (recipe.tail || 'none') === k, k === 'none' ? 'none' : '')).join('')}</div>`; },
+  look() { return `<h3>Look</h3><p class="hint">How the whole character is drawn.</p>
+    <div class="line"><span>Ink outline (anime edge lines)</span><input type="checkbox" data-flag="outline" ${recipe.outline !== false ? 'checked' : ''}></div>
+    <div class="line"><span>Painted hair, shading and clothes</span><input type="checkbox" data-flag="paint" ${recipe.paint !== false ? 'checked' : ''}></div>
+    <h4>Preview light</h4><div class="cards three">${['showcase', 'studio', 'soft', 'warm', 'cool', 'neon'].map((l) => `<button class="opt" data-light="${l}"><span class="lb">${l[0].toUpperCase() + l.slice(1)}</span></button>`).join('')}</div>`; },
+};
+const colour = (id, label) => `<div class="line"><span>${label}</span><input type="color" data-col="${id}" value="${id === 'eyeColor' ? (recipe.eyeColor || (kit.bodies[recipe.parts.Head]?.base === 'male' ? '#2f8f8a' : '#4f7396')) : (recipe[id] || (id === 'accent' ? '#f2efe9' : '#888888'))}"></div>`;
+const PROPS = {
+  face: () => colour('skin', 'Skin') + colour('eyeColor', 'Eyes'),
+  hair: () => (recipe.headModel ? '<p class="muted">This head keeps its own hair colour.</p>' : colour('hairColor', 'Hair')),
+  body: () => colour('skin', 'Skin') + `<div id="height" class="muted"></div>`,
+  outfit: () => colour('clothing', 'Main colour') + colour('accent', 'Accent colour'),
+  acc: () => colour('accent', 'Accent colour'),
+  animal: () => `<div class="line"><span>Same colour as the hair</span><input type="checkbox" data-flag="furMatch" ${recipe.furColor ? '' : 'checked'}></div>` + (recipe.furColor ? colour('furColor', 'Fur') : '') + `<div class="line"><span>Tip (fox, wolf, bunny puff)</span><input type="color" data-col="furTip" value="${recipe.furTip || furTipFor(recipe.tail !== 'none' ? recipe.tail : recipe.ears, recipe.furColor || recipe.hairColor)}"></div>`,
+  look: () => '',
+};
+
 function render() {
-  $('ready').innerHTML = READY.map((r, i) => `<button data-ready="${i}" title="Start from ${r.label}: everything can be changed"><img src="/readymade/${r.key}.png" alt="" loading="lazy"><span>${r.label}</span></button>`).join('');
-  $('starts').innerHTML = STARTS.map(([n], i) => `<button data-start="${i}">${n}</button>`).join('');
-  $('parts').innerHTML = PART_ROWS.map(([label, ps]) => {
-    const isHead = label === 'Head', cur = isHead && recipe.headModel ? `model:${recipe.headModel}` : recipe.parts[ps[0]], fit = recipe.fit[ps[0]] ?? 'own';
-    const extra = isHead ? Object.entries(kit.heads || {}).map(([k, h]) => `<option value="model:${k}" ${cur === `model:${k}` ? 'selected' : ''}>${h.label} (complete head)</option>`).join('') : '';
-    return `<div class="prow"><span class="k">${label}</span>
-      <select data-part="${label}">${bodies.map(([k, b]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${b.label}</option>`).join('')}${extra}</select>
-      ${ps[0] === 'Torso' ? '<span></span>' : `<select data-fit="${label}" title="Own size keeps the part as it is. Match scales it to what it attaches to.">${FITS.map(([v, n]) => `<option value="${v}" ${v === fit ? 'selected' : ''}>${n}</option>`).join('')}</select>`}</div>`;
-  }).join('');
-  hairOptions(); faceShapeOptions(); eyeShapeOptions();
-  $('hairColor').value = recipe.hairColor; $('skin').value = recipe.skin; $('outline').checked = recipe.outline !== false; $('eyeColor').value = recipe.eyeColor || (kit.bodies[recipe.parts.Head]?.base === 'male' ? '#2f8f8a' : '#4f7396'); $('clothing').value = recipe.clothing; $('accent').value = recipe.accent || '#f2efe9'; $('name').value = recipe.name;
-  const cur = recipe.outfit || defaultOutfit(kit, recipe.parts.Torso);
-  const grp = outfitGroup(kit, recipe.parts.Torso), GN = { male: 'For male characters', female: 'For female characters', anime: 'For anime characters', premium: 'Premium (female & anime)', premiumMale: 'Premium (male)', any: 'Basics' }, order = grp === 'male' ? ['male', 'premiumMale', 'anime', 'female', 'premium', 'any'] : [grp, 'premium', ...['anime', 'female', 'male'].filter((g) => g !== grp), 'premiumMale', 'any'];
-  $('outfit').innerHTML = order.map((g) => `<optgroup label="${GN[g]}">${Object.entries(OUTFITS).filter(([, o]) => o.group === g).map(([k, o]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${o.label}</option>`).join('')}</optgroup>`).join('') + `<option value="none" ${cur === 'none' ? 'selected' : ''}>None</option>`;
-  $('ears').innerHTML = Object.entries(EARS).map(([k, n]) => `<option value="${k}" ${k === (recipe.ears || 'none') ? 'selected' : ''}>${n}</option>`).join(''); $('ears').disabled = !!recipe.headModel; $('ears').title = recipe.headModel ? 'This head has its own ears' : '';
-  $('tail').innerHTML = Object.entries(TAILS).map(([k, n]) => `<option value="${k}" ${k === (recipe.tail || 'none') ? 'selected' : ''}>${n}</option>`).join('');
-  $('furMatch').checked = !recipe.furColor; $('furColor').value = recipe.furColor || recipe.hairColor; $('furColor').disabled = !recipe.furColor; $('furTip').value = recipe.furTip || furTipFor(recipe.tail !== 'none' ? recipe.tail : recipe.ears, recipe.furColor || recipe.hairColor);
-  const worn = accessoriesOf(kit, recipe); $('acc').innerHTML = Object.entries(ACCESSORIES).filter(([k]) => !['catEars', 'tail'].includes(k) || worn.includes(k)).map(([k, n]) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" data-acc="${k}" ${worn.includes(k) ? 'checked' : ''}>${n}</label>`).join('');
+  $('tabs').innerHTML = Object.entries(TABS).map(([k, t]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${t.label}</button>`).join('');
+  const secs = TABS[tab].sections; if (!secs.some(([k]) => k === section)) section = secs[0][0];
+  $('rail').innerHTML = secs.map(([k, n, g]) => `<button data-sec="${k}" class="${k === section ? 'on' : ''}" title="${n}"><span class="g">${g}</span>${n}</button>`).join('');
+  $('panel').innerHTML = panels[section]();
+  $('props').innerHTML = `<h4>${TABS[tab].label} colours</h4>` + PROPS[tab]() + (tab !== 'body' ? '<div id="notes"></div>' : '');
+  $('name').value = recipe.name || '';
+  showNotes();
 }
-// undo / redo: every change is a snapshot of the recipe
+function showNotes() {
+  const n = viewer.vrm?.userData?.modularNotes || [], h = viewer.vrm?.userData?.modularHeight;
+  for (const el of document.querySelectorAll('#notes')) el.innerHTML = `<b>Height ${h ? h.toFixed(2) : '?'} m.</b> ` + n.map((x) => x.replace(/^(\w+):/, '<b>$1</b>:')).join('<br>');
+  if ($('height')) $('height').textContent = h ? `Height ${h.toFixed(2)} m` : '';
+}
+function setStatus(t, kind = '') { $('status').textContent = t; $('status').className = `status ${kind}`; }
+
+// ------------------------------------------------------------------ undo / redo: every change is a snapshot of the recipe
 const hist = []; let hpos = -1, fromHistory = false;
 const histButtons = () => { $('undo').disabled = hpos <= 0; $('redo').disabled = hpos >= hist.length - 1; };
 function remember() { const s = JSON.stringify(recipe); if (hist[hpos] === s) return; hist.splice(hpos + 1); hist.push(s); if (hist.length > 80) hist.shift(); hpos = hist.length - 1; histButtons(); }
 function travel(d) { const p = hpos + d; if (p < 0 || p >= hist.length) return; hpos = p; const keep = recipe.name; recipe = JSON.parse(hist[p]); recipe.name = keep; fromHistory = true; render(); refresh(); histButtons(); }
-// a random character: a start, then hair, face, eyes, outfit and colours picked from what that head and body offer
+
+// ------------------------------------------------------------------ a random character
 const PALETTE = ['#24315e', '#7a1c26', '#2b3f73', '#ff5fa2', '#1c1a22', '#2d6a4f', '#f2efe9', '#ffd166', '#5b6bd6', '#8e2a2a', '#3a3a46', '#e0566d', '#2f8f8a', '#c97b3a'];
 const HAIR = ['#2b2220', '#4a2f22', '#6b4226', '#a0522d', '#d9b26a', '#1c1c24', '#b03a48', '#5c7cfa', '#e8e2d6', '#f2a7c3'];
 const EYES = ['#4f7396', '#2f8f8a', '#6b4226', '#5a8a3c', '#8a4fb8', '#c0392b', '#3c6e9e', '#d4a017'];
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 function surprise() {
-  const starts = STARTS.filter(([n]) => !/body, |arms/.test(n)), keep = recipe.name; recipe = pick(starts)[1](); recipe.name = keep; render();
-  const opt = (id) => [...$(id).querySelectorAll('option')].filter((o) => !o.disabled && o.value && !/Comes with|Not available/.test(o.textContent)).map((o) => o.value);
-  if (!$('hair').disabled) recipe.hair = pick(opt('hair').filter((v) => v !== 'None')) || recipe.hair;
-  if (!$('faceShape').disabled) recipe.faceShape = pick(opt('faceShape'));
-  if (!$('eyeShape').disabled) recipe.eyeShape = pick(opt('eyeShape'));
+  const keep = recipe.name; recipe = fromBase(pick(['anime_female', 'anime_female', 'anime_male', ...(kit.bodies.mika_female ? ['mika_female'] : []), 'female', 'male'])); recipe.name = keep;
+  const hl = hairChoices(kit, recipe.parts.Head); if (hl.length) recipe.hair = pick(hl).name;
+  recipe.faceShape = pick(FACE_SHAPES[faceShapeGroup(kit, recipe.parts.Head)])[0];
+  const eg = eyeShapeGroup(kit, recipe.parts.Head); if (eg) recipe.eyeShape = pick(EYE_SHAPES[eg])[0];
   const grp = outfitGroup(kit, recipe.parts.Torso), ok = Object.entries(OUTFITS).filter(([, o]) => o.group === grp || o.group === (grp === 'male' ? 'premiumMale' : 'premium'));
-  const [ok0, o] = pick(ok); recipe.outfit = ok0; recipe.accessories = null;
+  const [k, o] = pick(ok); recipe.outfit = k; recipe.accessories = null;
   if (o.colors && Math.random() < 0.5) Object.assign(recipe, o.colors); else { recipe.clothing = pick(PALETTE); recipe.accent = pick(PALETTE.filter((c) => c !== recipe.clothing)); }
-  if (!recipe.headModel) { recipe.hairColor = pick(HAIR); recipe.eyeColor = pick(EYES); }
+  recipe.hairColor = pick(HAIR); recipe.eyeColor = pick(EYES);
   recipe.ears = recipe.tail = 'none'; recipe.furColor = recipe.furTip = null;          // about half get animal ears, most of those a tail too
-  if (Math.random() < 0.5) { const k = pick(['cat', 'cat', 'fox', 'wolf', 'bunny', 'bear', 'elf']); if (!recipe.headModel) recipe.ears = k; if (k !== 'elf' && Math.random() < 0.8) recipe.tail = k; if (Array.isArray(recipe.accessories)) recipe.accessories = recipe.accessories.filter((a) => !['catEars', 'tail', 'headset'].includes(a)); }
+  if (Math.random() < 0.5) { const a = pick(['cat', 'cat', 'fox', 'wolf', 'bunny', 'bear', 'elf']); recipe.ears = a; if (a !== 'elf' && Math.random() < 0.8) recipe.tail = a; }
   render(); refresh();
 }
+
+// ------------------------------------------------------------------ build the character
 let refreshes = 0;
 async function refresh() {
   if (refreshes++) dirty = true;
@@ -98,65 +152,82 @@ async function refresh() {
     await viewer.loadCreated(JSON.parse(JSON.stringify(recipe)), { keepCamera: !first });
     if (my !== seq) return;
     if (first) { viewer.frame(view); first = false; }
-    const n = viewer.vrm?.userData?.modularNotes || [], h = viewer.vrm?.userData?.modularHeight;
-    $('notes').innerHTML = `<b>Height ${h ? h.toFixed(2) : '?'} m.</b> ` + (n.length ? n.map((x) => x.replace(/^(\w+):/, '<b>$1</b>:')).join('<br>') : 'All parts come from one body, so there are no seams to blend.');
+    showNotes();
     document.title = 'READY Character Maker · Kael Studio';
   } catch (e) { console.error(e); setStatus(e.message, 'err'); document.title = 'ERROR ' + e.message; }
   finally { if (my === seq) $('busy').classList.remove('on'); }
 }
+function setBase(b) {
+  const keep = { hair: recipe.hair, hairColor: recipe.hairColor, eyeColor: recipe.eyeColor, outfit: recipe.outfit, clothing: recipe.clothing, accent: recipe.accent, accessories: recipe.accessories, ears: recipe.ears, tail: recipe.tail, furColor: recipe.furColor, furTip: recipe.furTip, outline: recipe.outline, paint: recipe.paint, name: recipe.name };
+  const head = HEADS.find(([k]) => k === b);
+  if (head) { recipe = { ...fromBase(b), ...keep, headModel: b, skin: head[1].skin || recipe.skin }; return; }
+  recipe = { ...fromBase(b), ...keep, skin: recipe.skin, headModel: null };
+  const list = hairChoices(kit, recipe.parts.Head); if (recipe.hair !== 'None' && !list.some((h) => h.name === recipe.hair)) recipe.hair = list[0]?.name || 'None';      // a head never goes bald just because it was swapped
+}
+function choose(pickStr) {
+  const i = pickStr.indexOf(':'), k = pickStr.slice(0, i), v = pickStr.slice(i + 1);
+  if (k === 'faceShape' || k === 'eyeShape' || k === 'hair') recipe[k] = v;
+  else if (k === 'outfit') { recipe.outfit = v; recipe.accessories = null; const c = OUTFITS[v]?.colors; if (c) Object.assign(recipe, c); }      // premium outfits start in their signature colours; a new outfit brings its own accessories
+  else if (k === 'acc') { const w = new Set(worn()); w.has(v) ? w.delete(v) : w.add(v); recipe.accessories = [...w]; }
+  else if (k === 'ears' || k === 'tail') { recipe[k] = v; if (v !== 'none' && Array.isArray(recipe.accessories)) recipe.accessories = recipe.accessories.filter((a) => a !== (k === 'ears' ? 'catEars' : 'tail')); }
+  else if (k === 'base') setBase(v);
+  else return;
+  render(); refresh();
+}
+
+// ------------------------------------------------------------------ input
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button, a'); if (!b) { if (!e.target.closest('.hmenu')) document.querySelector('.hmenu')?.remove(); return; }
+  if (b.dataset.tab) { tab = b.dataset.tab; section = null; render(); return; }
+  if (b.dataset.sec) { section = b.dataset.sec; render(); return; }
+  if (b.dataset.pick) return choose(b.dataset.pick);
+  if (b.dataset.light) { viewer.setLighting(b.dataset.light); return; }
+  if (b.id === 'undo') return travel(-1);
+  if (b.id === 'redo') return travel(1);
+  if (b.id === 'surprise') return surprise();
+  if (b.id === 'menuBtn') { const open = document.querySelector('.hmenu'); if (open) return open.remove();
+    const m = document.createElement('div'); m.className = 'hmenu';
+    m.innerHTML = `<a href="/characters.html">← My Characters</a><a href="/characters.html#new">Create New…</a>${READY.map((r) => `<a href="/mixer.html?ready=${r.key}">Sample: ${esc(r.label)}</a>`).join('')}`;
+    document.body.append(m); return; }
+  if (b.dataset.motion) { const on = !b.classList.contains('on'); b.classList.toggle('on', on); viewer.setMotion(on ? b.dataset.motion : 'idle'); return; }
+  if (b.dataset.view) { view = b.dataset.view; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x === b)); viewer.frame(view); }
+});
 document.addEventListener('change', (e) => {
   const t = e.target;
   if (t.dataset.part === 'Head' && t.value.startsWith('model:')) {      // a complete head: sits where the anime head would, brings its own skin tone
     recipe.headModel = t.value.slice(6); if (kit.bodies[recipe.parts.Head]?.style !== 'anime') recipe.parts.Head = 'anime_female';
-    const h = kit.heads[recipe.headModel]; if (h?.skin) { recipe.skin = h.skin; $('skin').value = h.skin; } hairOptions(); faceShapeOptions(); eyeShapeOptions();
+    const h = kit.heads[recipe.headModel]; if (h?.skin) recipe.skin = h.skin;
   }
-  else if (t.dataset.part) { for (const p of PART_ROWS.find((r) => r[0] === t.dataset.part)[1]) recipe.parts[p] = t.value; if (t.dataset.part === 'Head') { recipe.headModel = null; hairOptions(); faceShapeOptions(); eyeShapeOptions(); } }
+  else if (t.dataset.part) { for (const p of PART_ROWS.find((r) => r[0] === t.dataset.part)[1]) recipe.parts[p] = t.value; if (t.dataset.part === 'Head') { recipe.headModel = null; const list = hairChoices(kit, recipe.parts.Head); if (recipe.hair !== 'None' && !list.some((h) => h.name === recipe.hair)) recipe.hair = list[0]?.name || 'None'; } }
   else if (t.dataset.fit) { for (const p of PART_ROWS.find((r) => r[0] === t.dataset.fit)[1]) recipe.fit[p] = t.value; }
-  else if (t.id === 'hair') recipe.hair = t.value;
-  else if (t.id === 'faceShape') recipe.faceShape = t.value;
-  else if (t.id === 'eyeShape') recipe.eyeShape = t.value;
-  else if (t.id === 'outline') recipe.outline = t.checked;
-  else if (t.dataset.acc) recipe.accessories = [...document.querySelectorAll('[data-acc]')].filter((c) => c.checked).map((c) => c.dataset.acc);
-  else if (t.id === 'outfit') { recipe.outfit = t.value; recipe.accessories = null; const c = OUTFITS[t.value]?.colors; if (c) Object.assign(recipe, c); render(); }      // premium outfits start in their signature colours       // a new outfit brings its own accessories
-  else if (['hairColor', 'skin', 'clothing', 'accent', 'eyeColor'].includes(t.id)) recipe[t.id] = t.value;
-  else if (t.id === 'ears' || t.id === 'tail') { recipe[t.id] = t.value; if (t.value !== 'none' && Array.isArray(recipe.accessories)) recipe.accessories = recipe.accessories.filter((a) => a !== (t.id === 'ears' ? 'catEars' : 'tail')); if (!recipe.furTip) $('furTip').value = furTipFor(t.value, recipe.furColor || recipe.hairColor); }
-  else if (t.id === 'furMatch') { recipe.furColor = t.checked ? null : $('furColor').value; $('furColor').disabled = t.checked; }
-  else if (t.id === 'furColor') recipe.furColor = t.value;
-  else if (t.id === 'furTip') recipe.furTip = t.value;
+  else if (t.dataset.col) recipe[t.dataset.col] = t.value;
+  else if (t.dataset.flag === 'furMatch') { recipe.furColor = t.checked ? null : recipe.hairColor; render(); }
+  else if (t.dataset.flag) recipe[t.dataset.flag] = t.checked;
   else if (t.id === 'name') { recipe.name = t.value; return; }
   else return;
+  if (t.dataset.part || t.dataset.fit) render();
   refresh();
 });
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.start) { const keep = recipe.name; recipe = STARTS[+b.dataset.start][1](); recipe.name = keep; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));
-render(); refresh(); }
-  if (b.dataset.ready) { recipe = READY[+b.dataset.ready].make(); $('name').value = recipe.name; render(); refresh(); return; }
-  if (b.id === 'undo') return travel(-1);
-  if (b.id === 'redo') return travel(1);
-  if (b.id === 'surprise') return surprise();
-  if (b.dataset.motion) { const on = !b.classList.contains('on'); b.classList.toggle('on', on); viewer.setMotion(on ? b.dataset.motion : 'idle'); return; }
-  if (b.dataset.view) { view = b.dataset.view; document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x === b)); viewer.frame(view); }
-});
+
+// ------------------------------------------------------------------ save and export
 $('save').addEventListener('click', async () => {
-  recipe.name = $('name').value.trim() || 'Mixed character'; setStatus('Saving…');
+  recipe.name = $('name').value.trim() || recipe.name || 'My character'; setStatus('Saving…');
   try {
     let thumbnail = null; try { thumbnail = viewer.thumbnail(); } catch { /* preview only */ }
     const url = savedId ? `/api/library/${savedId}/recipe` : '/api/library/create';
     const r = await fetch(url, { method: savedId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipe, name: recipe.name, thumbnail }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Could not save');
-    if (!savedId) { savedId = j.avatar.id; const u = new URL(location.href); u.searchParams.set('id', savedId); history.replaceState(null, '', u); }      // later saves update this character instead of adding copies
+    if (!savedId) { savedId = j.avatar.id; const u = new URL(location.href); for (const k of [...u.searchParams.keys()]) u.searchParams.delete(k); u.searchParams.set('id', savedId); history.replaceState(null, '', u); }      // later saves update this character instead of adding copies
     dirty = false;
     if ($('bakeLive').checked) await fetch(`/api/library/${savedId}/activate`, { method: 'POST' });
-    toast?.('Saved to your library');
-    // optimize it for the stream right away (the stream builds it live until this finishes)
-    setStatus('Saved. Optimizing it for the stream…', 'ok');
+    toast?.('Saved to My Characters');
+    setStatus('Saved. Optimizing it for the stream…', 'ok');          // the stream builds it live until this finishes
     const id = savedId, rec = await ensureBaked(id, { onStep: (s) => { if (savedId === id && !dirty) setStatus(`Saved. Optimizing for the stream: ${s}…`, 'ok'); } });
     if (savedId === id && !dirty) setStatus(`Saved and optimized for the stream${rec.bakeNotes ? `: ${rec.bakeNotes.slice(0, 2).join(' · ')}` : ''}.${$('bakeLive').checked ? ' It is on stream now.' : ''}`, 'ok');
   } catch (err) { setStatus(err.message, 'err'); }
 });
 $('bake').addEventListener('click', async () => {        // a .vrm to keep or use in other VTuber apps
-  const name = $('name').value.trim() || recipe.name || 'Mixed character', btn = $('bake'); btn.disabled = true; $('bakeDl').classList.add('hidden');
+  const name = $('name').value.trim() || recipe.name || 'My character', btn = $('bake'); btn.disabled = true; $('bakeDl').classList.add('hidden');
   try {
     let blob, note = '';
     if (savedId && !dirty) { const rec = await ensureBaked(savedId, { onStep: (s) => setStatus(`Baking: ${s}…`) }); blob = await (await fetch(`/api/library/${savedId}/baked`)).blob(); note = rec.bakeNotes ? ` ${rec.bakeNotes.join(' · ')}.` : ''; }
@@ -167,10 +238,10 @@ $('bake').addEventListener('click', async () => {        // a .vrm to keep or us
   } catch (err) { console.error(err); setStatus(`Bake failed: ${err.message}`, 'err'); }
   btn.disabled = false;
 });
-if (editId) {
-  try { const rec = await fetch(`/api/library/${editId}/file`).then((r) => r.json()); if (rec.kind === 'modular') recipe = { ...defaultModular(), ...rec }; } catch { /* start fresh */ }
-}
-if (q.get('start')) recipe = { ...STARTS[+q.get('start')][1](), name: recipe.name };
+
+// ------------------------------------------------------------------ start
+if (editId) { try { const rec = await fetch(`/api/library/${editId}/file`).then((r) => r.json()); if (rec.kind === 'modular') recipe = { ...defaultModular(), ...rec }; } catch { /* start fresh */ } }
+if (q.get('base')) recipe = fromBase(q.get('base'));
 if (q.get('ready')) { const r = READY.find((x) => x.key === q.get('ready')); if (r) recipe = r.make(); }
 if (q.get('outfit')) { recipe.outfit = q.get('outfit'); if (OUTFITS[recipe.outfit]?.colors) Object.assign(recipe, OUTFITS[recipe.outfit].colors); }
 if (q.get('outline')) recipe.outline = q.get('outline') !== '0';
@@ -178,10 +249,16 @@ if (q.get('acc') !== null) recipe.accessories = q.get('acc').split(',').filter(B
 for (const k of ['clothing', 'accent', 'hairColor', 'hair', 'eyeColor', 'face', 'faceShape', 'eyeShape', 'ears', 'tail', 'furColor', 'furTip']) if (q.get(k)) recipe[k] = q.get(k);
 if (q.get('light')) viewer.setLighting(q.get('light'));
 if (q.get('view')) view = q.get('view');
+if (q.get('tab') && TABS[q.get('tab')]) tab = q.get('tab');
 document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));
 render(); refresh();
+// picture cards that do not exist yet are made in the background, the open tab's first
+const TAB_CATS = { face: ['face', 'eyes'], hair: ['hair', 'acc'], body: ['base'], outfit: ['outfit'], acc: ['acc'], animal: ['ears', 'tail'], look: [] };
+allJobs().then((jobs) => { const first = TAB_CATS[tab]; jobs.sort((a, b) => (first.includes(b.cat) ? 1 : 0) - (first.includes(a.cat) ? 1 : 0));
+  return makeMissing(jobs, (cat, key, url) => { made.set(`${cat}/${key}`, url); for (const el of document.querySelectorAll(`[data-thumb="${cat}/${key}"]`)) el.style.backgroundImage = `url('${url}')`; }); }).catch((e) => console.warn('picture cards', e));
 
 document.addEventListener('keydown', (e) => {      // ⌘Z / ⇧⌘Z (Ctrl on other keyboards), not while typing a name
-  if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || /input|select|textarea/i.test(document.activeElement?.tagName || '') && document.activeElement.type === 'text') return;
+  if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || document.activeElement?.type === 'text') return;
   e.preventDefault(); travel(e.shiftKey ? 1 : -1);
 });
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });

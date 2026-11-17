@@ -6,32 +6,57 @@
 <title>Character Maker · Kael Studio</title>
 <link rel="stylesheet" href="/ui.css">
 <style>
-  .work { display: grid; grid-template-columns: 400px 1fr; min-height: 0; }
-  #editor { min-width: 0; overflow-y: auto; border-right: 1px solid var(--line); background: linear-gradient(180deg, #11131c, #0e1017); padding: 16px 18px 24px; }
-  #editor h2 { margin: 0 0 2px; } #editor .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
-  #editor h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 18px 0 8px; }
-  .prow { display: grid; grid-template-columns: 62px 1fr 96px; gap: 8px; align-items: center; margin-bottom: 7px; }
-  .prow .k { font-size: 13px; font-weight: 600; }
-  .prow select, .line select, .line input[type=text] { width: 100%; }
-  .line { display: grid; grid-template-columns: 62px 1fr; gap: 8px; align-items: center; margin-bottom: 7px; }
-  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
-  .quick button { font-size: 12px; padding: 5px 10px; }
-  .ready { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .ready button { padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: stretch; border-radius: 10px; font-size: 11px; line-height: 1.2; }
-  .ready img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; background: #1a1a26; }
-  .ready span { padding: 4px 2px 5px; text-align: center; }
-  #notes { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 8px; }
-  #notes b { color: var(--text, #e8e9f2); font-weight: 600; }
+  .work { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+  .ebar { display: flex; align-items: center; gap: 10px; padding: 0 14px 0 6px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #12141d, #0f1118); min-height: 50px; }
+  .ebar .menu-btn { font-size: 18px; padding: 6px 10px; background: transparent; border: 0; color: var(--muted); }
+  .tabs { display: flex; gap: 2px; align-self: stretch; }
+  .tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); font-weight: 650; font-size: 14px; padding: 0 14px; }
+  .tabs button:hover { color: var(--text); background: rgba(255,255,255,.03); }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--acc); }
+  .ebar .sp { flex: 1; }
+  .ebar .tools { display: flex; gap: 6px; align-items: center; }
+  .ebar .tools button, .ebar .tools a { font-size: 12.5px; padding: 6px 11px; }
+  .ebar input[type=text] { width: 170px; }
+  .ebar label { display: flex; gap: 5px; align-items: center; font-size: 12px; color: var(--muted); }
+  .body3 { display: grid; grid-template-columns: 66px 360px 1fr 270px; min-height: 0; }
+  .rail { border-right: 1px solid var(--line); background: #0e1017; display: flex; flex-direction: column; gap: 4px; padding: 10px 6px; }
+  .rail button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; font-size: 10.5px; line-height: 1.15; border-radius: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); }
+  .rail button .g { font-size: 18px; }
+  .rail button:hover { color: var(--text); background: var(--surface2); }
+  .rail button.on { color: #fff; background: var(--acc); }
+  .panel { border-right: 1px solid var(--line); background: linear-gradient(180deg, #11131c, #0e1017); overflow-y: auto; padding: 14px 14px 30px; min-width: 0; }
+  .panel h3 { margin: 2px 0 12px; font-size: 17px; }
+  .panel h4 { margin: 16px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .panel .hint { color: var(--muted); font-size: 12px; margin: -6px 0 12px; }
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .cards.three { grid-template-columns: repeat(3, 1fr); }
+  .opt { padding: 0; display: flex; flex-direction: column; align-items: stretch; border-radius: 12px; overflow: hidden; background: var(--surface2); border: 2px solid transparent; color: var(--text); font-size: 11.5px; line-height: 1.25; cursor: pointer; position: relative; }
+  .opt:hover { border-color: #4b4f68; }
+  .opt.on { border-color: var(--acc); box-shadow: 0 4px 16px rgba(155,107,255,.28); }
+  .opt.on::after { content: '✓'; position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 99px; background: var(--acc); color: #fff; font-size: 12px; display: grid; place-items: center; }
+  .opt .im { aspect-ratio: 3 / 4; background: #1a1c28 center / cover no-repeat; display: grid; place-items: center; color: var(--faint); font-size: 26px; }
+  .opt .lb { padding: 6px 6px 7px; text-align: center; }
+  .opt.none .im { background: repeating-conic-gradient(#1c1e2a 0 25%, #191b26 0 50%) 0 0/16px 16px; }
+  .props { background: linear-gradient(180deg, #11131c, #0e1017); border-left: 1px solid var(--line); overflow-y: auto; padding: 16px 16px 30px; min-width: 0; }
+  .props h4 { margin: 0 0 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .line { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+  .line input[type=color] { width: 54px; height: 30px; }
+  .line.col { grid-template-columns: 1fr; }
+  .prow { display: grid; grid-template-columns: 54px 1fr 92px; gap: 6px; align-items: center; margin-bottom: 7px; }
+  .prow .k { font-size: 12.5px; font-weight: 600; } .prow select { width: 100%; }
+  #notes { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+  #notes b { color: var(--text); font-weight: 600; }
   .stage { min-width: 0; position: relative; }
   #viewer { position: absolute; inset: 0; z-index: 1; }
-  #viewer.checker { background: repeating-conic-gradient(#1d1f2b 0 25%, #171923 0 50%) 0 0/24px 24px; }
   .views { top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; }
   .busy { top: 66px; left: 50%; transform: translateX(-50%); font-size: 11.5px; color: var(--muted); padding: 4px 12px; opacity: 0; transition: opacity .2s; }
   .busy.on { opacity: 1; }
-  .dock-save { right: 14px; bottom: 14px; padding: 12px; width: 330px; display: flex; flex-direction: column; gap: 8px; }
-  .dock-save .r { display: flex; gap: 8px; align-items: center; }
-  .dock-save input[type=text] { flex: 1; }
-  .status { font-size: 12px; color: var(--muted); min-height: 16px; } .status.err { color: #ff8b8b; } .status.ok { color: #7fe0a8; }
+  .statusbar { left: 14px; bottom: 14px; right: 14px; padding: 8px 12px; display: flex; gap: 10px; align-items: center; }
+  .statusbar:has(.status:empty):not(:has(#bakeDl:not(.hidden))) { display: none; }
+  .status { font-size: 12px; color: var(--muted); flex: 1; } .status.err { color: #ff8b8b; } .status.ok { color: #7fe0a8; }
+  .hmenu { position: fixed; z-index: 50; top: 100px; left: 8px; min-width: 220px; padding: 6px; border-radius: 12px; background: var(--surface-solid); border: 1px solid var(--line2); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .hmenu a, .hmenu button { text-align: left; background: transparent; border: 0; color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 13px; text-decoration: none; }
+  .hmenu a:hover, .hmenu button:hover { background: var(--surface3); }
 </style>
 <script type="importmap">
 { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/", "@pixiv/three-vrm": "/vendor/three-vrm/three-vrm.module.js" } }
@@ -41,46 +66,32 @@
 <div class="app">
   <header id="topbar"></header>
   <div class="work">
-    <aside id="editor">
-      <h2>Character Maker</h2>
-      <div class="sub">Anime and human characters: pick a ready-made or a start, then change anything, down to which body each part comes from. Animal ears and tails are under <b>Animal</b>.</div>
-      <div class="quick" style="margin-bottom:4px"><button id="undo" title="Undo (⌘Z)" disabled>↶ Undo</button><button id="redo" title="Redo (⇧⌘Z)" disabled>↷ Redo</button><button id="surprise" title="A random character from the kit">🎲 Surprise me</button></div>
-      <h3>Ready-made</h3><div class="ready" id="ready"></div>
-      <h3>Or start from</h3><div class="quick" id="starts"></div>
-      <h3>Parts</h3><div id="parts"></div>
-      <h3>Look</h3>
-      <div class="line"><span class="k">Hair</span><select id="hair"></select></div>
-      <div class="line"><span class="k">Hair colour</span><input type="color" id="hairColor"></div>
-      <div class="line"><span class="k">Skin</span><input type="color" id="skin"></div>
-      <div class="line"><span class="k">Face shape</span><select id="faceShape"></select></div>
-      <div class="line"><span class="k">Eye shape</span><select id="eyeShape"></select></div>
-      <div class="line"><span class="k">Eyes</span><input type="color" id="eyeColor"></div>
-      <div class="line"><span class="k">Outfit</span><select id="outfit"></select></div>
-      <div class="line"><span class="k">Ink outline</span><label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" id="outline"> Anime-style edge lines</label></div>
-      <div class="line"><span class="k">Extras</span><div id="acc" style="display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px"></div></div>
-      <div class="line"><span class="k">Clothing</span><input type="color" id="clothing"></div>
-      <div class="line"><span class="k">Accent</span><input type="color" id="accent"></div>
-      <h3>Animal</h3>
-      <div class="line"><span class="k">Ears</span><select id="ears"></select></div>
-      <div class="line"><span class="k">Tail</span><select id="tail"></select></div>
-      <div class="line"><span class="k">Fur</span><div style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="color" id="furColor" title="Ears and tail"><label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="furMatch"> Same as hair</label><input type="color" id="furTip" title="Tail tip (fox, wolf) and bunny puff"></div></div>
-      <h3>Seams</h3><div id="notes"></div>
-    </aside>
-    <main class="stage">
-      <div id="viewer"></div>
-      <div class="floating glass seg views">
-        <button data-view="front-full" class="on">Full</button><button data-view="front">Upper</button><button data-view="face">Face</button>
-        <span class="div"></span><button data-view="threequarter">¾</button><button data-view="side">Side</button><button data-view="back">Back</button><span class="div"></span><button data-motion="sway" title="Swing the hips to try the cloth and hair physics">Sway</button>
+    <div class="ebar">
+      <button class="menu-btn" id="menuBtn" title="Menu">☰</button>
+      <nav class="tabs" id="tabs"></nav>
+      <span class="sp"></span>
+      <div class="tools">
+        <button id="undo" title="Undo (⌘Z)" disabled>↶</button><button id="redo" title="Redo (⇧⌘Z)" disabled>↷</button><button id="surprise" title="A random character">🎲 Surprise me</button>
+        <input type="text" id="name" maxlength="60" placeholder="Character name">
+        <button class="primary" id="save" title="Saves the character to My Characters and optimizes it for the stream">Save</button>
+        <label title="Put this character on stream when it is saved"><input type="checkbox" id="bakeLive"> Go live</label>
+        <button id="bake" title="One optimized .vrm file to keep, or to use in other VTuber apps (VSeeFace, Warudo, VRChat…)">Export .vrm</button>
       </div>
-      <div class="floating glass busy" id="busy">stitching…</div>
-      <div class="floating glass dock-save">
-        <div class="r"><input type="text" id="name" maxlength="60" placeholder="Character name"></div>
-        <div class="r"><button class="primary" id="save" style="flex:1" title="Saves the character and optimizes it for the stream">Save to library</button><label title="Put this character on stream when it is saved"><input type="checkbox" id="bakeLive"> Go live</label></div>
-        <div class="r"><button id="bake" style="flex:1" title="One optimized .vrm file to keep, or to use in other VTuber apps (VSeeFace, Warudo, VRChat…)">Export .vrm file</button></div>
-        <div class="r"><a id="bakeDl" class="btnlink hidden" style="flex:1;justify-content:center" download>Download .vrm</a></div>
-        <div class="status" id="status"></div>
-      </div>
-    </main>
+    </div>
+    <div class="body3">
+      <nav class="rail" id="rail"></nav>
+      <aside class="panel" id="panel"></aside>
+      <main class="stage">
+        <div id="viewer"></div>
+        <div class="floating glass seg views">
+          <button data-view="front-full" class="on">Full</button><button data-view="front">Upper</button><button data-view="face">Face</button>
+          <span class="div"></span><button data-view="threequarter">¾</button><button data-view="side">Side</button><button data-view="back">Back</button><span class="div"></span><button data-motion="sway" title="Swing the hips to try the cloth, hair and tail physics">Sway</button>
+        </div>
+        <div class="floating glass busy" id="busy">building…</div>
+        <div class="floating glass statusbar"><span class="status" id="status"></span><a id="bakeDl" class="btnlink hidden" download>Download .vrm</a></div>
+      </main>
+      <aside class="props" id="props"></aside>
+    </div>
   </div>
 </div>
 <script type="module" src="/mixer.js"></script>
