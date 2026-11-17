@@ -142,3 +142,13 @@ test('mixed outfits and body proportions are saved safely', async () => {
   assert.equal(r.fit.Head, 1.2); assert.equal(r.fit.Arm_L, 1.6, 'sizes are clamped');
   assert.equal(sanitizeRecipe({ kind: 'modular', parts: {}, outfit: 'p_maid', custom: { top: { from: 'x' } } }).custom, null, 'pieces only apply to a mixed outfit');
 });
+
+test('built hair: every part the maker offers is kept when saving', async () => {
+  const { sanitizeRecipe } = await import('../lib/recipe.js');
+  const src = read('public/hairgen.js'), block = src.match(/export const HAIR_PARTS = \{([\s\S]*?)\n\};/)[1];
+  const parts = Object.fromEntries([...block.matchAll(/^\s*(\w+): \{([^}]*)\}/gm)].map(([, slot, body]) => [slot, [...body.matchAll(/(\w+): '/g)].map((m) => m[1])]));
+  assert.deepEqual(Object.keys(parts), ['front', 'back', 'side', 'ext', 'extra']);
+  for (const [slot, keys] of Object.entries(parts)) for (const k of keys) assert.equal(sanitizeRecipe({ kind: 'modular', parts: {}, hair: 'Custom', hairParts: { [slot]: k } }).hairParts[slot], k, `${slot} ${k}`);
+  const r = sanitizeRecipe({ kind: 'modular', parts: {}, hair: 'Custom', hairParts: { front: '<img>', ext: 'twin' } });
+  assert.equal(r.hair, 'Custom'); assert.equal(r.hairParts.front, 'straight', 'unknown parts fall back'); assert.equal(r.hairParts.ext, 'twin');
+});

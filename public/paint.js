@@ -18,7 +18,7 @@ export function shadeOf(base) {
 // ------------------------------------------------------------------ hair
 /** A hair texture: strands running down (v), around the head (u, wraps), darker roots, and the anime shine ring.
  *  Painted twice from the same seed: once in the hair colour, once in its shadow colour (the shade texture of the stream file). */
-function hairTexture(color, ringV, ringH) {
+export function hairTexture(color, ringV, ringH) {
   const key = `hair:${color}:${ringV.toFixed(3)}:${ringH.toFixed(3)}`; if (cache.has(key)) return cache.get(key);
   const W = 1024, H = 1024, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), r = rnd(7919);
   const base = new THREE.Color(color), lum = base.r * 0.3 + base.g * 0.59 + base.b * 0.11;

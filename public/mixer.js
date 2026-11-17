@@ -7,6 +7,7 @@ import { loadKit, defaultModular, PART_ROWS, OUTFITS, SLOTS, outfitSlice, custom
 import { ensureBaked } from '/autobake.js';
 import { EARS, TAILS, furTipFor } from '/animal.js';
 import { READY } from '/readymade.js';
+import { HAIR_PARTS, HAIR_SLOTS, DEFAULT_HAIR_PARTS, HAIR_PRESETS } from '/hairgen.js';
 import { allJobs, makeMissing, thumbUrl } from '/thumbmaker.js';
 
 const $ = (id) => document.getElementById(id);
@@ -37,7 +38,7 @@ const worn = () => accessoriesOf(kit, recipe);
 const HAIR_EXTRA = ['bow', 'kanzashi', 'headdress', 'tiara'], ACC_MAIN = ['headset', 'glasses', 'choker', 'scarf'];
 const TABS = {
   face: { label: 'Face', sections: [['shape', 'Face shape', '◯'], ['eyes', 'Eyes', '◉']] },
-  hair: { label: 'Hairstyle', sections: [['style', 'Hairstyle', '♒'], ['extra', 'Extra', '✿']] },
+  hair: { label: 'Hairstyle', sections: [['style', 'Hairstyle sets', '♒'], ['h_front', 'Front', '⌒'], ['h_back', 'Back', '∥'], ['h_side', 'Side', '⟆'], ['h_ext', 'Extensions', '⥿'], ['h_extra', 'Extra', '✦'], ['extra', 'Hair pieces', '✿']] },
   body: { label: 'Body', sections: [['base', 'Base body', '⚲'], ['shape', 'Proportions', '⇕'], ['mix', 'Mix parts', '⧉']] },
   outfit: { label: 'Outfit', sections: [['sets', 'Whole sets', '👗'], ['top', 'Tops', '👕'], ['bottom', 'Bottoms', '👖'], ['legs', 'Legwear', '🧦'], ['shoes', 'Shoes', '👟']] },
   acc: { label: 'Accessories', sections: [['acc', 'Accessories', '🎧']] },
@@ -58,10 +59,12 @@ const panels = {
   },
   style() {
     if (recipe.headModel) return '<h3>Hairstyle</h3><p class="hint">This head comes with its own hair.</p>';
-    const list = hairChoices(kit, recipe.parts.Head), hk = hairKey();
-    return `<h3>Hairstyle</h3><div class="cards">${card('hair:None', 'None', null, recipe.hair === 'None', 'none')}${list.map((h) => card(`hair:${h.name}`, h.name, thumb('hair', `${hk}__${h.name}`), h.name === recipe.hair)).join('')}</div>`;
+    const list = hairChoices(kit, recipe.parts.Head), hk = hairKey(), built = recipe.hair === 'Custom' ? JSON.stringify({ ...DEFAULT_HAIR_PARTS, ...recipe.hairParts }) : null;
+    return `<h3>Hairstyle sets</h3><p class="hint">Built styles can be changed piece by piece under Front, Back, Side, Extensions and Extra.</p><h4>Built</h4><div class="cards">${HAIR_PRESETS.map(([k, n, hp]) => card(`hairset:${k}`, n, thumb('hairset', k), built === JSON.stringify(hp))).join('')}</div>
+      <h4>Sculpted</h4><div class="cards">${card('hair:None', 'None', null, recipe.hair === 'None', 'none')}${list.map((h) => card(`hair:${h.name}`, h.name, thumb('hair', `${hk}__${h.name}`), h.name === recipe.hair)).join('')}</div>`;
   },
-  extra() { const w = worn(); return `<h3>Extra</h3><p class="hint">Bows, pins and headpieces that sit in the hair. Tap to add or remove.</p><div class="cards">${HAIR_EXTRA.map((k) => card(`acc:${k}`, ACCESSORIES[k], thumb('acc', k), w.includes(k))).join('')}</div>`; },
+  h_front() { return hairPartPanel('front'); }, h_back() { return hairPartPanel('back'); }, h_side() { return hairPartPanel('side'); }, h_ext() { return hairPartPanel('ext'); }, h_extra() { return hairPartPanel('extra'); },
+  extra() { const w = worn(); return `<h3>Hair pieces</h3><p class="hint">Bows, pins and headpieces that sit in the hair. Tap to add or remove.</p><div class="cards">${HAIR_EXTRA.map((k) => card(`acc:${k}`, ACCESSORIES[k], thumb('acc', k), w.includes(k))).join('')}</div>`; },
   base() {
     const bodies = Object.entries(kit.bodies).map(([k, b]) => [k, b.label]), cur = recipe.headModel ? `head:${recipe.headModel}` : (PART_ROWS.every(([, ps]) => ps.every((p) => recipe.parts[p] === recipe.parts.Torso)) ? recipe.parts.Torso : null);
     return `<h3>Base body</h3><p class="hint">Changes the whole body. Your hair, outfit and colours stay where they can.</p><div class="cards">${bodies.map(([k, n]) => card(`base:${k}`, n, thumb('base', k), cur === k)).join('')}${HEADS.map(([k, h]) => card(`base:${k}`, `${h.label} head`, thumb('base', k), cur === `head:${k}`)).join('')}</div>`;
@@ -100,6 +103,11 @@ const panels = {
     <h4>Preview light</h4><div class="cards three">${['showcase', 'studio', 'soft', 'warm', 'cool', 'neon'].map((l) => `<button class="opt" data-light="${l}"><span class="lb">${l[0].toUpperCase() + l.slice(1)}</span></button>`).join('')}</div>`; },
 };
 const SLOT_NAME = Object.fromEntries(SLOTS);
+function hairPartPanel(slot) {
+  if (recipe.headModel) return '<h3>Hairstyle</h3><p class="hint">This head comes with its own hair.</p>';
+  const cur = recipe.hair === 'Custom' ? { ...DEFAULT_HAIR_PARTS, ...recipe.hairParts }[slot] : null, name = Object.fromEntries(HAIR_SLOTS)[slot];
+  return `<h3>${name}</h3><p class="hint">${recipe.hair === 'Custom' ? 'Each part is drawn to fit this head.' : 'Picking one switches to a built hairstyle; the other parts start from a bob with bangs.'}</p><div class="cards">${Object.entries(HAIR_PARTS[slot]).map(([k, n]) => card(`hairpart:${slot}:${k}`, n, k === 'none' ? null : thumb('hairpart', `${slot}_${k}`), cur === k, k === 'none' ? 'none' : '')).join('')}</div>`;
+}
 /** One card per different piece the outfits have for a slot (identical pieces, such as plain shoes, appear once). */
 function slotChoices(slot) { const seen = new Map(); for (const k of Object.keys(OUTFITS)) { const d = outfitSlice(k, slot); if (!d) continue; const sig = JSON.stringify(d.layers) + JSON.stringify(d.extras) + JSON.stringify(d.skirt || d.skirts || ''); if (!seen.has(sig)) seen.set(sig, k); } return [...seen.values()]; }
 const slotFrom = (slot) => (recipe.outfit === 'custom' ? recipe.custom?.[slot]?.from : outfitSlice(recipe.outfit || defaultOutfit(kit, recipe.parts.Torso), slot) ? (recipe.outfit || defaultOutfit(kit, recipe.parts.Torso)) : 'none') || 'none';
@@ -186,6 +194,8 @@ function setBase(b) {
 function choose(pickStr) {
   const i = pickStr.indexOf(':'), k = pickStr.slice(0, i), v = pickStr.slice(i + 1);
   if (k === 'faceShape' || k === 'eyeShape' || k === 'hair') recipe[k] = v;
+  else if (k === 'hairset') { recipe.hair = 'Custom'; recipe.hairParts = { ...HAIR_PRESETS.find((p) => p[0] === v)[2] }; }
+  else if (k === 'hairpart') { const [slot, val] = v.split(':'); if (recipe.hair !== 'Custom') { recipe.hair = 'Custom'; recipe.hairParts = { ...DEFAULT_HAIR_PARTS }; } recipe.hairParts = { ...DEFAULT_HAIR_PARTS, ...recipe.hairParts, [slot]: val }; }
   else if (k === 'piece') { const [slot, from] = v.split(':');
     if (recipe.outfit !== 'custom' || !recipe.custom) { const cur = recipe.outfit && recipe.outfit !== 'none' ? recipe.outfit : defaultOutfit(kit, recipe.parts.Torso); recipe.accessories = worn(); recipe.custom = recipe.outfit === 'none' ? customFrom('basic', recipe.clothing, recipe.accent) : customFrom(cur, recipe.clothing, recipe.accent); if (recipe.outfit === 'none') for (const [s] of SLOTS) recipe.custom[s].from = 'none'; recipe.outfit = 'custom'; }
     const sig = OUTFITS[from]?.colors; recipe.custom[slot] = { from, main: sig ? sig.clothing : recipe.custom[slot]?.main || recipe.clothing, accent: sig ? sig.accent : recipe.custom[slot]?.accent || recipe.accent }; }
@@ -275,6 +285,7 @@ if (q.get('outfit')) { recipe.outfit = q.get('outfit'); if (OUTFITS[recipe.outfi
 if (q.get('outline')) recipe.outline = q.get('outline') !== '0';
 if (q.get('acc') !== null) recipe.accessories = q.get('acc').split(',').filter(Boolean);
 for (const k of ['clothing', 'accent', 'hairColor', 'hair', 'eyeColor', 'face', 'faceShape', 'eyeShape', 'ears', 'tail', 'furColor', 'furTip']) if (q.get(k)) recipe[k] = q.get(k);
+if (q.get('hp')) { const [front, back, side, ext, extra] = q.get('hp').split(','); recipe.hair = 'Custom'; recipe.hairParts = { front, back, side, ext, extra }; }      // e.g. hp=straight,long,short,twin,ahoge
 if (q.get('body')) recipe.body = Object.fromEntries(q.get('body').split(',').map((kv) => kv.split(':')).map(([k, v]) => [k, +v]));      // e.g. body=legs:1.1,hips:0.5
 if (q.get('light')) viewer.setLighting(q.get('light'));
 if (q.get('view')) view = q.get('view');
@@ -282,7 +293,7 @@ if (q.get('tab') && TABS[q.get('tab')]) tab = q.get('tab');
 document.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === view));
 render(); refresh();
 // picture cards that do not exist yet are made in the background, the open tab's first
-const TAB_CATS = { face: ['face', 'eyes'], hair: ['hair', 'acc'], body: ['base'], outfit: ['outfit', 'piece'], acc: ['acc'], animal: ['ears', 'tail'], look: [] };
+const TAB_CATS = { face: ['face', 'eyes'], hair: ['hairset', 'hairpart', 'hair', 'acc'], body: ['base'], outfit: ['outfit', 'piece'], acc: ['acc'], animal: ['ears', 'tail'], look: [] };
 if (!q.get('nothumbs')) allJobs().then((jobs) => { const first = TAB_CATS[tab]; jobs.sort((a, b) => (first.includes(b.cat) ? 1 : 0) - (first.includes(a.cat) ? 1 : 0));
   return makeMissing(jobs, (cat, key, url) => { made.set(`${cat}/${key}`, url); for (const el of document.querySelectorAll(`[data-thumb="${cat}/${key}"]`)) el.style.backgroundImage = `url('${url}')`; }); }).catch((e) => console.warn('picture cards', e));
 

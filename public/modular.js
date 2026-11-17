@@ -10,6 +10,7 @@ import { buildOutfit, OUTFITS, defaultOutfit, outfitGroup, SLOTS, outfitSlice, c
 import { buildAccessories, ACCESSORIES } from '/accessories.js';
 import { buildAnimal } from '/animal.js';
 import { paintHair, animeShading } from '/paint.js';
+import { buildHair } from '/hairgen.js';
 import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes, humanMakeup } from '/face.js';
 export { FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf };
 export { OUTFITS, defaultOutfit, outfitGroup, ACCESSORIES, SLOTS, outfitSlice, customFrom };
@@ -283,6 +284,7 @@ export async function loadModular(input) {
   } catch (e) { console.warn('modular head extras', e); }
   // heads without their own hair set (the human heads) wear the matching anime set, sized back down to a human skull
   const hs = hairSource(kit, hk), hairList = kit.extras[hs.body]?.hair || [];
+  if (!model && recipe.hair === 'Custom') try { const root = buildHair({ vrm, body, recipe }); const sw = addHairSway(vrm, root); if (sw) bake.hair.push(sw); notes.push('Hair: built (front, back, side, extension, extra)'); } catch (e) { console.warn('built hair', e); }
   const hair = model ? null : hairList.find((h) => h.name === recipe.hair);
   if (hair) try {
     let hairFit = { basis, scale: exScale };

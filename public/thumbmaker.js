@@ -4,6 +4,7 @@
 import { AvatarViewer } from '/viewer.js';
 import { defaultModular, loadKit, hairChoices, OUTFITS, ACCESSORIES, FACE_SHAPES, EYE_SHAPES, SLOTS, outfitSlice } from '/modular.js';
 import { EARS, TAILS } from '/animal.js';
+import { HAIR_PARTS, HAIR_PRESETS, DEFAULT_HAIR_PARTS } from '/hairgen.js';
 
 export const thumbUrl = (cat, key) => `/api/thumbs/${cat}/${String(key).replace(/[^\w-]+/g, '_')}`;
 const W = 240, H = 320;
@@ -18,6 +19,8 @@ export async function allJobs(only = null) {
   for (const [g, b] of [['cartoon', 'anime_female'], ['female', 'female'], ['male', 'male']]) for (const [k] of FACE_SHAPES[g]) add('face', k, base(b, { faceShape: k }), 'head');
   for (const [g, b] of [['anime', 'anime_female'], ['animeMale', 'anime_male'], ['female', 'female'], ['male', 'male']]) for (const [k] of EYE_SHAPES[g]) add('eyes', k, base(b, { eyeShape: k }), 'face');
   for (const b of ['anime_female', 'anime_male']) for (const h of hairChoices(kit, b)) add('hair', `${b}__${h.name}`, base(b, { hair: h.name }), 'threequarter');
+  for (const [k, , hp] of HAIR_PRESETS) add('hairset', k, base('anime_female', { hair: 'Custom', hairParts: hp, hairColor: '#6b4226' }), 'threequarter');
+  for (const [slot, opts] of Object.entries(HAIR_PARTS)) for (const k of Object.keys(opts)) if (k !== 'none') add('hairpart', `${slot}_${k}`, base('anime_female', { hair: 'Custom', hairParts: { ...DEFAULT_HAIR_PARTS, front: slot === 'front' ? k : 'none', back: slot === 'back' ? k : 'short', side: slot === 'side' ? k : 'none', ext: slot === 'ext' ? k : 'none', extra: slot === 'extra' ? k : 'none' }, hairColor: '#6b4226' }), slot === 'front' ? 'head' : slot === 'back' || slot === 'ext' ? 'back' : 'threequarter');
   for (const [k, o] of Object.entries(OUTFITS)) add('outfit', k, base(['male', 'premiumMale'].includes(o.group) ? 'anime_male' : 'anime_female', { outfit: k, ...(o.colors || {}) }), 'front-full');
   for (const [slot] of SLOTS) { const seen = new Set(); for (const [k, o] of Object.entries(OUTFITS)) { const d = outfitSlice(k, slot); if (!d) continue; const sig = JSON.stringify(d); if (seen.has(sig)) continue; seen.add(sig);
     const custom = Object.fromEntries(SLOTS.map(([s]) => [s, { from: s === slot ? k : 'none', main: o.colors?.clothing || '#3a4a7a', accent: o.colors?.accent || '#f2efe9' }]));
