@@ -256,10 +256,10 @@ function blushMaterial(core = 'rgba(255,120,140,0.62)') {
 export const FACE_SHAPES = {
   female: [['f_oval', 'Oval', {}], ['f_heart', 'Heart', { fw: 1.04, cw: 1.045, jw: 0.9, chw: 0.72, len: 0.06, fwd: 0.002 }],
     ['f_round', 'Round', { cw: 1.06, jw: 1.07, chw: 1.12, len: -0.12, full: 0.0045 }], ['f_long', 'Long', { fw: 0.97, cw: 0.95, jw: 0.95, chw: 0.92, len: 0.2 }],
-    ['f_square', 'Soft square', { jw: 1.1, chw: 1.16, len: -0.03, fwd: 0.001 }]],
+    ['f_square', 'Soft square', { jw: 1.1, chw: 1.16, len: -0.03, fwd: 0.001 }], ['f_model', 'Model (defined jaw, rounded chin)', { cw: 0.96, jw: 1.05, chw: 1.0, len: 0.08, fwd: 0.004, jawK: 0.1, full: -0.0015 }]],
   male: [['m_oval', 'Oval', {}], ['m_square', 'Square', { cw: 1.02, jw: 1.13, chw: 1.22, len: 0.03, fwd: 0.003 }],
     ['m_diamond', 'Diamond', { fw: 0.94, cw: 1.08, jw: 0.92, chw: 0.82, len: 0.07, fwd: 0.002 }], ['m_long', 'Long', { fw: 0.98, cw: 0.97, jw: 1.05, chw: 1.1, len: 0.22, fwd: 0.002 }],
-    ['m_round', 'Round', { cw: 1.06, jw: 1.07, chw: 1.08, len: -0.1, full: 0.0045 }]],
+    ['m_round', 'Round', { cw: 1.06, jw: 1.07, chw: 1.08, len: -0.1, full: 0.0045 }], ['m_model', 'Model (defined jaw, rounded chin)', { cw: 0.96, jw: 1.05, chw: 1.0, len: 0.08, fwd: 0.004, jawK: 0.1, full: -0.0015 }]],
   cartoon: [['c_classic', 'Classic', {}], ['c_cute', 'Cute (short, round)', { cw: 1.05, jw: 0.98, chw: 1.38, len: -0.29, mouthUp: 0.004, full: 0.003, fullU: 0.25 }], ['c_vline', 'V-line', { cw: 1.02, jw: 0.86, chw: 0.6, len: 0.1, fwd: 0.003 }],
     ['c_round', 'Round (chibi)', { cw: 1.09, jw: 1.1, chw: 1.16, len: -0.22, full: 0.006 }], ['c_heart', 'Heart', { fw: 1.05, cw: 1.06, jw: 0.88, chw: 0.7, len: 0.02 }],
     ['c_mature', 'Mature', { fw: 0.98, cw: 0.96, jw: 1.0, chw: 0.9, len: 0.18, fwd: 0.002 }],

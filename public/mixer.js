@@ -37,7 +37,7 @@ const hairKey = () => { const src = hairSource(kit, recipe.parts.Head).body; ret
 const worn = () => accessoriesOf(kit, recipe);
 const HAIR_EXTRA = ['bow', 'kanzashi', 'headdress', 'tiara'], ACC_MAIN = ['headset', 'glasses', 'choker', 'scarf'];
 const TABS = {
-  face: { label: 'Face', sections: [['shape', 'Face shape', '◯'], ['eyes', 'Eyes', '◉']] },
+  face: { label: 'Face', sections: [['faceshape', 'Face shape', '◯'], ['eyes', 'Eyes', '◉']] },
   hair: { label: 'Hairstyle', sections: [['style', 'Hairstyle sets', '♒'], ['h_front', 'Front', '⌒'], ['h_back', 'Back', '∥'], ['h_side', 'Side', '⟆'], ['h_ext', 'Extensions', '⥿'], ['h_extra', 'Extra', '✦'], ['extra', 'Hair pieces', '✿']] },
   body: { label: 'Body', sections: [['base', 'Base body', '⚲'], ['shape', 'Proportions', '⇕'], ['mix', 'Mix parts', '⧉']] },
   outfit: { label: 'Outfit', sections: [['sets', 'Whole sets', '👗'], ['top', 'Tops', '👕'], ['bottom', 'Bottoms', '👖'], ['legs', 'Legwear', '🧦'], ['shoes', 'Shoes', '👟']] },
@@ -46,7 +46,7 @@ const TABS = {
   look: { label: 'Look', sections: [['look', 'Look', '✦']] },
 };
 const panels = {
-  shape() {
+  faceshape() {      // keys must be unique: the Body tab has its own shape() (Proportions)
     if (recipe.headModel) return '<h3>Face shape</h3><p class="hint">This head keeps its own face. Pick another base on the Body tab to choose a face shape.</p>';
     const g = faceShapeGroup(kit, recipe.parts.Head), cur = faceShapeOf(kit, recipe)[0];
     return `<h3>Face shape</h3><div class="cards">${FACE_SHAPES[g].map(([k, n]) => card(`faceShape:${k}`, n, thumb('face', k), k === cur)).join('')}</div>`;
