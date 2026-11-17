@@ -193,7 +193,7 @@ export async function bakeVRM(recipe, { name = recipe.name || 'Kael character', 
     md.extensions = { ...(md.extensions || {}), VRMC_materials_mtoon: { specVersion: '1.0', transparentWithZWrite: !!x.zwrite, renderQueueOffsetNumber: 0, shadeColorFactor: x.shade,
       ...(shadeTex ? { shadeMultiplyTexture: shadeTex } : {}), shadingShiftFactor: x.shift ?? -0.05, shadingToonyFactor: x.toony ?? 0.9, giEqualizationFactor: 0.9,
       matcapFactor: [0, 0, 0], parametricRimColorFactor: [0, 0, 0], parametricRimFresnelPowerFactor: 5, parametricRimLiftFactor: 0, rimLightingMixFactor: 1,
-      outlineWidthMode: x.outline ? 'worldCoordinates' : 'none', outlineWidthFactor: x.outline ? 0.0017 : 0, outlineColorFactor: [0.13, 0.07, 0.09], outlineLightingMixFactor: 1,
+      outlineWidthMode: x.outline ? 'worldCoordinates' : 'none', outlineWidthFactor: x.outline ? (x.width ?? 0.0017) : 0, outlineColorFactor: [0.13, 0.07, 0.09], outlineLightingMixFactor: 1,
       uvAnimationScrollXSpeedFactor: 0, uvAnimationScrollYSpeedFactor: 0, uvAnimationRotationSpeedFactor: 0 } };
     delete md.extras; }
   // humanoid, expressions, look-at, first person, meta
@@ -232,7 +232,7 @@ function texOf(m) { return m.map || m.uniforms?.map?.value || null; }
 function classify(m, mesh, hasColor) {
   const tex = texOf(m), unlit = m.isMeshBasicMaterial, blend = !!m.transparent, outline = !unlit && !blend && !NO_OUTLINE.test(mesh.name) && !NO_OUTLINE.test(mesh.userData.matName || '') && !mesh.userData.noOutline;
   if (tex) { const mt = m.isMToonMaterial || m.type === 'ShaderMaterial' && m.shadeColorFactor;
-    return { key: `tex:${tex.uuid}:${unlit ? 'u' : 't'}:${blend ? 'b' : 'o'}`, palette: false, tex, unlit, blend, alphaTest: m.alphaTest || 0, outline: false, mtoon: mt ? m : null }; }
+    return { key: `tex:${tex.uuid}:${unlit ? 'u' : 't'}:${blend ? 'b' : 'o'}:${outline && m.userData.inkBase ? 'line' : ''}`, palette: false, tex, unlit, blend, alphaTest: m.alphaTest || 0, outline: !!(outline && m.userData.inkBase), outlineWidth: mesh.userData.outlineWidth, mtoon: mt ? m : null }; }      // painted kit pieces (hair) keep their ink line
   const alphaRamp = !!((m.alphaTest || m.transparent) && hasColor && m.vertexColors && mesh.geometry.attributes.color?.itemSize === 4);      // cut-out hems, and soft painted fades (blush)
   // all opaque toon pieces share one material (cut-out hems ride in the palette's alpha); see-through ones get their own
   return { key: `pal:${unlit ? 'u' : 't'}:${blend ? 'b' : 'o'}:${outline ? 'line' : 'plain'}`, palette: true, unlit, blend, alphaTest: blend ? 0 : 0.5, outline, alphaRamp };
@@ -246,7 +246,7 @@ function makeMaterial(spec, palTex) {
   const m = new THREE.MeshStandardMaterial({ map, side: THREE.DoubleSide, transparent: spec.blend, alphaTest: spec.blend ? 0 : (spec.palette ? 0.5 : spec.alphaTest), roughness: 1, metalness: 0 });
   if (shade) { m.emissiveMap = shade; m.emissive.set(1, 1, 1); }
   const sc = mt?.shadeColorFactor ? mt.shadeColorFactor.toArray() : [0.74, 0.7, 0.76];
-  m.userData.mtoon = { shade: sc, outline: spec.outline, shift: mt?.shadingShiftFactor ?? -0.05, toony: mt?.shadingToonyFactor ?? 0.9, zwrite: !!mt?.transparentWithZWrite };
+  m.userData.mtoon = { shade: sc, outline: spec.outline, width: spec.outlineWidth, shift: mt?.shadingShiftFactor ?? -0.05, toony: mt?.shadingToonyFactor ?? 0.9, zwrite: !!mt?.transparentWithZWrite };
   m.name = spec.palette ? (spec.outline ? 'Toon' : 'ToonNoLine') + (spec.blend ? 'Blend' : '') : (mt?.name || 'ToonTex');
   if (mt && mt.color) m.color.copy(mt.color);
   return m;

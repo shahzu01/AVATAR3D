@@ -118,11 +118,12 @@ export function addOutlines(vrm, { width = 0.0017, skin = '#ecc4ad' } = {}) {
   for (const o of todo) {
     let p = o, inHead = false; while (p) { if (p.name === 'HeadModel') inHead = true; p = p.parent; } if (inHead) continue;           // a complete head keeps its own look
     const m0 = [].concat(o.material)[0]; if (!m0 || m0.transparent || skip.test(o.name) || skip.test(o.userData.matName || '') || o.userData.noOutline) continue;
-    const base = m0.isMToonMaterial || !m0.color ? new THREE.Color(skin) : m0.color.clone(), ink = base.clone().multiplyScalar(0.3).lerp(new THREE.Color('#2a1420'), 0.35);
+    const base = m0.userData.inkBase ? m0.userData.inkBase.clone() : m0.isMToonMaterial || !m0.color ? new THREE.Color(skin) : m0.color.clone(), ink = base.clone().multiplyScalar(0.3).lerp(new THREE.Color('#2a1420'), 0.35);
     const mat = new THREE.MeshBasicMaterial({ color: ink, side: THREE.BackSide, vertexColors: !!o.geometry.attributes.color && o.geometry.attributes.color.itemSize === 4, alphaTest: m0.alphaTest || 0 });
     const sway = m0.customProgramCacheKey?.() === 'kael-hair-sway' ? m0.onBeforeCompile : null;
-    mat.onBeforeCompile = (sh, r) => { sway?.(sh, r); sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  transformed += normalize(normal) * ${width.toFixed(5)};`); };
-    mat.customProgramCacheKey = () => 'kael-outline' + (sway ? '-sway' : '') + width;
+    const w = o.userData.outlineWidth ?? width;      // dense layered hair takes a finer line, or its outline shows between the strands
+    mat.onBeforeCompile = (sh, r) => { sway?.(sh, r); sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  transformed += normalize(normal) * ${w.toFixed(5)};`); };
+    mat.customProgramCacheKey = () => 'kael-outline' + (sway ? '-sway' : '') + w;
     let e;
     if (o.isSkinnedMesh) { e = new THREE.SkinnedMesh(o.geometry, mat); o.parent.add(e); e.bind(o.skeleton, o.bindMatrix); if (o.morphTargetInfluences) { e.morphTargetInfluences = o.morphTargetInfluences; e.morphTargetDictionary = o.morphTargetDictionary; } }
     else { e = new THREE.Mesh(o.geometry, mat); o.add(e); }

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { toonGradient } from '/creator/geom.js';
 import { buildExtras } from '/garments.js';
 import { rigCloth } from '/cloth.js';
+import { shadeOf } from '/paint.js';
 
 // group: which characters the outfit was designed for (any outfit still works on any body). acc: accessories it comes with.
 export const OUTFITS = {
@@ -141,6 +142,15 @@ export function buildOutfit(ctx) {
   const out = [], n = pos.count; let nb = null;
   const neighbours = () => { if (nb) return nb; nb = Array.from({ length: kit.vertexCount }, () => []); const Q = kit.quadsA;
     for (let f = 0; f < Q.length; f += 4) for (let k = 0; k < 4; k++) { const a = Q[f + k], b = Q[f + (k + 1) % 4]; nb[a].push(b); nb[b].push(a); } return nb; };
+  // painted fold shadows, anime style: flat tones (not gradients) where cloth folds in or faces down, plus a hemline just inside
+  // each edge. Concavity is measured on the body once: how far a vertex's neighbours rise above its own tangent plane.
+  const paint = recipe.paint !== false, KEY = new THREE.Vector3(0.35, 0.75, 0.56).normalize().toArray(); let concM = null;
+  const concavity = () => { if (concM) return concM; const N = neighbours(), fm = ctx.fromMaster; concM = new Float32Array(kit.vertexCount);
+    for (let m = 0; m < kit.vertexCount; m++) { const g = fm[m]; if (g < 0) continue; let x = 0, y = 0, z = 0, c = 0, el = 0;
+      for (const q of N[m]) { const h = fm[q]; if (h < 0) continue; const dx = pos.getX(h) - pos.getX(g), dy = pos.getY(h) - pos.getY(g), dz = pos.getZ(h) - pos.getZ(g); x += dx; y += dy; z += dz; el += Math.hypot(dx, dy, dz); c++; }
+      if (c) concM[m] = (x * nrm.getX(g) + y * nrm.getY(g) + z * nrm.getZ(g)) / c / Math.max(1e-4, el / c); }
+    for (let it = 0; it < 14; it++) { const nx = concM.slice(); for (let m = 0; m < kit.vertexCount; m++) { let s = concM[m], c = 1; for (const q of N[m]) { s += concM[q]; c++; } nx[m] = s / c; } concM = nx; }
+    return concM; };
   for (const spec of def.layers) {
     const [name, role] = spec.split(':'), l = L[name], cov = new Float32Array(kit.vertexCount), colour = role ? pal[role] : l.color;
     for (let m = 0; m < kit.vertexCount; m++) cov[m] = l.f(P[m * 3], P[m * 3 + 1], P[m * 3 + 2], Math.abs(P[m * 3]), region[m], m);
@@ -155,6 +165,9 @@ export function buildOutfit(ctx) {
           const d = (x - pos.getX(g)) * nrm.getX(g) + (y - pos.getY(g)) * nrm.getY(g) + (z - pos.getZ(g)) * nrm.getZ(g), need = Math.max(l.off * 0.35, l.clear || 0) + (l.loose ? l.loose(pos.getY(g)) * 0.8 : 0) - d;
           if (need > 0) { x += nrm.getX(g) * need; y += nrm.getY(g) * need; z += nrm.getZ(g) * need; } gp[g * 3] = x; gp[g * 3 + 1] = y; gp[g * 3 + 2] = z; }); }
     }
+    let wide = 0; for (let m = 0; m < kit.vertexCount; m++) if (cov[m] > wide) wide = cov[m];
+    const base = new THREE.Color(colour), sh = shadeOf(colour), ratio = ['r', 'g', 'b'].map((k) => Math.min(1, sh[k] / Math.max(0.02, base[k])));
+    const tones = [[1, 1, 1], ratio.map((x) => 1 + (x - 1) * 0.55), ratio];
     for (let i = 0; i < n; i++) { const c = cov[toMaster[i]];
       col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = 1; col[i * 4 + 3] = 0.5 + Math.max(-1, Math.min(1, c)) * 20; }       // 0.5 = the hem; kept linear so the cut is straight
     const I = ctx.fullIndex, idx = [];
@@ -165,6 +178,12 @@ export function buildOutfit(ctx) {
     const ownNormals = !!l.smooth;
     g.setAttribute('color', new THREE.BufferAttribute(col, 4)); g.setAttribute('skinIndex', body.geometry.attributes.skinIndex); g.setAttribute('skinWeight', body.geometry.attributes.skinWeight); g.setIndex(idx);
     if (ownNormals) { const full = g.clone(); full.setIndex(I); full.deleteAttribute('normal'); full.computeVertexNormals(); g.setAttribute('normal', full.attributes.normal); }
+    if (paint) { const N3 = g.attributes.normal;
+      for (let i = 0; i < n; i++) { const m = toMaster[i], c = cov[m], d = N3.getX(i) * KEY[0] + N3.getY(i) * KEY[1] + N3.getZ(i) * KEY[2]; let t = 0;      // shadow from a painted key light above and in front
+        if (d < 0.12) t = 1; if (d < -0.38) t = 2;
+        if (wide > 0.025 && c >= 0 && c < 0.008) t = Math.max(t, 1);            // the hemline
+        col[i * 4] = tones[t][0]; col[i * 4 + 1] = tones[t][1]; col[i * 4 + 2] = tones[t][2]; } }
+    if (paint) try { refineHem(g, cov, toMaster, P, region, l.f, 2); } catch (e) { console.warn('hem refine', e); }      // smooth edges instead of the body's sawtooth
     const mesh = new THREE.SkinnedMesh(g, toon({ color: colour, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })); mesh.name = 'Outfit_' + name; mesh.frustumCulled = false;
     body.parent.add(mesh); mesh.bind(body.skeleton, body.bindMatrix); out.push(mesh);
   }
@@ -201,4 +220,44 @@ function buildSkirt(ctx, { hz, H, main, accent, len = 0.185, flare = 0.085, plea
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4)); g.setIndex(idx); g.computeVertexNormals();
   const mesh = new THREE.SkinnedMesh(g, toon({ color: main, side: THREE.DoubleSide, vertexColors: true })); mesh.name = 'Outfit_' + name; mesh.frustumCulled = false;
   body.parent.add(mesh); mesh.bind(sk, body.bindMatrix); return mesh;
+}
+
+/** Split the triangles a hem runs through (and just enough of their neighbours to leave no cracks), evaluating the garment's
+ *  own cut at every new point, so the edge follows the intended curve instead of zig-zagging across the body's triangles. */
+function refineHem(g, cov, toMaster, P, region, f, levels) {
+  const A = (n) => g.attributes[n];
+  let pos = Array.from(A('position').array), nrm = Array.from(A('normal').array), col = Array.from(A('color').array), si = Array.from(A('skinIndex').array), sw = Array.from(A('skinWeight').array);
+  let idx = Array.from(g.index.array);
+  const n0 = A('position').count, mp = new Array(n0 * 3), master = new Array(n0);      // each vertex's place on the master body (where the cut is defined)
+  for (let i = 0; i < n0; i++) { const m = toMaster[i]; master[i] = m; for (let k = 0; k < 3; k++) mp[i * 3 + k] = P[m * 3 + k]; }
+  const alpha = (i) => col[i * 4 + 3], cut = (c) => 0.5 + Math.max(-1, Math.min(1, c)) * 20;
+  for (let lv = 0; lv < levels; lv++) {
+    const T = idx.length / 3, ek = (a, b) => (a < b ? a * 4194304 + b : b * 4194304 + a), split = new Set();
+    const straddles = (t) => { const a = [alpha(idx[t * 3]), alpha(idx[t * 3 + 1]), alpha(idx[t * 3 + 2])]; return Math.min(...a) < 0.5 && Math.max(...a) > 0.5; };
+    for (let t = 0; t < T; t++) if (straddles(t)) for (let k = 0; k < 3; k++) split.add(ek(idx[t * 3 + k], idx[t * 3 + (k + 1) % 3]));
+    if (!split.size) break;
+    for (let changed = true; changed;) { changed = false;                // a triangle with two split edges gets all three
+      for (let t = 0; t < T; t++) { let c = 0; for (let k = 0; k < 3; k++) if (split.has(ek(idx[t * 3 + k], idx[t * 3 + (k + 1) % 3]))) c++;
+        if (c === 2) { for (let k = 0; k < 3; k++) split.add(ek(idx[t * 3 + k], idx[t * 3 + (k + 1) % 3])); changed = true; } } }
+    const mid = new Map();
+    const midpoint = (a, b) => { const key = ek(a, b); if (mid.has(key)) return mid.get(key); const v = pos.length / 3;
+      for (let k = 0; k < 3; k++) { pos.push((pos[a * 3 + k] + pos[b * 3 + k]) / 2); mp.push((mp[a * 3 + k] + mp[b * 3 + k]) / 2); }
+      const nx = nrm[a * 3] + nrm[b * 3], ny = nrm[a * 3 + 1] + nrm[b * 3 + 1], nz = nrm[a * 3 + 2] + nrm[b * 3 + 2], nl = Math.hypot(nx, ny, nz) || 1; nrm.push(nx / nl, ny / nl, nz / nl);
+      const m = master[a], x = mp[v * 3], y = mp[v * 3 + 1], z = mp[v * 3 + 2], c = f(x, y, z, Math.abs(x), region[m], m); master.push(m);
+      col.push(col[a * 4], col[a * 4 + 1], col[a * 4 + 2], cut(c));
+      const w = new Map(); for (const [i, h] of [[a, 0.5], [b, 0.5]]) for (let k = 0; k < 4; k++) { const wt = sw[i * 4 + k] * h; if (wt > 0) w.set(si[i * 4 + k], (w.get(si[i * 4 + k]) || 0) + wt); }
+      const top = [...w].sort((p, q) => q[1] - p[1]).slice(0, 4), tot = top.reduce((s2, [, x2]) => s2 + x2, 0) || 1;
+      for (let k = 0; k < 4; k++) { si.push(top[k] ? top[k][0] : 0); sw.push(top[k] ? top[k][1] / tot : 0); }
+      mid.set(key, v); return v; };
+    const out = [];
+    for (let t = 0; t < T; t++) { const v = [idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]], s3 = [0, 1, 2].map((k) => split.has(ek(v[k], v[(k + 1) % 3])));
+      const c = s3.filter(Boolean).length;
+      if (c === 0) out.push(...v);
+      else if (c === 3) { const m0 = midpoint(v[0], v[1]), m1 = midpoint(v[1], v[2]), m2 = midpoint(v[2], v[0]); out.push(v[0], m0, m2, m0, v[1], m1, m2, m1, v[2], m0, m1, m2); }
+      else { const k = s3.indexOf(true), a = v[k], b = v[(k + 1) % 3], o = v[(k + 2) % 3], m = midpoint(a, b); out.push(a, m, o, m, b, o); } }
+    idx = out;
+  }
+  const F = (arr) => new Float32Array(arr);
+  g.setAttribute('position', new THREE.BufferAttribute(F(pos), 3)); g.setAttribute('normal', new THREE.BufferAttribute(F(nrm), 3)); g.setAttribute('color', new THREE.BufferAttribute(F(col), 4));
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(F(sw), 4)); g.setIndex(idx);
 }

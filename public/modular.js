@@ -9,6 +9,7 @@ import { toonGradient } from '/creator/geom.js';
 import { buildOutfit, OUTFITS, defaultOutfit, outfitGroup } from '/outfits.js';
 import { buildAccessories, ACCESSORIES } from '/accessories.js';
 import { buildAnimal } from '/animal.js';
+import { paintHair, animeShading } from '/paint.js';
 import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes, humanMakeup } from '/face.js';
 export { FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf };
 export { OUTFITS, defaultOutfit, outfitGroup, ACCESSORIES };
@@ -266,7 +267,8 @@ export async function loadModular(input) {
       hairFit = { basis: [0, 1, 2].map((k) => mA[k] - (mH[k] - hb[k]) / sc), scale: headScale * sc };
     }
     const root = await loadStatic(KIT_BASE + hair.file); root.name = 'Hair';
-    root.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.material = toon({ color: recipe.hairColor }); } });
+    root.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.material = toon({ color: recipe.hairColor, side: THREE.DoubleSide }); } });      // some strands are single sheets: draw both sides, or the ink shell behind them shows through
+    if (recipe.paint !== false) try { paintHair(root, recipe.hairColor); } catch (e) { console.warn('hair paint', e); }      // strands and the shine ring
     attachToHead(vrm, root, hairFit.basis, hairFit.scale); const sw = addHairSway(vrm, root); if (sw) bake.hair.push(sw);
   } catch (e) { console.warn('modular hair', e); }
   // how far each finger fans away from the middle finger in the rest pose (about the vertical axis), so the viewer can close the hand
@@ -283,6 +285,7 @@ export async function loadModular(input) {
     const mk = humanMakeup({ vrm, body, face: await loadFaceKit(KIT_BASE), toMaster, male: kit.bodies[hk].base === 'male', hairColor: recipe.hairColor, skin: recipe.skin });
     if (mk.length) notes.push('Face: drawn brows, lash line and lip colour');
   } catch (e) { console.warn('modular human makeup', e); }
+  if (recipe.paint !== false) try { animeShading(vrm.scene); } catch (e) { console.warn('anime shading', e); }
   if (recipe.outline !== false) addOutlines(vrm, { skin: recipe.skin });
   vrm.userData = { ...vrm.userData, modular: recipe, modularNotes: notes, modularHeight: height, kitHand: hands ? 'master' : kitHand, paintedEyes: !!faceArt };
   return vrm;
