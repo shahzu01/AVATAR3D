@@ -51,12 +51,11 @@ export function topbar(page, { tools = '' } = {}) {
     <a class="brand" href="/tracker.html" title="Kael Studio"><span class="mark">${ICON.mark}</span><span><b>Kael</b> Studio</span></a>
     <nav class="nav">
       <a href="/tracker.html" class="${page === 'studio' ? 'on' : ''}">${ICON.studio}<span>Studio</span></a>
-      <a href="/library.html" class="${page === 'library' ? 'on' : ''}">${ICON.library}<span>Library</span></a>
-      <a href="/creator.html" class="${page === 'creator' ? 'on' : ''}">${ICON.creator}<span>Creator</span></a>
+      <a href="/characters.html" class="${['characters', 'library', 'mixer', 'creator'].includes(page) ? 'on' : ''}" title="Your characters, samples, and making new ones">${ICON.library}<span>Characters</span></a>
     </nav>
     <div class="spacer"></div>
     <div class="tools">${tools}</div>
-    <a class="activechip" href="/library.html" id="tbActive" title="Your active avatar (what OBS shows)"><span class="ph"></span><span class="t"><small>On stream</small><span>…</span></span><span class="livedot" id="tbLive" title="OBS connected"></span></a>`;
+    <a class="activechip" href="/characters.html" id="tbActive" title="Your active avatar (what OBS shows)"><span class="ph"></span><span class="t"><small>On stream</small><span>…</span></span><span class="livedot" id="tbLive" title="OBS connected"></span></a>`;
   refreshActive();
   setInterval(refreshActive, 4000);
 }

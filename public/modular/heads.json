@@ -1,0 +1,50 @@
+{
+ "nekomika": {
+  "label": "NekoMika",
+  "neckFit": 0.72,
+  "file": "head_nekomika.vrm",
+  "chin": [
+   0.019,
+   1.365,
+   0.118
+  ],
+  "headBone": [
+   0.01878,
+   1.39005,
+   0.05179
+  ],
+  "neckBone": [
+   0.01878,
+   1.30661,
+   0.07747
+  ],
+  "stubBottom": 1.3125001192092896,
+  "top": 1.6500000953674316,
+  "skin": "#fccbbb",
+  "expressions": [
+   "aa",
+   "angry",
+   "blink",
+   "blinkLeft",
+   "blinkRight",
+   "ee",
+   "happy",
+   "ih",
+   "oh",
+   "ou",
+   "relaxed",
+   "sad",
+   "surprised"
+  ],
+  "sway": [
+   "Ear_L",
+   "Ear_R",
+   "Hair_hairFL",
+   "Hair_hairB0",
+   "Hair_hairB1",
+   "Hair_hairB2",
+   "Hair_hairB3"
+  ],
+  "kb": 19455
+ }
+}

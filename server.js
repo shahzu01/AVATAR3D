@@ -12,12 +12,16 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Library, UserError, pickLook, LOOK_KEYS } from './lib/library.js';
 import { PhoneFace } from './lib/phone.js';
+import { TriggerEngine, sanitizeRules, DEFAULT_RULES, WHEN, ITEMS, EXPRESSIONS, GESTURES, PRESETS, ACTS, POSE_NAMES } from './lib/triggers.js';
+import { TwitchEvents } from './lib/twitch-events.js';
+import { PropStore, sanitizeProps, sanitizeScene, FILE_RE as PROP_FILE_RE, MAX_PROP_MB } from './lib/props-store.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3939);
 const VMC_PORT = Number(process.env.VMC_PORT || 39539);
-const SETTINGS_FILE = path.join(ROOT, 'settings.json');
-const AVATAR_DIR = path.join(ROOT, 'avatars');
+const DATA = process.env.KAEL_DATA_DIR ? path.resolve(process.env.KAEL_DATA_DIR) : ROOT;      // where the library and settings live (tests point this at a scratch folder)
+const SETTINGS_FILE = path.join(DATA, 'settings.json');
+const AVATAR_DIR = path.join(DATA, 'avatars');
 fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
 // ------------------------------------------------------------------ settings
@@ -28,8 +32,11 @@ const DEFAULT_SETTINGS = {
   camera: 'bust',                     // head | bust | half | full
   cameraOffset: { x: 0, y: 0, zoom: 1 },
   lightColor: '#ffffff', lightIntensity: 1.0, rimColor: '#a35cff', rimIntensity: 0.6,
+  lightingPreset: 'cute', lightingAO: true,      // cute | gaming | dramatic | showcase | cafe | daylight | moonlight | classic (public/lighting.js)
   mirror: false,                      // false = puppet (your left = avatar's left); true = mirror
   idleMotion: true,
+  idlePose: 'relaxed', poseLock: false, cameraMotion: 'still',      // still | drift | orbit
+       // pose library (public/avatar.js POSES)
   twitchChannel: '',
   chatCommands: true,
   commandCooldownMs: 1500,
@@ -40,7 +47,9 @@ try { settings = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(SETTINGS_F
 function saveSettings() { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); }
 
 // ------------------------------------------------------------------ avatar library
-const library = new Library(ROOT, { legacyDir: AVATAR_DIR, limits: settings.importLimits });
+const propStore = new PropStore(DATA);
+settings.props = sanitizeProps(settings.props, propStore); settings.scene = sanitizeScene(settings.scene, propStore);
+const library = new Library(DATA, { legacyDir: AVATAR_DIR, limits: settings.importLimits });
 const canGoLive = (r) => r && (r.sourceType === 'created' || (r.format.type === 'VRM' && r.suitability?.tracking));
 function ensureActive() {
   if (library.get(settings.activeAvatarId) && canGoLive(library.get(settings.activeAvatarId))) return;
@@ -54,7 +63,9 @@ ensureActive();
 function activeInfo() {
   const r = library.get(settings.activeAvatarId);
   if (!r) return null;
-  return { id: r.id, name: r.name, kind: r.sourceType === 'created' ? 'created' : 'vrm', url: library.publicRecord(r).fileUrl, transform: r.presentation.transform, tracking: r.presentation.tracking };
+  const bk = library.bakeState(r);      // a Part Mixer character with an up-to-date baked VRM goes on stream as that VRM
+  if (bk?.state === 'fresh') return { id: r.id, name: r.name, kind: 'vrm', baked: true, url: `/api/library/${r.id}/baked?v=${bk.hash}`, transform: r.presentation.transform, tracking: r.presentation.tracking };
+  return { id: r.id, name: r.name, kind: r.sourceType === 'created' ? 'created' : 'vrm', needsBake: bk ? bk.state : null, url: library.publicRecord(r).fileUrl, transform: r.presentation.transform, tracking: r.presentation.tracking };
 }
 const publicSettings = () => ({ ...settings, active: activeInfo() });
 function activate(id) {
@@ -67,6 +78,13 @@ function activate(id) {
   if (r.presentation.look) Object.assign(settings, r.presentation.look); else library.setPresentation(r.id, { look: pickLook(settings) });
   saveSettings(); broadcast({ type: 'settings', settings: publicSettings() });
   return r;
+}
+function readBinary(req, max) {
+  return new Promise((resolve, reject) => {
+    const parts = []; let n = 0;
+    req.on('data', (d) => { n += d.length; if (n > max) { reject(new UserError('File is too large.', 413)); req.destroy(); } else parts.push(d); });
+    req.on('end', () => resolve(Buffer.concat(parts))); req.on('error', () => reject(new UserError('Upload interrupted.')));
+  });
 }
 function readJson(req, max = 4e6) {
   return new Promise((resolve, reject) => {
@@ -126,6 +144,13 @@ async function libraryApi(req, res, url) {
         if (id === settings.activeAvatarId) broadcast({ type: 'settings', settings: publicSettings() });
         return json({ avatar: pub(library.get(id)) });
       }
+      if (sub === '/baked' && M === 'GET') { const bk = library.bakeState(rec); return bk?.state === 'fresh' ? sendFile(res, library.bakedPath(rec), 'application/octet-stream') : json({ error: 'No up-to-date baked file.' }, 404); }
+      if (sub === '/baked' && M === 'PUT') {
+        const buf = await readBinary(req, library.limits.maxFileMB * 1e6);
+        library.saveBake(id, buf, url.searchParams.get('hash'));
+        if (id === settings.activeAvatarId) broadcast({ type: 'settings', settings: publicSettings() });      // the stream switches to the baked file
+        return json({ avatar: pub(library.get(id)) });
+      }
       if (sub === '/thumb' && M === 'GET') return rec.thumbnail ? sendFile(res, library.thumbPath(rec), 'image/png') : json({ error: 'No thumbnail.' }, 404);
       if (sub === '/download' && M === 'GET') return sendFile(res, library.filePath(rec), 'application/octet-stream', { 'Content-Disposition': `attachment; filename="${rec.originalFilename.replace(/"/g, '')}"` });
       if (!sub && M === 'PATCH') {
@@ -153,6 +178,57 @@ async function libraryApi(req, res, url) {
     if (e instanceof UserError) return json({ error: e.message }, e.code);
     console.error(e); return json({ error: 'Something went wrong while handling the avatar. Details are in the log.' }, 500);
   }
+}
+
+// Picture cards for the Character Maker's choices. The browser renders a missing card itself (on your GPU, in the
+// background) and stores it here, so each picture is made once. THUMB_VERSION changes when the look of characters does.
+const THUMB_VERSION = 3, THUMB_CATS = new Set(['face', 'eyes', 'hair', 'hairset', 'hairpart', 'outfit', 'piece', 'acc', 'ears', 'tail', 'base']), THUMB_KEY = /^[\w-]{1,80}$/;
+const thumbDir = () => path.join(DATA, 'thumbs', `v${THUMB_VERSION}`);
+async function thumbsApi(req, res, url) {
+  const json = (o, c = 200) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+  const m = url.pathname.match(/^\/api\/thumbs(?:\/([a-z]+)\/([\w-]+))?$/);
+  if (!m) return json({ error: 'Not found' }, 404);
+  const [, cat, key] = m;
+  if (!cat && req.method === 'GET') { const have = []; for (const c of THUMB_CATS) { try { for (const f of fs.readdirSync(path.join(thumbDir(), c))) if (f.endsWith('.jpg')) have.push(`${c}/${f.slice(0, -4)}`); } catch { /* none yet */ } } return json({ version: THUMB_VERSION, have }); }
+  if (!THUMB_CATS.has(cat) || !THUMB_KEY.test(key)) return json({ error: 'Not found' }, 404);
+  const file = path.join(thumbDir(), cat, `${key}.jpg`);
+  if (req.method === 'GET') return sendFile(res, file, 'image/jpeg');
+  if (req.method === 'POST') {
+    const buf = await readBinary(req, 600000);
+    if (!(buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff)) return json({ error: 'A JPEG picture is expected.' }, 400);
+    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, buf); return json({ saved: `${cat}/${key}` });
+  }
+  return json({ error: 'Not allowed' }, 405);
+}
+async function propsApi(req, res, url) {
+  const p = url.pathname, M = req.method, json = (o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+  try {
+    if (p === '/api/props' && M === 'GET') return json({ files: propStore.list, maxMB: MAX_PROP_MB });
+    if (p === '/api/props/upload' && M === 'POST') { const buf = await readBinary(req, MAX_PROP_MB * 1e6 + 1); try { return json({ file: propStore.add(buf, url.searchParams.get('name')) }); } catch (e) { return json({ error: e.message }, 422); } }
+    const m = p.match(/^\/api\/props\/([a-f0-9]{16})$/);
+    if (m && M === 'DELETE') {
+      const e = propStore.remove(m[1]); if (!e) return json({ error: 'Not found.' }, 404);
+      settings.props = settings.props.filter((q) => q.src !== `file:${e.file}`); if (settings.scene.file === e.file) settings.scene = sanitizeScene({ kind: 'none' }, propStore);
+      saveSettings(); broadcast({ type: 'settings', settings: publicSettings() }); return json({ removed: e.id });
+    }
+    return json({ error: 'Not found.' }, 404);
+  } catch (e) { return json({ error: e instanceof UserError ? e.message : 'Invalid request.' }, e.code || 400); }
+}
+async function eventsApi(req, res, p) {
+  const M = req.method, json = (o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+  try {
+    if (p === '/api/triggers' && M === 'GET') return json({ rules: settings.triggers, when: WHEN, items: ITEMS, expressions: EXPRESSIONS, gestures: GESTURES, presets: PRESETS, acts: ACTS });
+    if (p === '/api/triggers' && M === 'PUT') { const b = await readJson(req, 2e5); settings.triggers = sanitizeRules(b.rules); saveSettings(); return json({ rules: settings.triggers }); }
+    if (p === '/api/triggers/reset' && M === 'POST') { settings.triggers = structuredClone(DEFAULT_RULES); saveSettings(); return json({ rules: settings.triggers }); }
+    if (p === '/api/triggers/test' && M === 'POST') {          // pretend this happened on stream
+      const b = await readJson(req, 1e4); if (!WHEN[b.when]) return json({ error: 'Unknown event.' }, 400);
+      return json({ fired: streamEvent({ when: b.when, name: String(b.name || '').slice(0, 60), amount: Number(b.amount) || 0, user: String(b.user || 'Test viewer').slice(0, 40) }, 'test') });
+    }
+    if (p === '/api/twitch/status' && M === 'GET') return json(twitchEvents.status());
+    if (p === '/api/twitch/connect' && M === 'POST') { const b = await readJson(req, 1e4); try { return json(await twitchEvents.startSignIn(b.clientId)); } catch (e) { return json({ error: e.message }, 400); } }
+    if (p === '/api/twitch/disconnect' && M === 'POST') { twitchEvents.disconnect(); return json(twitchEvents.status()); }
+    return json({ error: 'Not found.' }, 404);
+  } catch (e) { return json({ error: e instanceof UserError ? e.message : 'Invalid request.' }, e.code || 400); }
 }
 
 // ------------------------------------------------------------------ static files
@@ -195,10 +271,44 @@ function status() {
     vmcActive: phone.active, phone: phone.status(), twitch: twitchState, settings: publicSettings() };
 }
 
+// ------------------------------------------------------------------ who may talk to the server
+// Only this Mac: the server listens on 127.0.0.1 unless KAEL_HOST (or "listenHost" in settings.json) says otherwise.
+// Requests must name a local host (stops DNS-rebinding tricks), and browser requests to the API or the live socket must
+// come from Kael Studio's own pages (stops other websites from deleting avatars, changing settings or firing triggers).
+// Stream Deck and Terminal requests carry no browser headers and keep working. The iPhone apps use UDP and are not affected.
+const HOST = process.env.KAEL_HOST || settings.listenHost || '127.0.0.1';
+const LOOPBACK_ONLY = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
+const LOCAL_NAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+function refuse(req) {
+  const host = String(req.headers.host || ''), name = host.replace(/:\d+$/, '').toLowerCase();
+  if (LOOPBACK_ONLY && !LOCAL_NAMES.has(name)) return 'Unknown host.';
+  const p = (req.url || '').split('?')[0];
+  if (!(p.startsWith('/api/') || p === '/ws')) return null;
+  const site = req.headers['sec-fetch-site'];
+  if (site === 'cross-site' || site === 'same-site') return 'Requests from other websites are not allowed.';
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null') { try { if (new URL(origin).host.toLowerCase() !== host.toLowerCase()) return 'Requests from other websites are not allowed.'; } catch { return 'Bad origin.'; } }
+  else if (origin === 'null') return 'Requests from other websites are not allowed.';
+  return null;
+}
+
+// ------------------------------------------------------------------ stream events -> trigger rules -> avatar
+if (!Array.isArray(settings.triggers)) settings.triggers = structuredClone(DEFAULT_RULES); else settings.triggers = sanitizeRules(settings.triggers);
+const engine = new TriggerEngine({ getRules: () => settings.triggers, send: (m) => broadcast(m), setPreset: (p) => { settings.lightingPreset = p; saveSettings(); broadcast({ type: 'settings', settings: publicSettings() }); } });
+function streamEvent(ev, source = 'twitch') {
+  const fired = engine.handle(ev);
+  broadcast({ type: 'streamEvent', event: { ...ev, source }, fired }, ['control']);
+  return fired;
+}
+const twitchEvents = new TwitchEvents({ dataDir: DATA, onEvent: (ev) => streamEvent(ev), log: (t) => console.log(t), onStatus: (st) => broadcast({ type: 'twitchEvents', status: st }, ['control']) });
+
 const server = http.createServer((req, res) => {
+  const no = refuse(req);
+  if (no) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: no })); return; }
+  if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
   const url = new URL(req.url, `http://${req.headers.host}`);
   const p = url.pathname;
-  const ok = (obj) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(obj)); };
+  const ok = (obj) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   // Stream Deck friendly endpoints (GET so a "web request" button works)
   let m;
   if ((m = p.match(/^\/api\/trigger\/([\w-]+)$/))) {
@@ -207,6 +317,14 @@ const server = http.createServer((req, res) => {
   }
   if ((m = p.match(/^\/api\/throw\/([\w-]+)$/))) { const msg = { type: 'throw', item: m[1], count: Number(url.searchParams.get('n') || 1), source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
   if ((m = p.match(/^\/api\/gesture\/([\w-]+)$/))) { const msg = { type: 'gesture', name: m[1], source: 'api' }; broadcast(msg); return ok({ sent: msg }); }
+  if (p.startsWith('/api/triggers') || p.startsWith('/api/twitch/')) { eventsApi(req, res, p); return; }
+  if (p.startsWith('/api/props')) { propsApi(req, res, url); return; }
+  if (p.startsWith('/api/thumbs')) { thumbsApi(req, res, url).catch((e) => { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }); return; }
+  if (p.startsWith('/userprops/')) {          // your uploaded props and scenes
+    const f = p.slice(11), fp = PROP_FILE_RE.test(f) && propStore.has(f) ? propStore.filePath(f) : null;
+    if (!fp) { res.writeHead(404); res.end(); return; }
+    return sendFile(res, fp, { glb: 'model/gltf-binary', png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[f.split('.').pop()]);
+  }
   if (p === '/api/status') return ok(status());
   if (p === '/api/phone') return ok(phone.status());
   if (p === '/api/phone/calibrate' && req.method === 'POST') return ok({ calibrated: phone.calibrate(), status: phone.status() });
@@ -218,7 +336,12 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const patch = JSON.parse(body);
-        delete patch.active;
+        delete patch.active; delete patch.triggers;      // rules go through /api/triggers, which checks them
+        if ('props' in patch) patch.props = sanitizeProps(patch.props, propStore);
+        if ('scene' in patch) patch.scene = sanitizeScene(patch.scene, propStore);
+        if ('idlePose' in patch) patch.idlePose = POSE_NAMES.includes(patch.idlePose) ? patch.idlePose : 'relaxed';
+        if ('poseLock' in patch) patch.poseLock = !!patch.poseLock;
+        if ('cameraMotion' in patch) patch.cameraMotion = ['still', 'drift', 'orbit'].includes(patch.cameraMotion) ? patch.cameraMotion : 'still';
         const nextActive = patch.activeAvatarId; delete patch.activeAvatarId;
         if (patch.phone) patch.phone = { ...DEFAULT_SETTINGS.phone, ...settings.phone, ...patch.phone };
         settings = { ...settings, ...patch }; saveSettings();
@@ -244,7 +367,7 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res, p);
 });
 
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4 * 1024 * 1024 });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4 * 1024 * 1024, verifyClient: ({ req }) => !refuse(req) });
 wss.on('connection', (ws, req) => {
   const role = new URL(req.url, 'http://x').searchParams.get('role') || 'avatar';
   const client = { ws, role }; clients.add(client);
@@ -324,10 +447,12 @@ function connectTwitch(channel) {
       if (!m || !settings.chatCommands) continue;
       const [, user, text] = m;
       const cmd = text.trim().toLowerCase().match(/^!(\w+)/)?.[1];
-      if (!cmd || !CHAT[cmd]) continue;
+      const own = cmd && settings.triggers.some((r) => r.on && r.when === 'command' && r.match.toLowerCase() === cmd);
+      if (!cmd || (!CHAT[cmd] && !own)) continue;
       const key = `${user}:${cmd}`, now = Date.now();
       if (now - (lastCommand.get(key) || 0) < settings.commandCooldownMs) continue;
       lastCommand.set(key, now);
+      if (own) { streamEvent({ when: 'command', name: cmd, user }, 'chat'); continue; }      // your own command rules come first
       broadcast({ ...CHAT[cmd], from: user, source: 'chat' });
     }
   });
@@ -336,8 +461,8 @@ function connectTwitch(channel) {
 }
 connectTwitch(settings.twitchChannel);
 
-server.listen(PORT, () => {
-  console.log(`\nKael Studio running`);
+server.listen(PORT, HOST, () => {
+  console.log(`\nKael Studio running${LOOPBACK_ONLY ? ' (this Mac only)' : ` (open to the network on ${HOST})`}`);
   console.log(`  Studio + tracker (open in Chrome):  http://localhost:${PORT}/tracker.html`);
   console.log(`  Avatar for OBS Browser Source:      http://localhost:${PORT}/avatar.html`);
   console.log(`  Avatar library:                     http://localhost:${PORT}/library.html`);

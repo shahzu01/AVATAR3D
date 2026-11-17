@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Character Creator · Kael Studio</title>
+<title>Animal Maker · Kael Studio</title>
 <link rel="stylesheet" href="/ui.css">
 <style>
   .work { display: grid; grid-template-columns: var(--rail) var(--panelW, 384px) 1fr; min-height: 0; transition: grid-template-columns .25s ease; }
@@ -143,6 +143,7 @@
     </main>
   </div>
 </div>
+<script>if (!new URLSearchParams(location.search).get('id')) location.replace('/mixer.html');      // retired: new characters (and animal ears and tails) are made in the Character Maker; saved animals still open here</script>
 <script type="module" src="/creator.js"></script>
 </body>
 </html>

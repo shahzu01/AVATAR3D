@@ -36,12 +36,25 @@ const bind = (id, key, conv = (v) => v, evt = 'input') => $(id).addEventListener
   const el = e.target; const v = el.type === 'checkbox' ? el.checked : conv(el.value);
   if (key.includes('.')) { const [a, b] = key.split('.'); saveSettings({ [a]: { ...settings[a], [b]: v } }); } else saveSettings({ [key]: v });
 });
+// The active Part Mixer character is drawn far faster from its optimized (baked) file. The Studio makes that file when it
+// is missing or out of date, but only while the camera is off: baking keeps this page busy and would make tracking stutter.
+let bakeNoted = null;
+async function checkBake(s) {
+  const a = s.active; if (!a?.needsBake) return;
+  const key = `${a.id}:${a.needsBake}`;
+  if (running) { if (bakeNoted !== key) { bakeNoted = key; log(`${a.name} is not optimized yet, so OBS builds it live (slower). It will be optimized when you next open the Studio before starting the camera, or right away from the Part Mixer or the Library.`); } return; }
+  const { ensureBaked, isBaking } = await import('/autobake.js'); if (isBaking(a.id)) return;
+  log(`optimizing ${a.name} for the stream…`);
+  try { const r = await ensureBaked(a.id, { onStep: (st) => { $('perf').textContent = `Optimizing ${a.name}: ${st}…`; } }); log(`${a.name} optimized${r.bakeNotes ? `: ${r.bakeNotes.slice(0, 3).join(' · ')}` : ''}`); }
+  catch (e) { log(`could not optimize ${a.name}: ${e.message}`); }
+  if (!running) $('perf').textContent = 'Tracking stopped.';
+}
 function loadSettings(s) {
-  settings = s;
+  settings = s; checkBake(s);
   const set = (id, v) => { const el = $(id); if (!el || document.activeElement === el) return; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; };
-  set('cam', s.camera); set('zoom', s.cameraOffset?.zoom ?? 1); set('offY', s.cameraOffset?.y ?? 0); set('offX', s.cameraOffset?.x ?? 0);
+  set('cam', s.camera); set('camMotion', s.cameraMotion || 'still'); set('zoom', s.cameraOffset?.zoom ?? 1); set('offY', s.cameraOffset?.y ?? 0); set('offX', s.cameraOffset?.x ?? 0);
   set('bg', s.background); set('bgColor', s.backgroundColor); set('lightColor', s.lightColor); set('lightIntensity', s.lightIntensity);
-  set('rimColor', s.rimColor); set('rimIntensity', s.rimIntensity); set('idleMotion', s.idleMotion); set('twitch', s.twitchChannel);
+  set('rimColor', s.rimColor); set('rimIntensity', s.rimIntensity); set('lightingPreset', s.lightingPreset || 'classic'); set('lightingAO', s.lightingAO !== false); set('idleMotion', s.idleMotion); set('twitch', s.twitchChannel);
   set('chatCommands', s.chatCommands); set('mirror', s.mirror);
   const ph = s.phone || {};
   set('phoneApp', ph.app || 'vmc'); set('phoneIp', ph.ip || ''); set('phoneMirror', ph.mirror); set('phoneFlipYaw', ph.flipYaw); set('phoneFlipPitch', ph.flipPitch);
@@ -54,9 +67,11 @@ async function refreshAvatars() {
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('avatarSel').innerHTML = avatars.map((a) => `<option value="${a.id}" ${a.id === activeId ? 'selected' : ''}>${esc(a.name)}</option>`).join('') || '<option value="">(no avatar yet: open the library)</option>';
 }
-bind('cam', 'camera', String, 'change'); bind('zoom', 'cameraOffset.zoom', Number); bind('offY', 'cameraOffset.y', Number); bind('offX', 'cameraOffset.x', Number);
+bind('cam', 'camera', String, 'change'); bind('camMotion', 'cameraMotion', String, 'change'); bind('zoom', 'cameraOffset.zoom', Number); bind('offY', 'cameraOffset.y', Number); bind('offX', 'cameraOffset.x', Number);
 bind('bg', 'background', String, 'change'); bind('bgColor', 'backgroundColor'); bind('lightColor', 'lightColor'); bind('lightIntensity', 'lightIntensity', Number);
-bind('rimColor', 'rimColor'); bind('rimIntensity', 'rimIntensity', Number); bind('idleMotion', 'idleMotion', Boolean, 'change');
+bind('rimColor', 'rimColor'); bind('rimIntensity', 'rimIntensity', Number); bind('lightingAO', 'lightingAO', Boolean, 'change');
+// choosing a preset also resets the key/rim colours and strengths to that preset's own, so the sliders start from its look
+$('lightingPreset')?.addEventListener('change', async (e) => { const { lightDefaults } = await import('/light-presets.js'); const d = lightDefaults(e.target.value); for (const [k, v] of Object.entries(d)) { const el = $(k); if (el && el !== e.target) el.value = v; } saveSettings(d); }); bind('idleMotion', 'idleMotion', Boolean, 'change');
 bind('chatCommands', 'chatCommands', Boolean, 'change'); bind('mirror', 'mirror', Boolean, 'change');
 $('avatarSel').addEventListener('change', async (e) => {
   if (!e.target.value) return;
@@ -169,15 +184,42 @@ $('calib').onclick = () => { if (lastRaw) { face.calibrate(lastRaw); log('neutra
 $('tVoice').addEventListener('change', async (e) => {
   if (!e.target.checked) { analyser = null; chip('cVoice', false); return; }
   const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const ac = new AudioContext(); const src = ac.createMediaStreamSource(s); analyser = ac.createAnalyser(); analyser.fftSize = 1024; src.connect(analyser);
-  chip('cVoice', true); log('voice lip sync on (used when your face is not visible)');
+  const ac = new AudioContext(); const src = ac.createMediaStreamSource(s); analyser = ac.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0.5; src.connect(analyser);
+  noiseFloor = 0.006; chip('cVoice', true); log('voice lip sync on (used when your face is not visible, and when the camera is off)');
+  voiceOnly();
 });
+// With the camera off nothing else sends frames, so the voice gets a little loop of its own.
+function voiceOnly() {
+  if (!analyser) return;
+  if (!running) { const v = voiceLevel(); send({ type: 'frame', t: performance.now() / 1000, voice: v, vowels: v ? lastVowels : undefined }); }
+  setTimeout(voiceOnly, 33);
+}
+// Rough vowel from the spectrum: how much energy sits in the open-mouth band (first formant, ~600-1100 Hz) and how much
+// in the bright band (second formant, ~1800-3200 Hz). "a" is open, "i"/"e" are bright, "o"/"u" are neither.
+let noiseFloor = 0.006, lastVowels = null, fbuf = null;
+function vowels() {
+  const n = analyser.frequencyBinCount, hz = analyser.context.sampleRate / analyser.fftSize;
+  if (!fbuf || fbuf.length !== n) fbuf = new Float32Array(n);
+  analyser.getFloatFrequencyData(fbuf);
+  const band = (a, b) => { let s = 0; for (let i = Math.round(a / hz); i <= Math.round(b / hz) && i < n; i++) s += 10 ** (fbuf[i] / 10); return s; };
+  const low = band(200, 600), mid = band(600, 1100), hi = band(1800, 3200), all = low + mid + hi + 1e-12;
+  const open = mid / all, bright = hi / all, c = (x) => Math.max(0, Math.min(1, x));
+  const w = { aa: c((open - 0.3) * 3), ee: c((bright - 0.18) * 4) * c(1 - open * 2), ih: c((bright - 0.1) * 4) * c(1 - Math.abs(open - 0.35) * 3), oh: c(1 - bright * 6) * c(1 - Math.abs(open - 0.3) * 3), ou: c(1 - bright * 6) * c(1 - open * 3) };
+  const sum = Object.values(w).reduce((a, b) => a + b, 0);
+  if (sum < 0.05) return { aa: 1 };
+  for (const k in w) w[k] = Math.round((w[k] / sum) * 100) / 100;
+  return w;
+}
 function voiceLevel() {
   if (!analyser) return 0;
   const a = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(a);
   let s = 0; for (const v of a) s += v * v;
-  const rms = Math.sqrt(s / a.length), lvl = Math.max(0, Math.min(1, (rms - 0.01) * 12));
-  audioLevel += (lvl - audioLevel) * 0.5; return Math.round(audioLevel * 100) / 100;
+  const rms = Math.sqrt(s / a.length);
+  noiseFloor = rms < noiseFloor ? noiseFloor * 0.9 + rms * 0.1 : noiseFloor * 0.9995 + rms * 0.0005;      // follows the room's background hum (fan, PC)
+  const lvl = Math.max(0, Math.min(1, (rms - noiseFloor * 1.8 - 0.004) * 10));
+  audioLevel += (lvl - audioLevel) * (lvl > audioLevel ? 0.6 : 0.3);      // opens fast, closes a little slower
+  if (audioLevel > 0.04) { const v = vowels(); lastVowels = lastVowels ? Object.fromEntries(Object.keys({ ...v, ...lastVowels }).map((k) => [k, Math.round(((lastVowels[k] || 0) * 0.5 + (v[k] || 0) * 0.5) * 100) / 100])) : v; }
+  return audioLevel < 0.03 ? 0 : Math.round(audioLevel * 100) / 100;
 }
 
 // Process every new camera frame exactly once (no wasted work when the screen refreshes faster than the camera).
@@ -238,7 +280,7 @@ function tick() {
     lastHands = hands.solve(hr, t, opts); lastHandsT = now;
   } else if (!$('tHands').checked || now - lastHandsT > 350) { if (!$('tHands').checked) timing.hands = 0; if (now - lastHandsT > 350) lastHands = {}; }
   if (Object.keys(lastHands).length) msg.hands = lastHands;          // reuse the last result on skipped frames
-  const v = voiceLevel(); if (v) msg.voice = v;
+  const v = voiceLevel(); if (v) { msg.voice = v; msg.vowels = lastVowels; }
   if (now - lastSend > 1000 / 45) { send(msg); lastSend = now; }
   timing.total = timing.face + (timing.hands / handsEvery) + (timing.pose / poseEvery);
   autoTune(now);

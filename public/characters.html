@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Characters · Kael Studio</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+  .home { overflow-y: auto; height: calc(100vh - var(--topbar)); padding: 26px 34px 60px; }
+  .home h2 { font-size: 21px; font-weight: 700; margin: 0; letter-spacing: .1px; }
+  .home .sec { display: flex; align-items: baseline; gap: 14px; margin: 6px 0 14px; }
+  .home .sec .sp { flex: 1; }
+  .home .sec .links { display: flex; gap: 8px; }
+  .home .sec .links button, .home .sec .links a { font-weight: 650; padding: 8px 14px; border-radius: 9px; text-decoration: none; display: inline-flex; gap: 6px; align-items: center; }
+  .home .hint { color: var(--muted); font-size: 12.5px; margin: -6px 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 18px; margin-bottom: 38px; }
+  .card { position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 8px; color: var(--text); text-decoration: none; }
+  .card .pic { aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; background: linear-gradient(160deg, #20233a, #151722); border: 1px solid var(--line); display: grid; place-items: center; transition: border-color .15s, transform .15s, box-shadow .15s; }
+  .card:hover .pic { border-color: #555a78; transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
+  .card .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .pic .ph { font-size: 40px; color: var(--faint); }
+  .card .row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .card .nm { font-weight: 650; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .card .sub { font-size: 11px; color: var(--muted); }
+  .card .more { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
+  .card .more:hover { background: var(--surface3); color: var(--text); }
+  .card .live { position: absolute; top: 9px; left: 9px; font-size: 10px; font-weight: 750; letter-spacing: .6px; padding: 3px 8px; border-radius: 99px; background: var(--grad); color: #fff; z-index: 1; }
+  .card.new .pic { background: var(--surface2); border-style: dashed; border-color: #3a3f56; }
+  .card.new .pic span { font-size: 54px; font-weight: 300; color: #b9a6ff; }
+  .menu { position: fixed; z-index: 50; min-width: 190px; padding: 6px; border-radius: 12px; background: var(--surface-solid); border: 1px solid var(--line2); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .menu button, .menu a { text-align: left; background: transparent; border: 0; color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 13px; text-decoration: none; cursor: pointer; }
+  .menu button:hover, .menu a:hover { background: var(--surface3); }
+  .menu .danger { color: var(--bad); }
+  /* Create New: pick a base */
+  .modal { position: fixed; inset: 0; z-index: 40; background: rgba(5,6,10,.62); display: grid; place-items: center; backdrop-filter: blur(4px); }
+  .dialog { width: min(640px, 92vw); background: var(--surface-solid); border: 1px solid var(--line2); border-radius: 18px; padding: 24px 26px 22px; box-shadow: var(--shadow); text-align: center; }
+  .dialog h3 { margin: 0 0 6px; font-size: 19px; }
+  .dialog p { margin: 0 0 18px; color: var(--muted); }
+  .bases { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .bases .card .pic { aspect-ratio: 3 / 4; }
+  .bases .card .nm { text-align: center; font-size: 15px; }
+  .more-bases { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .more-bases a { font-size: 12px; padding: 6px 11px; border-radius: 99px; border: 1px solid var(--line2); color: var(--text); text-decoration: none; }
+  .more-bases a:hover { background: var(--surface3); }
+  .dialog .close { margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header id="topbar"></header>
+  <div class="home">
+    <div class="sec"><h2>My Characters</h2><span class="sp"></span>
+      <div class="links"><button id="newBtn" class="primary">+ New</button><a href="/library.html#import" title="Bring in a .vrm you already have (made in VRoid Studio or elsewhere)">Open a .vrm</a></div></div>
+    <div class="hint">Characters you made and models you imported. The one marked <b>On stream</b> is what OBS shows.</div>
+    <div class="grid" id="mine"><div class="card new" id="createCard"><div class="pic"><span>+</span></div><div class="row"><span class="nm" style="text-align:center">Create New</span></div></div></div>
+    <div class="sec"><h2>Sample Models</h2></div>
+    <div class="hint">Ready-made anime characters. Open one to use it as it is, or change anything about it and save it as your own.</div>
+    <div class="grid" id="samples"></div>
+  </div>
+</div>
+<div class="modal hidden" id="baseModal">
+  <div class="dialog">
+    <h3>Select a base to start with</h3>
+    <p>You can change the face, hair, body, outfit and everything else afterwards.</p>
+    <div class="bases">
+      <a class="card" href="/mixer.html?base=anime_female"><div class="pic"><img onerror="this.style.visibility='hidden'" onload="this.style.visibility='visible'" data-base="anime_female" alt=""></div><div class="row"><span class="nm">Feminine</span></div></a>
+      <a class="card" href="/mixer.html?base=anime_male"><div class="pic"><img onerror="this.style.visibility='hidden'" onload="this.style.visibility='visible'" data-base="anime_male" alt=""></div><div class="row"><span class="nm">Masculine</span></div></a>
+    </div>
+    <div class="more-bases"><span class="muted" style="align-self:center">More bases:</span><a href="/mixer.html?base=mika_female">Mika (taller)</a><a href="/mixer.html?base=female">Human female</a><a href="/mixer.html?base=male">Human male</a><a href="/mixer.html?base=nekomika">NekoMika head</a></div>
+    <button class="close" id="closeModal">Cancel</button>
+  </div>
+</div>
+<script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/", "@pixiv/three-vrm": "/vendor/three-vrm/three-vrm.module.js" } }</script>
+<script type="module" src="/characters.js"></script>
+</body>
+</html>

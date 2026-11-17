@@ -1,0 +1,31 @@
+{
+ "_comment": "Master dimensions for the modular character kit. Every body, socket and (later) part is derived from these values; nothing else is hardcoded. Units: metres. Axes: X left/right, Y front/back (character faces -Y), Z up, ground at Z = 0.",
+ "female": {
+  "height": 1.65,
+  "recipe": "female",
+  "prefix": "F_",
+  "base": "female",
+  "style": "human"
+ },
+ "male": {
+  "height": 1.8,
+  "recipe": "male",
+  "prefix": "M_",
+  "base": "male",
+  "style": "human"
+ },
+ "anime_female": {
+  "height": 1.65,
+  "prefix": "AF_",
+  "base": "female",
+  "style": "anime",
+  "head_scale": 1.16
+ },
+ "anime_male": {
+  "height": 1.8,
+  "prefix": "AM_",
+  "base": "male",
+  "style": "anime",
+  "head_scale": 1.1
+ }
+}
