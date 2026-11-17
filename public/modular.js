@@ -68,6 +68,26 @@ export function reshapeBody(A, kit, body) {
   let h = 0; for (let i = 0; i < NV; i++) h = Math.max(h, P[i * 3 + 2]); A.height = h;
 }
 
+/** No anatomy between the legs on any body: the groin is relaxed into a smooth, flat surface (Laplacian smoothing that
+ *  fades out toward the thighs and belly), so nothing shows under shorts or a skirt and the stream file carries the same shape. */
+export function smoothGroin(A, kit) {
+  const { P, bones } = A, NV = kit.vertexCount, Q = kit.quadsA; if (!Q || !bones.leftUpperLeg) return;
+  const hz = bones.leftUpperLeg[0][2], hx = Math.abs(bones.leftUpperLeg[0][0]), torso = kit.parts.indexOf('Torso');
+  const w = new Float32Array(NV); let any = false;
+  for (let i = 0; i < NV; i++) { const x = Math.abs(P[i * 3]), z = P[i * 3 + 2];
+    if (kit.partA[i] !== torso && !/^Leg/.test(kit.parts[kit.partA[i]] || '')) continue;
+    const fx = 1 - Math.min(1, Math.max(0, (x - hx * 0.55) / (hx * 0.5))), fz = 1 - Math.min(1, Math.max(0, (z - (hz + 0.02)) / 0.06)) , fzl = Math.min(1, Math.max(0, (z - (hz - 0.16)) / 0.06));
+    w[i] = fx * fz * fzl; if (w[i] > 0) any = true; }
+  if (!any) return;
+  const nb = Array.from({ length: NV }, () => new Set());
+  for (let f = 0; f < Q.length; f += 4) for (let k = 0; k < 4; k++) { const a = Q[f + k], b = Q[f + (k + 1) % 4]; if (w[a] > 0 || w[b] > 0) { nb[a].add(b); nb[b].add(a); } }
+  const act = []; for (let i = 0; i < NV; i++) if (w[i] > 0) act.push(i);
+  for (let it = 0; it < 60; it++) { const nx = new Float32Array(act.length * 3);
+    act.forEach((i, a) => { let x = 0, y = 0, z = 0, c = 0; for (const j of nb[i]) { x += P[j * 3]; y += P[j * 3 + 1]; z += P[j * 3 + 2]; c++; }
+      const k = c ? 0.6 * w[i] : 0; nx[a * 3] = P[i * 3] + ((c ? x / c : P[i * 3]) - P[i * 3]) * k; nx[a * 3 + 1] = P[i * 3 + 1] + ((c ? y / c : P[i * 3 + 1]) - P[i * 3 + 1]) * k; nx[a * 3 + 2] = P[i * 3 + 2] + ((c ? z / c : P[i * 3 + 2]) - P[i * 3 + 2]) * k; });
+    act.forEach((i, a) => { P[i * 3] = nx[a * 3]; P[i * 3 + 1] = nx[a * 3 + 1]; P[i * 3 + 2] = nx[a * 3 + 2]; }); }
+}
+
 /** Stitch a body. Returns positions (Blender axes, metres), bone head/tail positions, the head's scale and seam notes. */
 export function assemble(kit, recipe, blend = 0.05) {
   const NV = kit.vertexCount, P = new Float32Array(NV * 3), aff = {}, notes = [];
@@ -175,7 +195,7 @@ export async function loadModular(input) {
   const kit = await loadKit(), recipe = { ...defaultModular(), ...input, parts: { ...defaultModular().parts, ...(input.parts || {}) }, fit: { ...(input.fit || {}) } };
   const model = kit.heads?.[recipe.headModel] || null;
   if (model?.neckFit && (recipe.fit.Neck ?? 'own') === 'own') recipe.fit.Neck = model.neckFit;      // slim the kit neck so it sits inside the head's own neck and collar
-  const stitched = assemble(kit, recipe); reshapeBody(stitched, kit, recipe.body);      // body sliders: height, legs, shoulders, waist, hips
+  const stitched = assemble(kit, recipe); smoothGroin(stitched, kit); reshapeBody(stitched, kit, recipe.body);      // body sliders: height, legs, shoulders, waist, hips
   const { P, bones, headScale, headXf, height, notes } = stitched;
   // anime heads: reshape the face and paint the eyes (public/face.js). Done here, before normals and clothing are made from P.
   let faceArt = null;

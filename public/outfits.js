@@ -119,6 +119,7 @@ function buildPart(ctx, def, clothing, accentColour, tag) {
     region[m] = p.startsWith('Arm') ? 1 : p.startsWith('Hand') ? 5 : p.startsWith('Leg') ? 2 : p.startsWith('Foot') ? 3 : (p === 'Head' || p === 'Neck') ? 4
       : p === 'Torso' ? 0 : ax > sx + 0.05 ? (ax > wrist - 0.01 ? 5 : 1) : z < ankle + 0.03 ? 3 : z < hz - 0.08 ? 2 : z > neck[2] + 0.01 ? 4 : 0;
   }
+  const inseam = (hem, ax) => hem - 0.16 * Math.max(0, 1 - ax / (Math.abs(hipx) * 0.95)) ** 2;      // the hem line, lower toward the middle
   const kEdge = (z) => { const zv = hz + (def.vDepth ?? 0.52) * H, zt = neck[2] + 0.01; return 0.006 + 0.068 * Math.min(1, Math.max(0, (z - zv) / (zt - zv))); };
   const scoop = (x, y, z, r) => Math.hypot(x, (y - (neck[1] - 0.012)) * 0.9, z - (neck[2] + 0.012)) - r;      // neckline: outside a ball at the base of the neck
   // cover(x, y, z, |x|, region) in metres: positive = cloth here
@@ -129,9 +130,9 @@ function buildPart(ctx, def, clothing, accentColour, tag) {
     tank: { smooth: 12, clear: 0.0074, off: 0.0105, color: accent, f: (x, y, z, ax, r) => r === 0 ? Math.min(z - (hz + 0.20 * H), scoop(x, y, z, 0.092), sx + 0.012 - ax) : r === 1 ? sx + 0.012 - ax : -1 },
     tee: { smooth: 12, clear: 0.0074, loose: drape(0.010), off: 0.0105, color: accent, f: (x, y, z, ax, r) => r === 0 ? Math.min(z - (hz + 0.14 * H), scoop(x, y, z, 0.078)) : r === 1 ? sx + 0.105 - ax : -1 },
     sleeves: { off: 0.0065, color: main, f: (x, y, z, ax, r) => r === 1 ? Math.min(ax - (sx + 0.42 * (elbow - sx)), wrist - 0.004 - ax) : -1 },
-    shorts: { off: 0.0056, color: main, f: (x, y, z, ax, r) => (r === 0 || r === 2) ? Math.min(hz + 0.20 * H - z, z - (hz - 0.115)) : -1 },
-    shortShorts: { off: 0.0056, color: main, f: (x, y, z, ax, r) => (r === 0 || r === 2) ? Math.min(hz + 0.18 * H - z, z - (hz - 0.055)) : -1 },
-    briefs: { off: 0.0045, color: dark, f: (x, y, z, ax, r) => (r === 0 || r === 2) ? Math.min(hz + 0.13 * H - z, z - (hz - 0.03)) : -1 },
+    shorts: { off: 0.0056, color: main, f: (x, y, z, ax, r) => (r === 0 || r === 2) ? Math.min(hz + 0.20 * H - z, z - inseam(hz - 0.115, ax)) : -1 },      // leg hems, with the inseam dipping between the legs so the crotch is always covered
+    shortShorts: { off: 0.0056, color: main, f: (x, y, z, ax, r) => (r === 0 || r === 2) ? Math.min(hz + 0.18 * H - z, z - inseam(hz - 0.055, ax)) : -1 },
+    briefs: { off: 0.0045, color: dark, f: (x, y, z, ax, r) => (r === 0 || r === 2) ? Math.min(hz + 0.13 * H - z, z - inseam(hz - 0.03, ax)) : -1 },
     socksThigh: { off: 0.0042, color: accent, f: (x, y, z, ax, r) => r === 2 ? knee + 0.13 - z : r === 3 ? 1 : -1 },
     socksKnee: { off: 0.0042, color: accent, f: (x, y, z, ax, r) => r === 2 ? knee - 0.045 - z : r === 3 ? 1 : -1 },
     socksAnkle: { off: 0.0042, color: accent, f: (x, y, z, ax, r) => r === 2 ? ankle + 0.075 - z : r === 3 ? 1 : -1 },
