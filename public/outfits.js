@@ -203,9 +203,9 @@ function buildPart(ctx, def, clothing, accentColour, tag) {
     const base = new THREE.Color(colour), sh = shadeOf(colour), ratio = ['r', 'g', 'b'].map((k) => Math.min(1, sh[k] / Math.max(0.02, base[k])));
     const tones = [[1, 1, 1], ratio.map((x) => 1 + (x - 1) * 0.55), ratio];
     if (GUSSET.has(name) && Number.isFinite(crotchZ)) for (let i = 0; i < n; i++) { const m = toMaster[i], z = P[m * 3 + 2], ax = Math.abs(P[m * 3]);
-      if (z > crotchZ + 0.008 || z < crotchZ - 0.045 || ax > hx0 * 0.8) continue;
-      const depth = Math.min(1, Math.max(0, (crotchZ + 0.008 - z) / 0.053)), f = (1 - depth) ** 1.2, inner = Math.min(1, Math.max(0, (hx0 * 0.8 - ax) / (hx0 * 0.35)));
-      gp[i * 3] *= 1 - 0.92 * f * inner; }                                         // pull the inner-thigh cloth toward the middle: a web that closes the gap
+      if (z > crotchZ + 0.01 || z < crotchZ - 0.04 || ax > hx0 * 0.8) continue;
+      const depth = Math.min(1, Math.max(0, (crotchZ + 0.01 - z) / 0.05)), f = 0.5 - 0.5 * Math.cos(Math.PI * (1 - depth)), inner = Math.min(1, Math.max(0, (hx0 * 0.8 - ax) / (hx0 * 0.45)));
+      gp[i * 3] *= 1 - 0.5 * f * inner; }                                         // pull the inner-thigh cloth toward the middle: a web that closes the gap
     for (let i = 0; i < n; i++) { const c = cov[toMaster[i]];
       col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = 1; col[i * 4 + 3] = 0.5 + Math.max(-1, Math.min(1, c)) * 20; }       // 0.5 = the hem; kept linear so the cut is straight
     const I = ctx.fullIndex, idx = [];

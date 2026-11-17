@@ -86,6 +86,19 @@ export function smoothGroin(A, kit) {
     act.forEach((i, a) => { let x = 0, y = 0, z = 0, c = 0; for (const j of nb[i]) { x += P[j * 3]; y += P[j * 3 + 1]; z += P[j * 3 + 2]; c++; }
       const k = c ? 0.6 * w[i] : 0; nx[a * 3] = P[i * 3] + ((c ? x / c : P[i * 3]) - P[i * 3]) * k; nx[a * 3 + 1] = P[i * 3 + 1] + ((c ? y / c : P[i * 3 + 1]) - P[i * 3 + 1]) * k; nx[a * 3 + 2] = P[i * 3 + 2] + ((c ? z / c : P[i * 3 + 2]) - P[i * 3 + 2]) * k; });
     act.forEach((i, a) => { P[i * 3] = nx[a * 3]; P[i * 3 + 1] = nx[a * 3 + 1]; }); }      // across and front-to-back only: smoothing must not lift the crotch
+  // round the top of the gap between the thighs into a soft U: the inner thighs close in just below the crotch, and the fold
+  // there is smoothed downward only (it never rises), so there is no sharp crease for the ink line to catch
+  let cz = Infinity; for (let i = 0; i < NV; i++) if (kit.partA[i] === torso && Math.abs(P[i * 3]) < 0.012) cz = Math.min(cz, P[i * 3 + 2]);
+  if (!Number.isFinite(cz)) return;
+  const zone = []; for (let i = 0; i < NV; i++) { const z = P[i * 3 + 2], x = Math.abs(P[i * 3]); if (z < cz + 0.02 && z > cz - 0.05 && x < hx * 0.95) zone.push(i); }
+  for (const i of zone) { if (!/^Leg/.test(kit.parts[kit.partA[i]] || '')) continue; const z = P[i * 3 + 2], x = Math.abs(P[i * 3]);
+    const f = Math.max(0, 1 - (cz - z) / 0.04) * (z <= cz + 0.004 ? 1 : 0), inner = Math.min(1, Math.max(0, (hx * 0.95 - x) / (hx * 0.4)));
+    P[i * 3] *= 1 - 0.35 * f * f * inner; }
+  const nbz = Array.from({ length: NV }, () => []); for (let f = 0; f < Q.length; f += 4) for (let k = 0; k < 4; k++) { const a = Q[f + k], b = Q[f + (k + 1) % 4]; nbz[a].push(b); nbz[b].push(a); }
+  for (let it = 0; it < 25; it++) { const nz = zone.map((i) => { let s = 0, c = 0; for (const j of nbz[i]) { s += P[j * 3 + 2]; c++; } return c ? Math.min(P[i * 3 + 2], P[i * 3 + 2] * 0.5 + (s / c) * 0.5) : P[i * 3 + 2]; });
+    zone.forEach((i, a) => { P[i * 3 + 2] = nz[a]; }); }
+  for (let it = 0; it < 10; it++) { const nx2 = zone.map((i) => { let x = 0, y = 0, c = 0; for (const j of nbz[i]) { x += P[j * 3]; y += P[j * 3 + 1]; c++; } return c ? [P[i * 3] * 0.6 + x / c * 0.4, P[i * 3 + 1] * 0.6 + y / c * 0.4] : [P[i * 3], P[i * 3 + 1]]; });
+    zone.forEach((i, a) => { P[i * 3] = nx2[a][0]; P[i * 3 + 1] = nx2[a][1]; }); }
 }
 
 /** Stitch a body. Returns positions (Blender axes, metres), bone head/tail positions, the head's scale and seam notes. */
