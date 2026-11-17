@@ -262,14 +262,17 @@ export const FACE_SHAPES = {
     ['m_round', 'Round', { cw: 1.06, jw: 1.07, chw: 1.08, len: -0.1, full: 0.0045 }]],
   cartoon: [['c_classic', 'Classic', {}], ['c_cute', 'Cute (short, round)', { cw: 1.05, jw: 0.98, chw: 1.38, len: -0.29, mouthUp: 0.004, full: 0.003, fullU: 0.25 }], ['c_vline', 'V-line', { cw: 1.02, jw: 0.86, chw: 0.6, len: 0.1, fwd: 0.003 }],
     ['c_round', 'Round (chibi)', { cw: 1.09, jw: 1.1, chw: 1.16, len: -0.22, full: 0.006 }], ['c_heart', 'Heart', { fw: 1.05, cw: 1.06, jw: 0.88, chw: 0.7, len: 0.02 }],
-    ['c_mature', 'Mature', { fw: 0.98, cw: 0.96, jw: 1.0, chw: 0.9, len: 0.18, fwd: 0.002 }]],
+    ['c_mature', 'Mature', { fw: 0.98, cw: 0.96, jw: 1.0, chw: 0.9, len: 0.18, fwd: 0.002 }],
+    ['c_model', 'Model (defined jaw, rounded chin)', { cw: 0.96, jw: 1.05, chw: 1.0, len: 0.08, fwd: 0.004, jawK: 0.1, full: -0.0015 }],
+    ['c_elegant', 'Elegant (slim, long)', { fw: 0.98, cw: 0.97, jw: 0.88, chw: 0.78, len: 0.15, fwd: 0.002 }],
+    ['c_strong', 'Strong (broad, square jaw)', { cw: 1.0, jw: 1.14, chw: 1.16, len: 0.06, fwd: 0.003, jawK: 0.08 }]],
 };
 export const faceShapeGroup = (kit, headBody) => { const b = kit.bodies[headBody]; return b?.style === 'anime' ? 'cartoon' : b?.base === 'male' ? 'male' : 'female'; };
 export const faceShapeOf = (kit, recipe) => { const list = FACE_SHAPES[faceShapeGroup(kit, recipe.parts.Head)]; return (list.find(([k]) => k === recipe.faceShape) || list[0]); };
 
 export function shapeFace({ kit, P, headBone, basis, scale, eyeRef, params }) {
   const K = 1.35, q = params || {};          // presets are written mild; K sets how strongly they show
-  const p = { fw: 1, cw: 1, jw: 1, chw: 1, len: 0, fwd: 0, full: 0, fullU: 0.48, mouthUp: 0 }; for (const [k, v] of Object.entries(q)) p[k] = ['fw', 'cw', 'jw', 'chw'].includes(k) ? 1 + (v - 1) * K : k === 'fullU' ? v : v * K;
+  const p = { fw: 1, cw: 1, jw: 1, chw: 1, len: 0, fwd: 0, full: 0, fullU: 0.48, mouthUp: 0, jawK: 0 };      // jawK: a jaw corner (width just above the chin's sides) for (const [k, v] of Object.entries(q)) p[k] = ['fw', 'cw', 'jw', 'chw'].includes(k) ? 1 + (v - 1) * K : k === 'fullU' ? v : v * K;
   if (Object.keys(params || {}).length === 0) return null;
   const ids = kit.partVerts[kit.parts.indexOf('Head')], ring = kit.rings.HEAD_NECK_SOCKET, toR = (i, c) => basis[c] + (P[i * 3 + c] - headBone[c]) / scale;
   const sm = (t) => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }, ez = eyeRef[2];
@@ -287,6 +290,7 @@ export function shapeFace({ kit, P, headBone, basis, scale, eyeRef, params }) {
     const wN = sm((z - seam(y)) / 0.022), wD = sm((basis[1] + 0.03 - y) / 0.05), w = wN * wD, u = (ez - z) / Lf;
     x *= 1 + (width(u) - 1) * w * (u < 0 ? sm((basis[1] - 0.01 - y) / 0.04) : 1);              // forehead only changes at the front, so hair still fits
     if (z < mz && p.len) z = mz + (z - mz) * (1 + p.len * w);
+    if (p.jawK) x *= 1 + p.jawK * Math.exp(-(((u - 0.84) / 0.09) ** 2)) * sm((Math.abs(x0) - 0.012) / 0.03) * w;
     if (p.fwd) y -= p.fwd * Math.exp(-(((u - 1) / 0.28) ** 2)) * Math.exp(-((x0 / 0.032) ** 2)) * wN;
     if (p.full) { const g = Math.exp(-(((u - p.fullU) / 0.2) ** 2) - (((Math.abs(x0) - 0.046) / 0.022) ** 2)) * sm((basis[1] - 0.03 - y0) / 0.03) * wN; y -= p.full * g; x += Math.sign(x0) * p.full * 0.8 * g; }
     if (p.mouthUp) { const g = Math.exp(-(((u - 0.62) / 0.16) ** 2)) * Math.exp(-((x0 / 0.04) ** 2)) * wD * wN; z += p.mouthUp * g; }      // mouth closer to the nose
