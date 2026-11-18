@@ -2,7 +2,7 @@
 // viewer, photograph it and store the picture with the server (/api/thumbs). Runs one at a time in the background,
 // so the page stays usable; each picture is only ever made once (until the look of characters changes).
 import { AvatarViewer } from '/viewer.js';
-import { defaultModular, loadKit, hairChoices, OUTFITS, ACCESSORIES, FACE_SHAPES, EYE_SHAPES, SLOTS, outfitSlice } from '/modular.js';
+import { defaultModular, loadKit, hairChoices, OUTFITS, ACCESSORIES, FACE_SHAPES, faceThumbKey, EYE_SHAPES, SLOTS, outfitSlice } from '/modular.js';
 import { EARS, TAILS } from '/animal.js';
 import { HAIR_PARTS, HAIR_PRESETS, DEFAULT_HAIR_PARTS } from '/hairgen.js';
 
@@ -16,7 +16,7 @@ export async function allJobs(only = null) {
   const male = (b) => kit.bodies[b]?.base === 'male';
   const base = (b, o = {}) => ({ ...defaultModular(b), hair: HAIR0[b] || 'Bob', outfit: male(b) ? 'm_street' : 'a_magical', accessories: [], clothing: '#3a4a7a', accent: '#f2efe9', hairColor: '#4a2f22', eyeColor: '#4f7396', ...o });
   for (const b of Object.keys(kit.bodies)) add('base', b, base(b, { outfit: 'casual', clothing: '#26262e', accent: '#f2efe9' }), 'front-full');
-  for (const [g, b] of [['cartoon', 'anime_female'], ['female', 'female'], ['male', 'male']]) for (const [k] of FACE_SHAPES[g]) add('face', k, base(b, { faceShape: k }), 'head');
+  for (const [g, b] of [['cartoon', 'anime_female'], ['female', 'female'], ['male', 'male']]) for (const [k] of FACE_SHAPES[g]) add('face', faceThumbKey(g, k), base(b, { faceShape: k }), 'head');
   for (const [g, b] of [['anime', 'anime_female'], ['animeMale', 'anime_male'], ['female', 'female'], ['male', 'male']]) for (const [k] of EYE_SHAPES[g]) add('eyes', k, base(b, { eyeShape: k }), 'face');
   for (const b of ['anime_female', 'anime_male']) for (const h of hairChoices(kit, b)) add('hair', `${b}__${h.name}`, base(b, { hair: h.name }), 'threequarter');
   for (const [k, , hp] of HAIR_PRESETS) add('hairset', k, base('anime_female', { hair: 'Custom', hairParts: hp, hairColor: '#6b4226' }), 'threequarter');

@@ -3,7 +3,7 @@
 // Start points (Create New, sample models) are on the Characters home page (/characters.html).
 import { AvatarViewer } from '/viewer.js';
 import { topbar, toast } from '/ui.js';
-import { loadKit, defaultModular, PART_ROWS, OUTFITS, SLOTS, outfitSlice, customFrom, BODY_SLIDERS, defaultOutfit, hairChoices, hairSource, outfitGroup, ACCESSORIES, accessoriesOf, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf } from '/modular.js';
+import { loadKit, defaultModular, PART_ROWS, OUTFITS, SLOTS, outfitSlice, customFrom, BODY_SLIDERS, defaultOutfit, hairChoices, hairSource, outfitGroup, ACCESSORIES, accessoriesOf, FACE_SHAPES, faceThumbKey, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf } from '/modular.js';
 import { ensureBaked } from '/autobake.js';
 import { EARS, TAILS, furTipFor } from '/animal.js';
 import { READY } from '/readymade.js';
@@ -49,7 +49,7 @@ const panels = {
   faceshape() {      // keys must be unique: the Body tab has its own shape() (Proportions)
     if (recipe.headModel) return '<h3>Face shape</h3><p class="hint">This head keeps its own face. Pick another base on the Body tab to choose a face shape.</p>';
     const g = faceShapeGroup(kit, recipe.parts.Head), cur = faceShapeOf(kit, recipe)[0];
-    return `<h3>Face shape</h3><div class="cards">${FACE_SHAPES[g].map(([k, n]) => card(`faceShape:${k}`, n, thumb('face', k), k === cur)).join('')}</div>`;
+    return `<h3>Face shape</h3><div class="cards">${FACE_SHAPES[g].map(([k, n]) => card(`faceShape:${k}`, n, thumb('face', faceThumbKey(g, k)), k === cur)).join('')}</div>`;
   },
   eyes() {
     const g = recipe.headModel ? null : eyeShapeGroup(kit, recipe.parts.Head);

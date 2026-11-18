@@ -253,7 +253,7 @@ function blushMaterial(core = 'rgba(255,120,140,0.62)') {
  *  len stretches the face below the mouth, fwd brings the chin forward (m), full rounds the cheeks (m) at height fullU,
  *  mouthUp lifts the mouth toward the nose (m). The eyes, nose and
  *  mouth line stay where they are, so painted eyes, brows and expressions still line up. */
-export const FACE_SHAPES = {
+const OWN_FACE_SHAPES = {
   female: [['f_oval', 'Oval', {}], ['f_heart', 'Heart', { fw: 1.04, cw: 1.045, jw: 0.9, chw: 0.72, len: 0.06, fwd: 0.002 }],
     ['f_round', 'Round', { cw: 1.06, jw: 1.07, chw: 1.12, len: -0.12, full: 0.0045 }], ['f_long', 'Long', { fw: 0.97, cw: 0.95, jw: 0.95, chw: 0.92, len: 0.2 }],
     ['f_square', 'Soft square', { jw: 1.1, chw: 1.16, len: -0.03, fwd: 0.001 }], ['f_model', 'Model (defined jaw, rounded chin)', { cw: 0.96, jw: 1.05, chw: 1.0, len: 0.08, fwd: 0.004, jawK: 0.1, full: -0.0015 }],
@@ -273,6 +273,15 @@ export const FACE_SHAPES = {
     ['c_elegant', 'Elegant (slim, long)', { fw: 0.98, cw: 0.97, jw: 0.88, chw: 0.78, len: 0.15, fwd: 0.002 }],
     ['c_strong', 'Strong (broad, square jaw)', { cw: 1.0, jw: 1.14, chw: 1.16, len: 0.06, fwd: 0.003, jawK: 0.08 }]],
 };
+/** Every body gets every face shape: its own first (the first is its default), then the shapes the other bodies have that it
+ *  lacks (by name; shapes with no settings are the plain face it already has). Borrowed shapes keep their key, so saved choices still work. */
+export const FACE_SHAPES = Object.fromEntries(Object.keys(OWN_FACE_SHAPES).map((g) => {
+  const list = [...OWN_FACE_SHAPES[g]], names = new Set(list.map(([, n]) => n));
+  for (const o of ['cartoon', 'female', 'male']) if (o !== g) for (const e of OWN_FACE_SHAPES[o]) if (Object.keys(e[2]).length && !names.has(e[1])) { list.push(e); names.add(e[1]); }
+  return [g, list];
+}));
+/** Picture-card name for a face shape on a body group: a borrowed shape gets its own picture on that body. */
+export const faceThumbKey = (g, k) => (OWN_FACE_SHAPES[g].some(([x]) => x === k) ? k : `${g}-${k}`);
 export const faceShapeGroup = (kit, headBody) => { const b = kit.bodies[headBody]; return b?.style === 'anime' ? 'cartoon' : b?.base === 'male' ? 'male' : 'female'; };
 export const faceShapeOf = (kit, recipe) => { const list = FACE_SHAPES[faceShapeGroup(kit, recipe.parts.Head)]; return (list.find(([k]) => k === recipe.faceShape) || list[0]); };
 

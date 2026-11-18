@@ -11,8 +11,8 @@ import { buildAccessories, ACCESSORIES } from '/accessories.js';
 import { buildAnimal } from '/animal.js';
 import { paintHair, animeShading } from '/paint.js';
 import { buildHair } from '/hairgen.js';
-import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes, humanMakeup } from '/face.js';
-export { FACE_SHAPES, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf };
+import { loadFaceKit, addFace, paintEyes, addHairSway, animeBlink, addOutlines, styleFace, shapeFace, FACE_SHAPES, faceThumbKey, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf, humanEyes, humanMakeup } from '/face.js';
+export { FACE_SHAPES, faceThumbKey, faceShapeGroup, faceShapeOf, EYE_SHAPES, eyeShapeGroup, eyeShapeOf };
 export { OUTFITS, defaultOutfit, outfitGroup, ACCESSORIES, SLOTS, outfitSlice, customFrom };
 /** The accessories a recipe wears: its own list if it has one, otherwise the ones its outfit comes with. */
 export const accessoriesOf = (kit, recipe) => Array.isArray(recipe.accessories) ? recipe.accessories : (recipe.outfit === 'none' ? [] : (OUTFITS[recipe.outfit] || OUTFITS[defaultOutfit(kit, recipe.parts.Torso)])?.acc || []);
