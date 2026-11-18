@@ -229,7 +229,12 @@ function eyeTexture(colour = '#4f7396', style = 'classic') {
   iris(); gr = x.createLinearGradient(0, 124, 0, 408); gr.addColorStop(0, css(dark)); gr.addColorStop(0.42, css(deep)); gr.addColorStop(0.72, css(base)); gr.addColorStop(1, css(light)); x.fillStyle = gr; x.fill();
   x.save(); iris(); x.clip();
   gr = x.createRadialGradient(256, 372, 8, 256, 360, 120); gr.addColorStop(0, css(glow)); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.globalAlpha = 0.75; x.fillStyle = gr; x.fillRect(0, 0, 512, 512); x.globalAlpha = 1;
-  x.fillStyle = css(base.clone().multiplyScalar(0.1)); x.beginPath(); x.ellipse(256, 252, style === 'cat' ? 18 : style === 'sleepy' ? 50 : 44, style === 'cat' ? 92 : 64, 0, 0, Math.PI * 2); x.fill();                                                        // pupil
+  x.fillStyle = css(base.clone().multiplyScalar(0.1));
+  const PUPIL = { cat: [18, 92], sleepy: [50, 64], sharp: [24, 74], tiny: [20, 24], doll: [56, 76], glossy: [48, 66] }, [pw, ph] = PUPIL[style] || [44, 64];
+  if (style === 'star') { x.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 26 : 62; x.lineTo(256 + r * Math.cos(a), 256 + r * Math.sin(a)); } x.closePath(); x.fill(); }      // star-shaped pupil
+  else if (style === 'ring') { x.beginPath(); x.ellipse(256, 262, 30, 36, 0, 0, Math.PI * 2); x.fill(); x.lineWidth = 16; x.strokeStyle = css(glow); x.globalAlpha = 0.9; x.beginPath(); x.ellipse(256, 262, 80, 96, 0, 0, Math.PI * 2); x.stroke(); x.globalAlpha = 1; }      // a glowing ring in the iris
+  else { x.beginPath(); x.ellipse(256, 252, pw, ph, 0, 0, Math.PI * 2); x.fill(); }
+  if (style === 'doll') { x.globalAlpha = 0.35; x.strokeStyle = css(light); x.lineWidth = 6; for (let i = 0; i < 18; i++) { const a = i * Math.PI / 9; x.beginPath(); x.moveTo(256 + 64 * Math.cos(a), 266 + 76 * Math.sin(a)); x.lineTo(256 + 108 * Math.cos(a), 266 + 130 * Math.sin(a)); x.stroke(); } x.globalAlpha = 1; }      // fine iris streaks
   gr = x.createLinearGradient(0, 110, 0, 250); gr.addColorStop(0, 'rgba(10,8,20,0.8)'); gr.addColorStop(1, 'rgba(10,8,20,0)'); x.fillStyle = gr; x.fillRect(0, 0, 512, 512);            // upper lid shadow
   x.restore();
   x.lineWidth = 11; x.strokeStyle = css(base.clone().multiplyScalar(0.16)); iris(); x.stroke();
@@ -237,6 +242,17 @@ function eyeTexture(colour = '#4f7396', style = 'classic') {
   if (style === 'sparkle') {                     // idol eyes: four-point star highlights and a ring of small glints
     const star = (cx, cy, r) => { x.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 - Math.PI / 2, rr = i % 2 ? r * 0.28 : r; x.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); } x.closePath(); x.fill(); };
     star(204, 196, 50); star(318, 330, 26); for (const [px, py, pr] of [[290, 186, 9], [196, 300, 7], [336, 250, 6], [232, 360, 5]]) { x.beginPath(); x.arc(px, py, pr, 0, Math.PI * 2); x.fill(); }
+  } else if (style === 'heart') {               // heart-shaped highlights
+    const heart = (cx, cy, r) => { x.beginPath(); x.moveTo(cx, cy + r * 0.9); x.bezierCurveTo(cx - r * 1.5, cy - r * 0.1, cx - r * 0.6, cy - r * 1.2, cx, cy - r * 0.4); x.bezierCurveTo(cx + r * 0.6, cy - r * 1.2, cx + r * 1.5, cy - r * 0.1, cx, cy + r * 0.9); x.fill(); };
+    heart(206, 206, 46); heart(316, 338, 20); x.beginPath(); x.arc(292, 182, 8, 0, Math.PI * 2); x.fill();
+  } else if (style === 'star') { const star = (cx, cy, r) => { x.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 - Math.PI / 2, rr = i % 2 ? r * 0.3 : r; x.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); } x.closePath(); x.fill(); };
+    star(200, 200, 40); x.beginPath(); x.arc(318, 340, 14, 0, Math.PI * 2); x.fill();
+  } else if (style === 'glossy') {               // wet, glossy look: a big soft highlight, a lower crescent and small glints
+    x.beginPath(); x.ellipse(206, 200, 50, 40, -0.4, 0, Math.PI * 2); x.fill(); x.globalAlpha = 0.6; x.lineWidth = 12; x.strokeStyle = '#ffffff'; x.beginPath(); x.ellipse(256, 270, 92, 110, 0, 0.35 * Math.PI, 0.75 * Math.PI); x.stroke(); x.globalAlpha = 1;
+    for (const [px, py, pr] of [[310, 330, 16], [296, 186, 9], [180, 290, 6]]) { x.beginPath(); x.arc(px, py, pr, 0, Math.PI * 2); x.fill(); }
+  } else if (style === 'doll') { x.beginPath(); x.ellipse(200, 204, 46, 40, -0.4, 0, Math.PI * 2); x.fill(); x.beginPath(); x.ellipse(316, 336, 24, 18, -0.4, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(294, 190, 10, 0, Math.PI * 2); x.fill();
+  } else if (style === 'sharp' || style === 'tiny') { x.beginPath(); x.ellipse(214, 204, 26, 22, -0.4, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(306, 334, 10, 0, Math.PI * 2); x.fill();
+  } else if (style === 'ring') { x.beginPath(); x.ellipse(210, 196, 30, 24, -0.4, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(312, 340, 12, 0, Math.PI * 2); x.fill();
   } else if (style === 'sleepy') { x.beginPath(); x.ellipse(214, 270, 22, 18, -0.4, 0, Math.PI * 2); x.fill(); }
   else if (style === 'cute') { x.beginPath(); x.ellipse(196, 214, 52, 44, -0.35, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(318, 336, 22, 0, Math.PI * 2); x.fill(); x.globalAlpha = 0.8; x.beginPath(); x.arc(286, 182, 11, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1; }      // one big soft highlight and two small ones
   else if (style === 'droopy') { x.beginPath(); x.ellipse(210, 214, 40, 34, -0.3, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(300, 350, 20, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(320, 316, 8, 0, Math.PI * 2); x.fill(); }
@@ -319,19 +335,42 @@ export function shapeFace({ kit, P, headBone, basis, scale, eyeRef, params }) {
 
 /** Eye shapes: human female heads move the eyelid skin (MakeHuman eye targets in face_kit.json, strength K);
  *  anime girl heads change the painted eye opening (size, tilt, lid line), lashes and highlights. */
+// Painted anime eye styles, shared by anime girls (ag_) and anime boys (am_; boys draw no wing and smaller openings).
+const ANIME_EYES = [
+  ['cute', 'Cute (soft highlight, dot nose)', { a: 1.06, b: 1.14, top: 0.72, lash: 1.25, wing: 0.6, lower: 0.5, tex: 'cute', noseDot: true }],
+  ['sparkle', 'Sparkly idol', { a: 1.07, b: 1.1, tex: 'sparkle', lash: 1.1 }],
+  ['cat', 'Cat (upturned)', { a: 1.06, b: 0.8, tilt: 0.2, wing: 1.25, lash: 1.15, tex: 'cat' }],
+  ['droopy', 'Droopy (gentle)', { a: 1.02, b: 0.92, tilt: -0.24, wing: 0.6, lower: 1, lash: 0.85, tex: 'droopy' }],
+  ['sleepy', 'Sleepy (half-lidded)', { a: 1.04, b: 1.0, top: 0.3, lash: 1.5, wing: 0.8, tex: 'sleepy' }],
+  ['doll', 'Doll (big, round)', { a: 1.1, b: 1.2, lash: 1.2, lower: 0.6, tex: 'doll' }],
+  ['almond', 'Almond (elegant)', { a: 1.1, b: 0.84, tilt: 0.07, wing: 1.15, lash: 1.1 }],
+  ['sharp', 'Sharp (narrow)', { a: 1.06, b: 0.74, tilt: 0.18, wing: 1.2, lash: 1.3, tex: 'sharp' }],
+  ['star', 'Starry (star pupils)', { a: 1.06, b: 1.1, tex: 'star' }],
+  ['heart', 'Heart highlights', { a: 1.06, b: 1.1, lash: 1.15, tex: 'heart' }],
+  ['ring', 'Glowing ring', { a: 1.04, b: 1.04, tex: 'ring' }],
+  ['glossy', 'Glossy', { a: 1.06, b: 1.08, lash: 1.1, lower: 0.6, tex: 'glossy' }],
+  ['determined', 'Determined (flat lid)', { a: 1.06, b: 0.95, top: 0.55, tilt: 0.1, lash: 1.35, tex: 'sharp' }],
+  ['wide', 'Wide-eyed (small pupils)', { a: 1.04, b: 1.2, tex: 'tiny' }],
+];
+// Realistic eyes: eyelid shapes, made by mixing the eight eyelid targets in face_kit.json (they fit both the female and the male head).
+const HUMAN_EYES = [
+  ['round', 'Round', [['hf_round', 2.0]]], ['upturned', 'Upturned', [['hf_upturned', 2.7]]], ['downturned', 'Downturned', [['hf_downturned', 2.7]]],
+  ['hooded', 'Hooded', [['hf_hooded', 1.4]]], ['deepset', 'Deep-set (intense)', [['hm_deepset', 1.6]]], ['narrow', 'Narrow (focused)', [['hm_narrow', 1.8]]],
+  ['wide', 'Wide (open, friendly)', [['hm_wide', 1.8]]], ['bright', 'Bright (round, wide)', [['hf_round', 1.1], ['hm_wide', 0.9]]],
+  ['cat', 'Cat (upturned, narrow)', [['hf_upturned', 1.8], ['hm_narrow', 0.9]]], ['gentle', 'Gentle (downturned, wide)', [['hf_downturned', 2.2], ['hm_wide', 1.0]]],
+  ['sleepy', 'Sleepy (hooded, downturned)', [['hf_hooded', 1.8], ['hf_downturned', 1.2]]], ['focus', 'Piercing (deep-set, narrow)', [['hm_deepset', 1.6], ['hm_narrow', 1.2]]],
+  ['doll', 'Doll (big, round)', [['hf_round', 1.5], ['hm_wide', 1.1]]], ['softalmond', 'Soft almond', [['hf_round', 0.8], ['hf_upturned', 1.0]]],
+];
+const OWN_K = { hf_round: 2.0, hf_upturned: 2.7, hf_downturned: 2.7, hf_hooded: 1.4, hm_deepset: 1.6, hm_narrow: 1.8, hm_wide: 1.8, hm_downturned: 2.4 };      // a head's own targets, as before
+// the female targets move a man's lids further than a woman's, so on male heads they are used at 70%
+const humanList = (pre, first) => [first, ...HUMAN_EYES.map(([k, n, mix]) => [`${pre}_${k}`, n, OWN_K[`${pre}_${k}`] ? { k: OWN_K[`${pre}_${k}`] } : { mix: mix.map(([t, v]) => [t, pre === 'hm' && t.startsWith('hf_') ? +(v * 0.7).toFixed(2) : v]) }])];
 export const EYE_SHAPES = {
-  male: [['hm_classic', 'Classic', {}], ['hm_deepset', 'Deep-set (intense)', { k: 1.6 }], ['hm_narrow', 'Narrow (focused)', { k: 1.8 }], ['hm_wide', 'Wide (open, friendly)', { k: 1.8 }], ['hm_downturned', 'Downturned (calm)', { k: 2.4 }]],
-  animeMale: [['am_classic', 'Classic', {}],
-    ['am_sharp', 'Sharp', { a: 1.04, b: 0.78, tilt: 0.16, lash: 1.2, tex: 'cat' }],
-    ['am_calm', 'Calm (gentle)', { a: 1.0, b: 0.9, tilt: -0.18, lash: 0.9, tex: 'droopy' }],
-    ['am_bright', 'Bright', { a: 1.06, b: 1.08, tex: 'sparkle' }],
-    ['am_tired', 'Tired (half-lidded)', { a: 1.03, b: 1.0, top: 0.32, lash: 1.3, tex: 'sleepy' }]],
-  female: [['hf_almond', 'Almond', {}], ['hf_round', 'Round', { k: 2.0 }], ['hf_upturned', 'Upturned', { k: 2.7 }], ['hf_downturned', 'Downturned', { k: 2.7 }], ['hf_hooded', 'Hooded', { k: 1.4 }]],
-  anime: [['ag_classic', 'Classic', {}], ['ag_cute', 'Cute (soft highlight, dot nose)', { a: 1.06, b: 1.14, top: 0.72, lash: 1.25, wing: 0.6, lower: 0.5, tex: 'cute', noseDot: true }],
-    ['ag_sparkle', 'Sparkly idol', { a: 1.07, b: 1.1, tex: 'sparkle', lash: 1.1 }],
-    ['ag_cat', 'Cat (upturned)', { a: 1.06, b: 0.8, tilt: 0.2, wing: 1.25, lash: 1.15, tex: 'cat' }],
-    ['ag_droopy', 'Droopy (gentle)', { a: 1.02, b: 0.92, tilt: -0.24, wing: 0.6, lower: 1, lash: 0.85, tex: 'droopy' }],
-    ['ag_sleepy', 'Sleepy (half-lidded)', { a: 1.04, b: 1.0, top: 0.3, lash: 1.5, wing: 0.8, tex: 'sleepy' }]],
+  male: humanList('hm', ['hm_classic', 'Classic', {}]),
+  female: humanList('hf', ['hf_almond', 'Almond', {}]),
+  anime: [['ag_classic', 'Classic', {}], ...ANIME_EYES.map(([k, n, p]) => [`ag_${k}`, n, p])],
+  animeMale: [['am_classic', 'Classic', {}], ['am_sharp', 'Sharp', { a: 1.04, b: 0.78, tilt: 0.16, lash: 1.2, tex: 'cat' }], ['am_calm', 'Calm (gentle)', { a: 1.0, b: 0.9, tilt: -0.18, lash: 0.9, tex: 'droopy' }],
+    ['am_bright', 'Bright', { a: 1.06, b: 1.08, tex: 'sparkle' }], ['am_tired', 'Tired (half-lidded)', { a: 1.03, b: 1.0, top: 0.32, lash: 1.3, tex: 'sleepy' }],
+    ...ANIME_EYES.filter(([k]) => !['sharp', 'droopy', 'sparkle', 'sleepy'].includes(k)).map(([k, n, p]) => [`am_${k}`, n, p])],
 };
 export const eyeShapeGroup = (kit, headBody) => { const b = kit.bodies[headBody]; if (!b) return null; const m = b.base === 'male'; return b.style === 'anime' ? (m ? 'animeMale' : 'anime') : (m ? 'male' : 'female'); };
 export const eyeShapeOf = (kit, recipe) => { const g = eyeShapeGroup(kit, recipe.parts.Head); if (!g) return null; const l = EYE_SHAPES[g]; return l.find(([k]) => k === recipe.eyeShape) || l[0]; };

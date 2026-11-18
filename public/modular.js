@@ -218,8 +218,10 @@ export async function loadModular(input) {
       if (shapeFace({ kit, P, headBone: bones.head[0], basis: kit.bodies[src].bones.head[0], scale: headScale * (e0.scale || 1), eyeRef: kit.bodies[src].bones.leftEye[0], params })) notes.push(`Face shape: ${label}`);
     } catch (e) { console.warn('modular face shape', e); }
     const eyeSh = model ? null : eyeShapeOf(kit, recipe);
-    if (eyeSh && kit.bodies[k0].style !== 'anime' && eyeSh[2].k) try {                       // human eyes: move the eyelid skin
-      if (humanEyes({ face: await loadFaceKit(KIT_BASE), kit, P, key: eyeSh[0], k: eyeSh[2].k, scale: headScale })) notes.push(`Eye shape: ${eyeSh[1]}`);
+    if (eyeSh && kit.bodies[k0].style !== 'anime' && (eyeSh[2].k || eyeSh[2].mix)) try {      // human eyes: move the eyelid skin (one target, or a mix of them)
+      const face = await loadFaceKit(KIT_BASE); let ok = false;
+      for (const [key, k] of eyeSh[2].mix || [[eyeSh[0], eyeSh[2].k]]) ok = humanEyes({ face, kit, P, key, k, scale: headScale }) || ok;
+      if (ok) notes.push(`Eye shape: ${eyeSh[1]}`);
     } catch (e) { console.warn('modular eye shape', e); }
     if (!model && kit.bodies[k0].style === 'anime' && recipe.face !== 'classic' && kit.bodies[src].bones.leftEye) try {
       faceArt = styleFace({ kit, P, headBone: bones.head[0], basis: kit.bodies[src].bones.head[0], scale: headScale * (e0.scale || 1), eyeRef: kit.bodies[src].bones.leftEye[0], male: kit.bodies[k0].base === 'male', eyeColor: recipe.eyeColor || (kit.bodies[k0].base === 'male' ? '#2f8f8a' : '#4f7396'), hairColor: recipe.hairColor, eyeStyle: eyeSh && kit.bodies[k0].style === 'anime' ? eyeSh[2] : {} });
