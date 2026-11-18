@@ -137,7 +137,8 @@ export function addOutlines(vrm, { width = 0.0017, skin = '#ecc4ad' } = {}) {
  *  Works in the head's own reference frame (kit axes: x left, -y front, z up) and writes the reshaped skin back into P.
  *  Returns a group (glTF axes, same frame as the head's other extras) holding eyes, lashes and blush. */
 export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeColor, hairColor, eyeStyle = {} }) {
-  const es = { a: 1, b: 1, tilt: 0, top: 9, lash: 1, wing: 1, lower: 0, tex: 'classic', noseDot: false, ...eyeStyle };
+  const es = { a: 1, b: 1, tilt: 0, top: 9, lash: 1, wing: 1, lower: 0, tex: 'classic', noseDot: false, v2: false, pinch: 0.45, crease: 1, ...eyeStyle };
+  // v2 (the illustrated look): the iris is tucked under the upper lid, a heavy tapered lash line, a pointed inner corner, a lid shadow and a crease line
   const ids = kit.partVerts[kit.parts.indexOf('Head')], n = ids.length, R = new Float32Array(n * 3);
   for (let k = 0; k < n; k++) for (let c = 0; c < 3; c++) R[k * 3 + c] = basis[c] + (P[ids[k] * 3 + c] - headBone[c]) / scale;
   const front = []; for (let k = 0; k < n; k++) if (R[k * 3 + 1] < basis[1] - 0.015) front.push(k);
@@ -149,8 +150,9 @@ export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeCol
   const ex = eyeRef[0] + 0.001, ez = eyeRef[2] - (male ? 0.002 : 0.005), a = (male ? 0.0155 : 0.019) * es.a, b = (male ? 0.0165 : 0.023) * es.b;
   // the eye opening: an ellipse, sheared so the outer corner rises (tilt > 0) or falls, with the top flattened into a lid line for sleepy eyes
   const TOP = es.top * b, flat = (zr) => zr > TOP ? TOP + (zr - TOP) * 0.12 : zr, unflat = (zr) => zr > TOP ? TOP + (zr - TOP) / 0.12 : zr;
-  const pt = (s, t, f) => { const u = a * f * Math.cos(t), zr = flat(b * f * Math.sin(t)) + es.tilt * u; return [s * (ex + u), ez + zr]; };
-  const inside = (s, x, z) => { const u = s * x - ex, zr = unflat(z - ez - es.tilt * u); return Math.hypot(u / a, zr / b); };
+  const PIN = es.v2 ? es.pinch : 0, pinchAt = (c) => 1 - PIN * Math.max(0, -c) ** 2;      // c: cos of the angle round the eye; the inner corner (towards the nose) is c = -1
+  const pt = (s, t, f) => { const u = a * f * Math.cos(t), zr = flat(b * f * Math.sin(t)) * pinchAt(Math.cos(t)) + es.tilt * u; return [s * (ex + u), ez + zr]; };
+  const inside = (s, x, z) => { const u = s * x - ex, zr = unflat((z - ez - es.tilt * u) / pinchAt(Math.max(-1, Math.min(1, u / a)))); return Math.hypot(u / a, zr / b); };
   // nose: find the tip on the centre line and take most of its height away
   let tip = -1; for (const k of front) if (Math.abs(R[k * 3]) < 0.008 && R[k * 3 + 2] < ez - 0.008 && R[k * 3 + 2] > ez - 0.045 && (tip < 0 || R[k * 3 + 1] < R[tip * 3 + 1])) tip = k;
   let tz = ez - 0.025;
@@ -164,9 +166,9 @@ export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeCol
     R[k * 3] *= 1 - (male ? 0.05 : 0.13) * sm((zm + 0.012 - z) / 0.05) * wy + (male ? 0 : 0.03) * Math.exp(-((z - (tz - 0.002)) ** 2) / (2 * 0.018 ** 2)) * wy; }
   // eyes: a smooth membrane across each eye opening; skin inside it steps back, the painted eye lies on it
   const g = new THREE.Group(); g.name = 'FaceArt'; const GL = (x, y, z) => [x, z, -y];
-  const tex = eyeTexture(eyeColor, es.tex), eyeMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+  const tex = eyeTexture(eyeColor, es.tex, es.v2), eyeMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
   const ink = new THREE.Color(hairColor || '#3a2a26').multiplyScalar(0.28).lerp(new THREE.Color('#1a1014'), 0.5);
-  const lashMat = new THREE.MeshBasicMaterial({ color: ink, side: THREE.DoubleSide }), lowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#8a5a55'), side: THREE.DoubleSide });
+  const lashMat = new THREE.MeshBasicMaterial({ color: es.v2 ? ink.clone().lerp(new THREE.Color('#0d070b'), 0.7) : ink, side: THREE.DoubleSide }), lowMat = new THREE.MeshBasicMaterial({ color: es.v2 ? new THREE.Color('#5a3236') : new THREE.Color('#8a5a55'), side: THREE.DoubleSide });
   const mk = (pos, idx, mat, name, matName, uv) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); if (uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, mat); m.name = name; m.userData.matName = matName; m.userData.noOutline = true; m.frustumCulled = false; m.castShadow = false; g.add(m); return m; };
   const sides = [];
@@ -179,22 +181,29 @@ export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeCol
     const pos = [], uv = [], idx = [], RG = 6, SG = 28;
     const A0 = male ? 0.0155 : 0.019, B0 = male ? 0.0165 : 0.023, ia = Math.max(a, A0 * 0.92), ib = Math.max(b, B0 * 0.92);      // the iris keeps its size: a smaller or flattened opening covers more of it
     for (let i = 0; i <= RG; i++) for (let j = 0; j < SG; j++) { const rho = i / RG, t = j / SG * Math.PI * 2, [x, z] = pt(s, t, rho);
-      pos.push(...GL(x, mem(x, z) - 0.0013 - 0.0012 * (1 - rho * rho), z)); uv.push(0.5 + 0.31 * (x - s * ex) / ia, 0.5 - 0.31 * (z - ez) / ib); }
+      pos.push(...GL(x, mem(x, z) - 0.0013 - 0.0012 * (1 - rho * rho), z));
+      if (es.v2) uv.push(0.5 + 0.285 * (x - s * ex) / ia, 0.552 - 0.262 * (z - ez) / ib); else uv.push(0.5 + 0.31 * (x - s * ex) / ia, 0.5 - 0.31 * (z - ez) / ib); }      // v2: a bigger iris whose top sits under the lid
     for (let i = 0; i < RG; i++) for (let j = 0; j < SG; j++) { const p = i * SG + j, q = i * SG + (j + 1) % SG; idx.push(p, q, q + SG, p, q + SG, p + SG); }
     const eye = mk(pos, idx, eyeMat, 'Eyes_Painted', 'Eyes_painted', uv);
     const lidPos = pos.slice(); for (let i = 2; i < lidPos.length; i += 3) lidPos[i] += 0.0008;      // the eyelid: same opening, just in front of the eye, drawn only above the lash line
     const lid = mk(lidPos, idx.slice(), eyeMat, 'Eyelid', 'Eyelid'); lid.visible = false; lid.userData.base = Float32Array.from(lidPos);
     // upper lash line, thicker toward the outer corner, with a wing
-    const lp = [], li = [], N = 26, t0 = 170 * Math.PI / 180, t1 = 6 * Math.PI / 180;
-    for (let j = 0; j <= N; j++) { const t = t0 + (t1 - t0) * j / N, out = (Math.cos(t) + 1) / 2, th = ((male ? 0.0013 : 0.002) + (male ? 0.0012 : 0.0026) * out) * es.lash, taper = Math.min(1, j / 3);
-      for (const f of [0.95, 0.95 + th * taper / b]) { const [x, z] = pt(s, t, f); lp.push(...GL(x, Math.min(mem(x, z), depthAt(x, z)) - 0.0024, z)); } }
+    const lp = [], li = [], N = 26, t0 = (es.v2 ? 176 : 170) * Math.PI / 180, t1 = (es.v2 ? -14 : 6) * Math.PI / 180;      // v2 wraps round the outer corner
+    for (let j = 0; j <= N; j++) { const t = t0 + (t1 - t0) * j / N, out = (Math.cos(t) + 1) / 2, th = (es.v2 ? (male ? 0.0024 : 0.0032) + (male ? 0.003 : 0.0062) * Math.min(1, out * 1.15) ** 1.6 : (male ? 0.0013 : 0.002) + (male ? 0.0012 : 0.0026) * out) * es.lash, taper = Math.min(1, j / (es.v2 ? 5 : 3)), f0 = es.v2 ? 0.9 : 0.95;
+      for (const f of [f0, f0 + th * taper / b]) { const [x, z] = pt(s, t, f); lp.push(...GL(x, Math.min(mem(x, z), depthAt(x, z)) - 0.0024, z)); } }
     for (let j = 0; j < N; j++) { const p = j * 2; li.push(p, p + 1, p + 3, p, p + 3, p + 2); }
     if (!male && es.wing > 0) { const w0 = lp.length / 3; for (const [t, f] of [[30, 1.1], [2, 0.97]]) { const [x, z] = pt(s, t * Math.PI / 180, f); lp.push(...GL(x, Math.min(mem(x, z), depthAt(x, z)) - 0.0024, z)); }
       const wu = a * (1 + 0.36 * es.wing), wx = s * (ex + wu), wz = ez + flat(b * 0.5) * (es.tilt < 0 ? 0.2 : 1) + es.tilt * wu * 1.25; lp.push(...GL(wx, depthAt(wx, wz) - 0.002, wz)); li.push(w0, w0 + 1, w0 + 2); }
     const lash = mk(lp, li, lashMat, 'Lashes_Painted', 'Lashes_painted');
+    if (es.v2 && es.crease) {                     // the crease (double eyelid): a thin soft line above the lash line, following its curve
+      const cp = [], ci = [], CN = 18, c0 = 150 * Math.PI / 180, c1 = 25 * Math.PI / 180, creaseMat = new THREE.MeshBasicMaterial({ color: ink.clone().lerp(new THREE.Color('#c48a80'), 0.55), side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+      for (let j = 0; j <= CN; j++) { const t = c0 + (c1 - c0) * j / CN, mid = Math.sin(Math.PI * j / CN), w = (male ? 0.0005 : 0.0007) * (0.3 + 0.7 * mid) * es.crease, ff = 1.0 + (male ? 0.004 : 0.0055) / b;
+        for (const f of [ff, ff + w / b]) { const [x, z] = pt(s, t, f); cp.push(...GL(x, depthAt(x, z) - 0.0022, z + (male ? 0.0012 : 0.0018) * mid)); } }
+      for (let j = 0; j < CN; j++) { const p = j * 2; ci.push(p, p + 1, p + 3, p, p + 3, p + 2); }
+      mk(cp, ci, creaseMat, 'Crease_Painted', 'Crease').renderOrder = 1; }
     // lower lid line
     const bp = [], bi = [], M = 14, u0 = 222 * Math.PI / 180, u1 = 322 * Math.PI / 180;
-    for (let j = 0; j <= M; j++) { const t = u0 + (u1 - u0) * j / M; for (const f of [0.97, 0.97 + 0.0008 / b]) { const [x, z] = pt(s, t, f); bp.push(...GL(x, mem(x, z) - 0.002, z)); } }
+    for (let j = 0; j <= M; j++) { const t = u0 + (u1 - u0) * j / M, lw = es.v2 ? 0.0006 + 0.0011 * Math.max(0, Math.cos(t)) : 0.0008; for (const f of [0.97, 0.97 + lw / b]) { const [x, z] = pt(s, t, f); bp.push(...GL(x, mem(x, z) - 0.002, z)); } }
     for (let j = 0; j < M; j++) { const p = j * 2; bi.push(p, p + 1, p + 3, p, p + 3, p + 2); }
     if (es.lower) for (const t of [250, 275, 300, 318]) { const r = t * Math.PI / 180, [x, z] = pt(s, r, 0.98), [x2, z2] = pt(s, r, 1.0 + 0.004 * es.lower / b), w = 0.0007, n0 = bp.length / 3;      // small lower lashes
       bp.push(...GL(x - w, mem(x, z) - 0.002, z), ...GL(x + w, mem(x, z) - 0.002, z), ...GL(x2 + s * 0.0012, depthAt(x2, z2) - 0.0018, z2 - 0.0035 * es.lower)); bi.push(n0, n0 + 1, n0 + 2); }
@@ -219,8 +228,8 @@ export function styleFace({ kit, P, headBone, basis, scale, eyeRef, male, eyeCol
   return { group: g, browShift: Math.max(0, ez + Math.min(b, TOP) + Math.max(0, es.tilt) * a + 0.006 - (eyeRef[2] + 0.022)), lids: sides.map((d) => d.lid), blink, sides, topZ, zp };
 }
 const texCache = new Map();
-function eyeTexture(colour = '#4f7396', style = 'classic') {
-  const key = colour + style; if (texCache.has(key)) return texCache.get(key);
+function eyeTexture(colour = '#4f7396', style = 'classic', v2 = false) {
+  const key = colour + style + (v2 ? '2' : ''); if (texCache.has(key)) return texCache.get(key);
   const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'), base = new THREE.Color(colour), css = (col) => '#' + col.getHexString();
   const dark = base.clone().multiplyScalar(0.22), deep = base.clone().multiplyScalar(0.5), light = base.clone().lerp(new THREE.Color('#ffffff'), 0.5), glow = base.clone().lerp(new THREE.Color('#fff6d8'), 0.72);
   x.fillStyle = '#fbf6f4'; x.fillRect(0, 0, 512, 512);
@@ -237,6 +246,7 @@ function eyeTexture(colour = '#4f7396', style = 'classic') {
   if (style === 'doll') { x.globalAlpha = 0.35; x.strokeStyle = css(light); x.lineWidth = 6; for (let i = 0; i < 18; i++) { const a = i * Math.PI / 9; x.beginPath(); x.moveTo(256 + 64 * Math.cos(a), 266 + 76 * Math.sin(a)); x.lineTo(256 + 108 * Math.cos(a), 266 + 130 * Math.sin(a)); x.stroke(); } x.globalAlpha = 1; }      // fine iris streaks
   gr = x.createLinearGradient(0, 110, 0, 250); gr.addColorStop(0, 'rgba(10,8,20,0.8)'); gr.addColorStop(1, 'rgba(10,8,20,0)'); x.fillStyle = gr; x.fillRect(0, 0, 512, 512);            // upper lid shadow
   x.restore();
+  if (v2) { gr = x.createLinearGradient(0, 120, 0, 250); gr.addColorStop(0, 'rgba(25,15,35,0.7)'); gr.addColorStop(1, 'rgba(25,15,35,0)'); x.fillStyle = gr; x.fillRect(0, 0, 512, 512); }      // the lid's shadow across the top of the eye
   x.lineWidth = 11; x.strokeStyle = css(base.clone().multiplyScalar(0.16)); iris(); x.stroke();
   x.fillStyle = 'rgba(255,255,255,0.97)';
   if (style === 'sparkle') {                     // idol eyes: four-point star highlights and a ring of small glints

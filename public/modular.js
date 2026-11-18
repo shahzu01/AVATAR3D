@@ -224,7 +224,7 @@ export async function loadModular(input) {
       if (ok) notes.push(`Eye shape: ${eyeSh[1]}`);
     } catch (e) { console.warn('modular eye shape', e); }
     if (!model && kit.bodies[k0].style === 'anime' && recipe.face !== 'classic' && kit.bodies[src].bones.leftEye) try {
-      faceArt = styleFace({ kit, P, headBone: bones.head[0], basis: kit.bodies[src].bones.head[0], scale: headScale * (e0.scale || 1), eyeRef: kit.bodies[src].bones.leftEye[0], male: kit.bodies[k0].base === 'male', eyeColor: recipe.eyeColor || (kit.bodies[k0].base === 'male' ? '#2f8f8a' : '#4f7396'), hairColor: recipe.hairColor, eyeStyle: eyeSh && kit.bodies[k0].style === 'anime' ? eyeSh[2] : {} });
+      faceArt = styleFace({ kit, P, headBone: bones.head[0], basis: kit.bodies[src].bones.head[0], scale: headScale * (e0.scale || 1), eyeRef: kit.bodies[src].bones.leftEye[0], male: kit.bodies[k0].base === 'male', eyeColor: recipe.eyeColor || (kit.bodies[k0].base === 'male' ? '#2f8f8a' : '#4f7396'), hairColor: recipe.hairColor, eyeStyle: { ...(eyeSh && kit.bodies[k0].style === 'anime' ? eyeSh[2] : {}), v2: recipe.eyeLook === 'illustrated' } });      // eyeLook: 'classic' or 'illustrated' (the v2 drawing)
       if (eyeSh && kit.bodies[k0].style === 'anime' && Object.keys(eyeSh[2]).length) notes.push(`Eye shape: ${eyeSh[1]}`);
     } catch (e) { console.warn('modular face style', e); } }
   // master hands (blender/modular/hand_master.py): one rebuilt hand, mirrored, welded to each wrist; finger bones move to its joint centres

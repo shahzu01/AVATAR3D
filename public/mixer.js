@@ -55,7 +55,9 @@ const panels = {
     const g = recipe.headModel ? null : eyeShapeGroup(kit, recipe.parts.Head);
     if (!g) return '<h3>Eyes</h3><p class="hint">This head keeps its own eyes. You can still change the eye colour on the right.</p>';
     const cur = eyeShapeOf(kit, recipe)?.[0];
-    return `<h3>Eyes</h3><div class="cards">${EYE_SHAPES[g].map(([k, n]) => card(`eyeShape:${k}`, n, thumb('eyes', k), k === cur)).join('')}</div>`;
+    const look = recipe.eyeLook === 'illustrated' ? 'illustrated' : 'classic', lookBtn = (v, n, d) => `<button class="opt wide ${look === v ? 'on' : ''}" data-pick="eyeLook:${v}" title="${esc(d)}"><span class="nm">${n}</span></button>`;
+    const looks = g === 'anime' || g === 'animeMale' ? `<h3>Eye drawing</h3><div class="cards looks">${lookBtn('classic', 'Classic', 'Round, open eyes with a thin lash line')}${lookBtn('illustrated', 'Illustrated', 'The iris tucked under the lid, a heavy lash line, a crease and a pointed inner corner')}</div>` : '';
+    return `${looks}<h3>Eyes</h3><div class="cards">${EYE_SHAPES[g].map(([k, n]) => card(`eyeShape:${k}`, n, thumb('eyes', k), k === cur)).join('')}</div>`;
   },
   style() {
     if (recipe.headModel) return '<h3>Hairstyle</h3><p class="hint">This head comes with its own hair.</p>';
@@ -193,7 +195,7 @@ function setBase(b) {
 }
 function choose(pickStr) {
   const i = pickStr.indexOf(':'), k = pickStr.slice(0, i), v = pickStr.slice(i + 1);
-  if (k === 'faceShape' || k === 'eyeShape' || k === 'hair') recipe[k] = v;
+  if (k === 'faceShape' || k === 'eyeShape' || k === 'eyeLook' || k === 'hair') recipe[k] = v;
   else if (k === 'hairset') { recipe.hair = 'Custom'; recipe.hairParts = { ...HAIR_PRESETS.find((p) => p[0] === v)[2] }; }
   else if (k === 'hairpart') { const [slot, val] = v.split(':'); if (recipe.hair !== 'Custom') { recipe.hair = 'Custom'; recipe.hairParts = { ...DEFAULT_HAIR_PARTS }; } recipe.hairParts = { ...DEFAULT_HAIR_PARTS, ...recipe.hairParts, [slot]: val }; }
   else if (k === 'piece') { const [slot, from] = v.split(':');
@@ -284,7 +286,7 @@ if (q.get('ready')) { const r = READY.find((x) => x.key === q.get('ready')); if 
 if (q.get('outfit')) { recipe.outfit = q.get('outfit'); if (OUTFITS[recipe.outfit]?.colors) Object.assign(recipe, OUTFITS[recipe.outfit].colors); }
 if (q.get('outline')) recipe.outline = q.get('outline') !== '0';
 if (q.get('acc') !== null) recipe.accessories = q.get('acc').split(',').filter(Boolean);
-for (const k of ['clothing', 'accent', 'hairColor', 'hair', 'eyeColor', 'face', 'faceShape', 'eyeShape', 'ears', 'tail', 'furColor', 'furTip']) if (q.get(k)) recipe[k] = q.get(k);
+for (const k of ['clothing', 'accent', 'hairColor', 'hair', 'eyeColor', 'face', 'faceShape', 'eyeShape', 'eyeLook', 'ears', 'tail', 'furColor', 'furTip']) if (q.get(k)) recipe[k] = q.get(k);
 if (q.get('hp')) { const [front, back, side, ext, extra] = q.get('hp').split(','); recipe.hair = 'Custom'; recipe.hairParts = { front, back, side, ext, extra }; }      // e.g. hp=straight,long,short,twin,ahoge
 if (q.get('body')) recipe.body = Object.fromEntries(q.get('body').split(',').map((kv) => kv.split(':')).map(([k, v]) => [k, +v]));      // e.g. body=legs:1.1,hips:0.5
 if (q.get('light')) viewer.setLighting(q.get('light'));
