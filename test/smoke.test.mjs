@@ -94,6 +94,7 @@ test('props and scenes: upload checks, sanitizing, and deleting removes every us
   assert.equal((await api(`/api/props/${f.id}`, { method: 'DELETE' })).status, 200);
   s = (await api('/api/settings')).j;
   assert.deepEqual(s.props.map((p) => p.id), ['b'], 'deleting the file removes the prop'); assert.equal(s.scene.kind, 'none', 'and the scene that used it');
+  { const pr = await api('/api/premium'); assert.deepEqual(pr.j.skins, [], 'no premium skins unless the premium folder has some'); assert.equal((await api('/api/premium/nope/use', { method: 'POST' })).status, 404, 'an unknown premium skin is refused'); }
   for (const key of ['gaming', 'cafe', 'city', 'park', 'starry']) { await api('/api/settings', { method: 'POST', body: JSON.stringify({ scene: { kind: 'builtin', key } }) }); assert.equal((await api('/api/settings')).j.scene.key, key, `built-in scene ${key} is kept`); }
   await api('/api/settings', { method: 'POST', body: JSON.stringify({ scene: { kind: 'builtin', key: 'moon-base' } }) }); assert.equal((await api('/api/settings')).j.scene.kind, 'none', 'unknown built-in scenes are dropped');
 });

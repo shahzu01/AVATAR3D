@@ -14,6 +14,7 @@ import { Library, UserError, pickLook, LOOK_KEYS } from './lib/library.js';
 import { PhoneFace } from './lib/phone.js';
 import { TriggerEngine, sanitizeRules, DEFAULT_RULES, WHEN, ITEMS, EXPRESSIONS, GESTURES, PRESETS, ACTS, POSE_NAMES } from './lib/triggers.js';
 import { TwitchEvents } from './lib/twitch-events.js';
+import { Premium } from './lib/premium.js';
 import { PropStore, sanitizeProps, sanitizeScene, FILE_RE as PROP_FILE_RE, MAX_PROP_MB } from './lib/props-store.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -48,6 +49,7 @@ function saveSettings() { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(setting
 
 // ------------------------------------------------------------------ avatar library
 const propStore = new PropStore(DATA);
+const premium = new Premium(DATA);      // private skins in premium/ (never in git)
 settings.props = sanitizeProps(settings.props, propStore); settings.scene = sanitizeScene(settings.scene, propStore);
 const library = new Library(DATA, { legacyDir: AVATAR_DIR, limits: settings.importLimits });
 const canGoLive = (r) => r && (r.sourceType === 'created' || (r.format.type === 'VRM' && r.suitability?.tracking));
@@ -328,6 +330,17 @@ const server = http.createServer((req, res) => {
   if (p === '/api/status') return ok(status());
   if (p === '/api/phone') return ok(phone.status());
   if (p === '/api/phone/calibrate' && req.method === 'POST') return ok({ calibrated: phone.calibrate(), status: phone.status() });
+  if (p.startsWith('/api/premium')) {          // premium skins kept on this computer only (lib/premium.js)
+    const m = p.match(/^\/api\/premium(?:\/([A-Za-z0-9_-]+)(?:\/([a-z]+\.png|use))?)?$/);
+    const send = (o, c = 200) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+    if (!m) return send({ error: 'Not found.' }, 404);
+    if (!m[1] && req.method === 'GET') return send({ skins: premium.list().map(({ file, ...k }) => ({ ...k, avatarId: library.records.find((r) => r.premium === k.id)?.id || null,
+      cardUrl: k.images.includes('card.png') ? `/api/premium/${k.id}/card.png` : null })) });
+    const skin = m[1] && premium.read(m[1]); if (!skin) return send({ error: 'No such premium skin.' }, 404);
+    if (m[2] === 'use' && req.method === 'POST') { try { const rec = library.addPremium(skin); activate(rec.id); return send({ avatarId: rec.id, activeId: settings.activeAvatarId }); } catch (e) { return send({ error: e.message }, e.code || 400); } }
+    if (m[2] && m[2] !== 'use' && req.method === 'GET') { const fp = premium.imagePath(skin.id, m[2]); return fp ? sendFile(res, fp, 'image/png') : send({ error: 'Not found.' }, 404); }
+    return send({ error: 'Not found.' }, 404);
+  }
   if (p.startsWith('/api/library')) { libraryApi(req, res, url); return; }
   if (p === '/api/avatars') return ok({ avatars: library.list().filter(canGoLive).map((r) => ({ id: r.id, name: r.name })), activeId: settings.activeAvatarId });
   if (p === '/api/settings' && req.method === 'GET') return ok(publicSettings());

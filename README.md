@@ -111,6 +111,16 @@ The Studio's **Look** panel dresses the stream:
 - **Open a .vrm** imports a model you already have, for example one made in VRoid Studio.
 - **Ready to Stream** and **Animal & Fantasy:** the ready-made anime characters. Open one to use it or change it.
 
+### Premium skins (this computer only)
+
+Finished avatars you keep private go in a `premium/` folder inside Kael Studio. The folder is in `.gitignore`, so it is never uploaded. Each skin has its own folder, `premium/<id>/`, holding `<id>.vrm`, a `card.png` picture (3:4), optional renders (`hero.png`, `full.png`, `face.png`) and `skin.json`:
+
+```json
+{ "name": "Nova", "tagline": "Arcade gamer", "accent": "#ff6fd8" }
+```
+
+When the folder has skins, Characters shows a **Premium** row. Clicking a skin adds it to your Library (the file stays in `premium/`) and puts it on stream. Deleting it from the Library leaves the file in `premium/`.
+
 ### Avatar library (details and import)
 
 The library page (http://localhost:3939/library.html, or *Details* in a card's menu) still handles importing, checking and the per-avatar settings below.

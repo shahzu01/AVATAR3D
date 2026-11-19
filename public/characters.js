@@ -25,6 +25,19 @@ async function load() {
   $('mine').innerHTML = $('createCard').outerHTML + cards;
 }
 const sampleCards = (group) => READY.filter((r) => r.group === group).map((r) => `<a class="card" href="/mixer.html?ready=${r.key}"><div class="pic"><img src="/readymade/${r.key}.png" alt="" loading="lazy"></div><div class="row"><span class="nm">${esc(r.label)}</span></div></a>`).join('');
+// Premium skins: only on this computer (the server lists premium/); the row stays hidden when there are none.
+fetch('/api/premium').then((r) => r.json()).then(({ skins = [] }) => {
+  if (!skins.length) return;
+  $('premium').innerHTML = skins.map((k) => `<div class="card prem" data-prem="${esc(k.id)}" title="Stream ${esc(k.name)}"><div class="pic" style="background:${esc(k.accent)}22">${k.cardUrl ? `<img src="${esc(k.cardUrl)}" alt="" loading="lazy">` : ''}<span class="badge">PREMIUM</span></div>
+    <div class="row"><span class="nm">${esc(k.name)}${k.tagline ? `<span class="tag">${esc(k.tagline)}</span>` : ''}</span></div></div>`).join('');
+  $('premiumSec').hidden = false;
+  $('premium').addEventListener('click', async (e) => {
+    const c = e.target.closest('[data-prem]'); if (!c || c.classList.contains('busy')) return; c.classList.add('busy');
+    const r = await fetch(`/api/premium/${c.dataset.prem}/use`, { method: 'POST' }).then((x) => x.json()).catch((er) => ({ error: er.message }));
+    c.classList.remove('busy'); if (r.error) { alert(r.error); return; }
+    location.href = '/tracker.html';
+  });
+}).catch(() => {});
 $('samples').innerHTML = sampleCards('stream'); $('samplesAnimal').innerHTML = sampleCards('animal');
 
 function closeMenu() { document.querySelector('.menu')?.remove(); }
